@@ -1,228 +1,123 @@
 import pandas as pd
 import numpy as np
 import networkx as nx
-from sklearn.ensemble import HistGradientBoostingClassifier
+from xgboost import XGBClassifier
 
-# =============================================================================
-# 1. DATA INGESTION (Simulating ENSDF L-Records)
-# =============================================================================
-# Data is structured to mimic the information content of ENSDF "L-Records".
-# Terminology:
-#   NUCID: Nucleus ID
-#   E:     Level Energy (keV)
-#   DE:    Standard Uncertainty in Energy (keV)
-#   J:     Spin-Parity Jpi (e.g., "3-", "5/2+") - corresponding to ENSDF Col 23-39
-#   L:     Angular Momentum Transfer (ENSDF Col 56-64)
-#   DS:    Dataset Source ID (e.g., "ADOPTED", "HI-SPIN", "P-TRANSFER")
-# =============================================================================
+# ==========================================
+# 1. SETUP DATASETS
+# ==========================================
+# Define levels from datasets A, B, and C.
+# Use None or np.nan for missing values.
+levels = []
 
-data = []
+# Dataset A: Gamma Data
+levels.append({'E': 4059.0, 'DE': 3.0, 'J': None, 'L': None, 'DS': 'A', 'ID': 'A_4059'})
+levels.append({'E': 4112.0, 'DE': 4.0, 'J': None, 'L': None, 'DS': 'A', 'ID': 'A_4112'})
+levels.append({'E': 4173.0, 'DE': 2.0, 'J': 3.0,  'L': 3.0,  'DS': 'A', 'ID': 'A_4173'}) # J=3
+levels.append({'E': 4178.0, 'DE': 2.0, 'J': 2.0,  'L': 2.0,  'DS': 'A', 'ID': 'A_4178'}) # J=2
+levels.append({'E': 4347.0, 'DE': 4.0, 'J': None, 'L': None, 'DS': 'A', 'ID': 'A_4347'})
 
-# --- Dataset A: High-Resolution Gamma Spectroscopy (e.g., Adopted) ---
-data.extend([
-    # E=4059, DE=3
-    {'NUCID': '35CL', 'E': 4059.0, 'DE': 3.0, 'J': np.nan, 'L': np.nan, 'DS': 'DS_A', 'ID': 'A_4059'},
-    # E=4173, DE=2, J=3- (Definite assignment)
-    {'NUCID': '35CL', 'E': 4173.0, 'DE': 2.0, 'J': 3.0,    'L': 3.0,    'DS': 'DS_A', 'ID': 'A_4173'},
-    # E=4178, DE=2, J=2+ (Definite assignment)
-    {'NUCID': '35CL', 'E': 4178.0, 'DE': 2.0, 'J': 2.0,    'L': 2.0,    'DS': 'DS_A', 'ID': 'A_4178'},
-    {'NUCID': '35CL', 'E': 4347.0, 'DE': 4.0, 'J': np.nan, 'L': np.nan, 'DS': 'DS_A', 'ID': 'A_4347'}
-])
+# Dataset B: Reaction Data
+levels.append({'E': 4055.0, 'DE': 3.0, 'J_excl': None, 'DS': 'B', 'ID': 'B_4055'})
+levels.append({'E': 4108.0, 'DE': 2.0, 'J_excl': None, 'DS': 'B', 'ID': 'B_4108'})
+# B_4174 Excludes L=3 (cannot match A_4173)
+levels.append({'E': 4174.0, 'DE': 1.0, 'J_excl': 3.0,  'DS': 'B', 'ID': 'B_4174'}) 
+levels.append({'E': 4343.0, 'DE': 2.0, 'J_excl': None, 'DS': 'B', 'ID': 'B_4343'})
 
-# --- Dataset B: Particle Transfer Reaction (e.g., (p,t)) ---
-# Note: Reaction selection rules may exclude certain L transfers.
-data.extend([
-    {'NUCID': '35CL', 'E': 4055.0, 'DE': 3.0, 'J': np.nan, 'L': np.nan, 'DS': 'DS_B', 'ID': 'B_4055'},
-    # B_4174: This reaction explicitly excludes L=3 transfer (L_exclusion)
-    # In a real parser, this might come from specific cross-section analysis.
-    {'NUCID': '35CL', 'E': 4174.0, 'DE': 1.0, 'J': np.nan, 'L_excl': 3.0, 'DS': 'DS_B', 'ID': 'B_4174'},
-    {'NUCID': '35CL', 'E': 4343.0, 'DE': 2.0, 'J': np.nan, 'L': np.nan,    'DS': 'DS_B', 'ID': 'B_4343'}
-])
+# Dataset C: Low Res Data
+levels.append({'E': 2065.0, 'DE': 20.0, 'DS': 'C', 'ID': 'C_2065'})
+levels.append({'E': 4170.0, 'DE': 20.0, 'DS': 'C', 'ID': 'C_4170'})
+levels.append({'E': 4350.0, 'DE': 20.0, 'DS': 'C', 'ID': 'C_4350'})
 
-# --- Dataset C: Low-Resolution / Historical Data ---
-# High uncertainties (DE=20), potentially containing unresolved multiplets.
-data.extend([
-    {'NUCID': '35CL', 'E': 2065.0, 'DE': 20.0, 'J': np.nan, 'L': np.nan, 'DS': 'DS_C', 'ID': 'C_2065'},
-    {'NUCID': '35CL', 'E': 4170.0, 'DE': 20.0, 'J': np.nan, 'L': np.nan, 'DS': 'DS_C', 'ID': 'C_4170'},
-    # Missing Uncertainty handled via np.nan
-    {'NUCID': '35CL', 'E': 4350.0, 'DE': np.nan, 'J': np.nan, 'L': np.nan, 'DS': 'DS_C', 'ID': 'C_4350'}
-])
+df = pd.DataFrame(levels)
 
-df_levels = pd.DataFrame(data)
+# ==========================================
+# 2. TRAIN XGBOOST (Teaching it Physics)
+# ==========================================
+# We create a simple synthetic dataset to teach the model rules:
+# Rule 1: Low Z-Score (Energy Diff / Uncertainty) -> Match
+# Rule 2: Physics Veto (e.g. Spin Mismatch) -> No Match
+# Features: [Z_Score, Veto_Flag]
 
-# =============================================================================
-# 2. FEATURE ENGINEERING: Physics Compatibility Metrics
-# =============================================================================
+X_train = [
+    [0.0, 0], [0.5, 0], [1.0, 0], [2.0, 0], # Good Matches (Z <= 2)
+    [3.0, 0], [5.0, 0], [10.0, 0],          # Bad Energy Matches (Z > 2.5)
+    [0.0, 1], [1.0, 1], [5.0, 1]            # Veto=1 is ALWAYS No Match
+]
+y_train = [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]
 
-def calculate_compatibility_metrics(rec1, rec2):
-    """
-    Computes a feature vector representing the compatibility between two levels.
+# monotone_constraints='(-1, -1)' forces the model to learn that:
+# Increasing Z-Score reduces probability (-1)
+# Increasing Veto Flag reduces probability (-1)
+model = XGBClassifier(monotone_constraints='(-1, -1)', n_estimators=50, max_depth=2, random_state=42)
+model.fit(X_train, y_train)
+
+# ==========================================
+# 3. RUN MATCHING
+# ==========================================
+G = nx.Graph()
+for id in df['ID']: G.add_node(id)
+
+# Iterate through every pair of levels from different datasets
+import itertools
+for i, r1 in df.iterrows():
+    for j, r2 in df.iterrows():
+        if i >= j or r1['DS'] == r2['DS']: continue
+
+        # --- Feature Calculation ---
+        # 1. Z-Score (Energy Difference relative to errors)
+        err1 = r1.get('DE', 10.0)
+        err2 = r2.get('DE', 10.0)
+        sigma = np.sqrt(err1**2 + err2**2)
+        z_score = abs(r1['E'] - r2['E']) / sigma
+
+        # 2. Physics Veto
+        veto = 0
+        # Check if r1 has J and r2 excludes it
+        if pd.notna(r1.get('J')) and pd.notna(r2.get('J_excl')):
+            if r1['J'] == r2['J_excl']: veto = 1
+        # Symmetric check
+        if pd.notna(r2.get('J')) and pd.notna(r1.get('J_excl')):
+            if r2['J'] == r1['J_excl']: veto = 1
+
+        # --- Prediction ---
+        # Returns probability of being a match (Class 1)
+        prob = model.predict_proba([[z_score, veto]])[0][1]
+
+        # If probability > 50%, link them
+        if prob > 0.5:
+            G.add_edge(r1['ID'], r2['ID'], weight=prob)
+
+# ==========================================
+# 4. CREATE ADOPTED DATASET
+# ==========================================
+adopted_levels = []
+
+for comp in nx.connected_components(G):
+    sub = df[df['ID'].isin(comp)]
     
-    Parameters:
-    rec1, rec2: Series/Dict representing ENSDF L-records.
+    # Calculate Weighted Average Energy
+    # Weights = 1 / err^2
+    errs = sub['DE'].fillna(20.0) # Use 20 keV if error missing
+    weights = 1 / errs**2
+    mean_e = (sub['E'] * weights).sum() / weights.sum()
     
-    Returns:
-    list: [normalized_energy_diff, selection_rule_violation]
-    """
-    
-    # --- Metric 1: Normalized Energy Residual (Z-Score) ---
-    # Formula: |E1 - E2| / sqrt(DE1^2 + DE2^2)
-    # If DE is missing (NaN), assume a conservative default (e.g., 10 keV) 
-    # to prevent division by zero or loss of data.
-    de1 = rec1['DE'] if pd.notna(rec1.get('DE')) else 10.0
-    de2 = rec2['DE'] if pd.notna(rec2.get('DE')) else 10.0
-    
-    combined_uncertainty = np.sqrt(de1**2 + de2**2)
-    energy_diff = abs(rec1['E'] - rec2['E'])
-    
-    # Avoid singularity if combined_uncertainty is 0 (unlikely in physical data)
-    norm_diff = energy_diff / combined_uncertainty if combined_uncertainty > 0 else 100.0
-    
-    # --- Metric 2: Selection Rule Violation (Binary Flag) ---
-    # Checks for hard physics incompatibilities (Spin J or Angular Momentum L).
-    # 0 = Compatible / Insufficient Info
-    # 1 = Incompatible (Violation)
-    violation = 0
-    
-    # Check L-Transfer Exclusion (e.g., Target state cannot be populated by L=3)
-    # Case: Record 1 has definite L, Record 2 excludes that L
-    if pd.notna(rec1.get('L')) and pd.notna(rec2.get('L_excl')):
-        if rec1['L'] == rec2['L_excl']: 
-            violation = 1
-            
-    # Symmetric check
-    if pd.notna(rec2.get('L')) and pd.notna(rec1.get('L_excl')):
-        if rec2['L'] == rec1['L_excl']: 
-            violation = 1
-            
-    # Further checks (e.g., Jpi matching) can be added here
-            
-    return [norm_diff, violation]
-
-# =============================================================================
-# 3. MODEL TRAINING: Synthetic Physics Supervision
-# =============================================================================
-# Since ground-truth matched catalogs are sparse, we train the classifier 
-# using "Synthetic Supervision" based on known laws of physics and statistical probability.
-
-X_synthetic = [] 
-y_synthetic = [] # 1 = Association (Match), 0 = Non-Association
-
-# -- Class 1: Valid Associations --
-# Statistically consistent energies (Low Z-score) AND No Selection Rule Violations.
-for z in [0.0, 0.5, 1.0, 2.0, 3.0]: # Up to 3 sigma is generally acceptable
-    X_synthetic.append([z, 0])      # [norm_diff, violation]
-    y_synthetic.append(1)
-
-# -- Class 2: Energy Mismatches --
-# Statistically inconsistent energies (> 4 sigma).
-for z in [4.0, 6.0, 10.0, 50.0]:
-    X_synthetic.append([z, 0])
-    y_synthetic.append(0)
-
-# -- Class 3: Physics Violations (The "Veto") --
-# Even if energy match is perfect (Z=0), a selection rule violation 
-# renders the match physically impossible.
-for z in [0.0, 0.5, 1.0, 5.0]:
-    X_synthetic.append([z, 1])
-    y_synthetic.append(0)
-
-# Initialize HistGradientBoostingClassifier
-# Selected for:
-# 1. Native handling of NaNs (missing spectroscopic data).
-# 2. Ability to model non-linear decision boundaries (Violation flag overrides Energy).
-classifier = HistGradientBoostingClassifier(
-    learning_rate=0.1, 
-    max_depth=3, 
-    random_state=42
-)
-classifier.fit(X_synthetic, y_synthetic)
-
-# =============================================================================
-# 4. GRAPH TOPOLOGY CONSTRUCTION (The Reconciliation)
-# =============================================================================
-# We treat the Level Scheme as a Graph where:
-# Nodes = Observed Levels in individual datasets
-# Edges = Probabilistic Association based on ML score
-
-level_graph = nx.Graph()
-for uid in df_levels['ID']: 
-    level_graph.add_node(uid)
-
-# Pairwise comparison across datasets
-# Note: In production, spatial indexing (KDTree) can optimize this for N > 1000
-for i, rec_i in df_levels.iterrows():
-    for j, rec_j in df_levels.iterrows():
-        # Optimization: Only compare upper triangle and distinct datasets
-        if i >= j: continue 
-        if rec_i['DS'] == rec_j['DS']: continue 
-        
-        # Feature Extraction
-        features = calculate_compatibility_metrics(rec_i, rec_j)
-        
-        # Inference: Probability of Physical Association
-        # returns [prob_class_0, prob_class_1]
-        association_prob = classifier.predict_proba([features])[0][1]
-        
-        # Thresholding: Establish Edge if probability exceeds confidence level
-        # A threshold of 0.50 implies "More likely than not"
-        if association_prob > 0.50:
-            level_graph.add_edge(rec_i['ID'], rec_j['ID'], weight=association_prob)
-
-# =============================================================================
-# 5. UNIFIED LEVEL SCHEME GENERATION
-# =============================================================================
-# Connected components in the graph represent the consensus levels.
-# This naturally handles:
-# 1. One-to-One Matches (Ideal case)
-# 2. Orphans (Unmatched levels)
-# 3. Unresolved Multiplets (One level in low-res dataset matches two in high-res)
-
-unified_levels = []
-
-for component in nx.connected_components(level_graph):
-    # Extract dataframe subset for this component
-    comp_df = df_levels[df_levels['ID'].isin(component)]
-    
-    # --- Weighted Average Energy Calculation ---
-    # Weight w_i = 1 / sigma_i^2
-    # Handling NaNs in DE by assigning low weight (high uncertainty default)
-    comp_uncertainties = comp_df['DE'].fillna(20.0) 
-    weights = 1.0 / (comp_uncertainties**2)
-    
-    weighted_energy = (comp_df['E'] * weights).sum() / weights.sum()
-    
-    # --- Classification of the Group ---
-    # If a single dataset contributes >1 level to this component, 
-    # it indicates an "Unresolved Multiplet" or "Complex" structure 
-    # relative to the lower-resolution datasets in the group.
-    dataset_counts = comp_df['DS'].value_counts()
-    
-    if dataset_counts.max() > 1:
-        structure_type = "Unresolved Multiplet / Complex"
+    # Calculate Confidence (Average probability of links in this group)
+    # If single level, confidence is N/A (or 1.0 for "existence")
+    if len(comp) > 1:
+        sub_graph = G.subgraph(comp)
+        probs = [d['weight'] for u, v, d in sub_graph.edges(data=True)]
+        confidence = f"{np.mean(probs):.2f}"
     else:
-        structure_type = "Single Level"
-        
-    unified_levels.append({
-        'Unified_E (keV)': round(weighted_energy, 2),
-        'Structure': structure_type,
-        'N_Sources': len(component),
-        'Constituent_IDs': list(comp_df['ID'])
+        confidence = "-"
+
+    adopted_levels.append({
+        'Adopted_E': round(mean_e, 1),
+        'Confidence': confidence,
+        'Sources': " + ".join(sorted(sub['ID']))
     })
 
-# =============================================================================
-# 6. REPORTING
-# =============================================================================
-df_unified = pd.DataFrame(unified_levels).sort_values('Unified_E (keV)')
-
-print("--- RECONCILED LEVEL SCHEME ---")
-# Adjusting display options for clarity
-pd.set_option('display.max_colwidth', None)
-print(df_unified.to_string(index=False))
-
-# Validation Logic Example for Spot-Checking (Manual Review Trigger)
-# If Structure is Complex, flag for human evaluator review.
-review_candidates = df_unified[df_unified['Structure'].str.contains("Multiplet")]
-if not review_candidates.empty:
-    print("\n[ATTENTION] The following levels require Evaluator review (Multiplets Detected):")
-    print(review_candidates['Unified_E (keV)'].tolist())
+# Output
+final_df = pd.DataFrame(adopted_levels).sort_values('Adopted_E')
+print("\n=== FINAL ADOPTED DATASET ===")
+print(final_df.to_string(index=False))
