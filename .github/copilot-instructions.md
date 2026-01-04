@@ -1,7 +1,7 @@
 # LevelMatcher Project Instructions
 
 ## Project Overview
-Nuclear structure analysis tool that matches energy levels across disparate experimental datasets (e.g., Adopted vs. Reaction data). It uses **XGBoost** for ranking/classification and **Graph Theory/Optimization** for resolving global assignments.
+Nuclear structure analysis tool that matches energy levels across separate experimental datasets (e.g., Adopted data deduced from Decay and Reaction data). It uses **XGBoost** for ranking/classification and **Graph Theory/Optimization** for resolving global assignments.
 
 ## Core Architecture
 - **Standalone Scripts:** Logic is contained in single-file scripts (e.g., `Level_Matcher_Gemini.py`, `Level_Matcher_XGBoost.py`).
@@ -26,5 +26,6 @@ Nuclear structure analysis tool that matches energy levels across disparate expe
 - **Greedy Clustering:** Used to handle multiplets. A cluster (Adopted Level) cannot contain >1 level from the same Dataset (`DS`).
 
 ## Development Workflow
+- **Editing:** Directly edit `python Level_Matcher_Gemini.py` without creating new files.
 - **Execution:** Run scripts directly: `python Level_Matcher_Gemini.py`.
 - **No External Training Data:** Do not look for `.csv` training files. The model "learns" physics from the `X_train` list defined in the code.
