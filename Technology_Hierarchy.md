@@ -19,11 +19,11 @@
 *   **Logic:** **Sequential** execution.
 *   **Mechanism:** Iterative correction. Tree $N$ targets the errors of Tree $N-1$.
 *   **Key Algorithms:**
-    *   **AdaBoost:** Adjusts **sample weights** (focuses on hard-to-classify data points).
+    *   **Adaptive Boosting:** Adjusts **sample weights** (focuses on hard-to-classify data points).
     *   **Gradient Boosting:** Uses **gradient descent** to minimize error residuals (focuses on reducing loss).
 
 ## Level 3: Software Implementations (The Packages)
-*Libraries implementing the Gradient Boosting algorithm.*
+*Major libraries implementing the Gradient Boosting algorithm.*
 
 | Package | NaN Handling | Growth Strategy | Best Data Scale | Verdict for Nuclear Data |
 | :--- | :--- | :--- | :--- | :--- |

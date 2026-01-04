@@ -11,11 +11,11 @@ from xgboost import XGBClassifier
 levels = []
 
 # Dataset A: Gamma Data
-levels.append({'E': 4059.0, 'DE': 3.0, 'J': None, 'L': None, 'DS': 'A', 'ID': 'A_4059'})
-levels.append({'E': 4112.0, 'DE': 4.0, 'J': None, 'L': None, 'DS': 'A', 'ID': 'A_4112'})
-levels.append({'E': 4173.0, 'DE': 2.0, 'J': 3.0,  'L': 3.0,  'DS': 'A', 'ID': 'A_4173'}) # J=3
-levels.append({'E': 4178.0, 'DE': 2.0, 'J': 2.0,  'L': 2.0,  'DS': 'A', 'ID': 'A_4178'}) # J=2
-levels.append({'E': 4347.0, 'DE': 4.0, 'J': None, 'L': None, 'DS': 'A', 'ID': 'A_4347'})
+levels.append({'E': 4059.0, 'DE': 3.0, 'J': None, 'DS': 'A', 'ID': 'A_4059'})
+levels.append({'E': 4112.0, 'DE': 4.0, 'J': None, 'DS': 'A', 'ID': 'A_4112'})
+levels.append({'E': 4173.0, 'DE': 2.0, 'J': 3.0,  'DS': 'A', 'ID': 'A_4173'}) # J=3
+levels.append({'E': 4178.0, 'DE': 2.0, 'J': 2.0,  'DS': 'A', 'ID': 'A_4178'}) # J=2
+levels.append({'E': 4347.0, 'DE': 4.0, 'J': None, 'DS': 'A', 'ID': 'A_4347'})
 
 # Dataset B: Reaction Data
 levels.append({'E': 4055.0, 'DE': 3.0, 'J_excl': None, 'DS': 'B', 'ID': 'B_4055'})
