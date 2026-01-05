@@ -1,31 +1,36 @@
 # LevelMatcher Project Instructions
 
 ## Project Overview
-Nuclear structure analysis tool that matches energy levels across separate experimental datasets (e.g., Adopted data deduced from Decay and Reaction data). It uses **XGBoost** for ranking/classification and **Graph Theory/Optimization** for resolving global assignments.
+Nuclear structure analysis tool that matches energy levels across separate experimental datasets (A, B, C). It uses **XGBoost Regression** for soft probability matching and **Anchor-Based Hierarchical Clustering** for resolving assignments.
 
 ## Core Architecture
-- **Standalone Scripts:** Logic is contained in single-file scripts (e.g., `Level_Matcher_Gemini.py`, `Level_Matcher_XGBoost.py`).
+- **Single-File Script:** The primary logic resides in `Level_Matcher_Gemini.py`.
 - **Pipeline:**
-  1.  **Data Ingestion:** `pandas` DataFrames with columns `E_level`, `DE_level`, `Spin`, `Parity`, `DS`.
-  2.  **Physics-Informed Training:** XGBoost models are trained on **synthetic, hardcoded datasets** (`X_train`) that encode physical rules (e.g., "Spin mismatch = No Match").
-  3.  **Inference:** Pairwise probability prediction between all levels of different datasets.
-  4.  **Clustering/Assignment:** Greedy constraint solving or Hungarian algorithm to form "Adopted Levels".
+  1.  **Data Ingestion:** Hardcoded `pandas` DataFrame setup (Datasets A, B, C).
+  2.  **Physics-Informed Training:** `XGBRegressor` trained on `training_data_points` (synthetic list of tuples `(Z_Score, Veto, Probability)`).
+  3.  **Inference:** Predicts match probability (0.0-1.0) based on Z-Score and Physics Veto.
+  4.  **Clustering:** Anchor-based approach (A > B > C) to form "Adopted Levels".
 
 ## Key Patterns & Conventions
-- **Physics Veto:** Critical logic. If Spin/Parity mismatch, `Veto=1`.
-- **XGBoost Constraints:** Always use `monotone_constraints='(-1, -1)'` (or similar) to enforce that increasing Energy Difference (Z-Score) or Veto flag *decreases* match probability.
-- **ID Generation:** Use readable IDs: `f"{row['DS']}_{int(row['E_level'])}"` (e.g., `A_3005`).
-- **Data Columns:**
-  - `E_level`: Energy (keV).
-  - `DE_level`: Energy Uncertainty.
-  - `Spin` / `Parity`: Quantum numbers (nullable).
-  - `DS`: Dataset identifier (A, B, C...).
+- **Soft Labels:** Use `XGBRegressor(objective='binary:logistic')` to output continuous probabilities (e.g., 0.79) rather than binary classes.
+- **Physics Veto:** 
+  - If Spin/Parity mismatch -> `Veto=1`.
+  - `Veto=1` forces Probability to `0.0` in training data.
+- **Monotonic Constraints:** `monotone_constraints='(-1, -1)'` ensures probability decreases as Z-Score increases or Veto flag is set.
+- **ID Format:** `f"{row['DS']}_{int(row['E_level'])}"` (e.g., `A_3005`).
 
 ## Algorithms
 - **Z-Score:** `abs(E1 - E2) / sqrt(err1^2 + err2^2)`.
-- **Greedy Clustering:** Used to handle multiplets. A cluster (Adopted Level) cannot contain >1 level from the same Dataset (`DS`).
+- **Anchor-Based Clustering:**
+  - **Hierarchy:** Dataset A is the primary anchor. B and C match to A.
+  - **Constraint:** A cluster can contain at most one level from each Dataset.
+  - **Tie-Breaking:** Prefer higher probability; if tied, prefer lower Z-Score.
+- **Soft Source List:**
+  - Output format: `ID(Prob%) + ID(Prob%)`.
+  - Probabilities are calculated against the **Cluster Anchor**, not just any member.
+  - Exclude candidates from datasets already present in the cluster (unless they are the member).
 
 ## Development Workflow
-- **Editing:** Directly edit `python Level_Matcher_Gemini.py` without creating new files.
-- **Execution:** Run scripts directly: `python Level_Matcher_Gemini.py`.
-- **No External Training Data:** Do not look for `.csv` training files. The model "learns" physics from the `X_train` list defined in the code.
+- **Training Data:** Modify `training_data_points` list in `Level_Matcher_Gemini.py` to adjust model sensitivity (e.g., changing Z=2.0 probability).
+- **Execution:** Run `python Level_Matcher_Gemini.py`.
+- **No External Data:** All training data is synthetic and embedded in the script.

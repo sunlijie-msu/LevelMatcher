@@ -1,23 +1,42 @@
-# Level Matcher - Physics-aware matching and clustering for nuclear levels
+# LevelMatcher
 
-An automated system for matching nuclear energy levels across separate experimental datasets using Gradient Boosted Decision Trees (GBDT) and optimal assignment algorithms.
+Physics-aware nuclear level matching tool using XGBoost Regression and Anchor-Based Clustering. Matches energy levels across experimental datasets to generate "Adopted Levels" with probabilistic confidence scores.
 
-## Overview
-This tool solves the correspondence problem in nuclear structure analysis by ranking candidate matches between datasets (e.g., Adopted Levels vs. Reaction Data) and finding a globally optimal one-to-one mapping.
+## Core Features
 
-## Methodology
-The system employs a multi-stage approach:
-1.  **Feature Engineering:** Extracts physical features including energy differences ($\Delta E$), spin-parity ($J^\pi$) compatibility, and angular momentum transfer ($L$).
-2.  **Ranker (Boosting):** Utilizes a Gradient Boosting strategy to rank candidates. Boosting is preferred over Bagging (Random Forest) for its ability to strictly enforce physics constraints (e.g., spin vetoes) through sequential error correction.
-3.  **Global Optimization:** Applies the Hungarian algorithm (Linear Sum Assignment) to the ranked scores to ensure a unique, physically consistent mapping across the entire level scheme.
+*   **Soft Probability Matching:** Uses `XGBRegressor` to output continuous match probabilities (e.g., 79%) rather than binary classifications.
+*   **Physics Veto:** Enforces strict selection rules. Mismatched Spin/Parity sets probability to 0.0 regardless of energy agreement.
+*   **Anchor-Based Clustering:** Resolves multiplets using a strict hierarchy (Dataset A > B > C).
+    *   **Constraint:** Clusters contain at most one level per dataset.
+    *   **Tie-Breaking:** Prioritizes higher probability, then lower Z-score.
+*   **Synthetic Training:** "Physics-informed" training data embedded directly in the script (`training_data_points`), eliminating external dependencies.
 
-## Implementation Strategy
-Based on the [Machine Learning Hierarchy](Technology_Hierarchy.md), the project prioritizes **XGBoost** for its:
-*   **Sparsity Awareness:** Native handling of missing experimental values (NaNs) without biased imputation.
-*   **Small Data Stability:** Level-wise tree growth and $L1/L2$ regularization to prevent overfitting on typical nuclear datasets.
-*   **Physics Compliance:** Effective modeling of hard constraints and selection rules.
+## Architecture
 
-## Project Structure
-*   `Level_Matcher_XGBoost.py`: (Recommended) Implementation optimized for stability and sparsity.
-*   `Level_Matcher_GPT.py`: Reference implementation using LightGBM.
-*   `Level_Matcher_Gemini.py`: Reference implementation using Scikit-learn.
+| Component | Implementation | Purpose |
+| :--- | :--- | :--- |
+| **Model** | `XGBRegressor` | Predicts match probability based on Z-Score and Veto. |
+| **Objective** | `binary:logistic` | Outputs soft probabilities (0.0 - 1.0). |
+| **Constraints** | `monotone_constraints='(-1, -1)'` | Ensures probability decreases as Energy Diff or Veto increases. |
+| **Clustering** | Custom Hierarchical | Groups levels around "Anchors" (A > B > C). |
+
+## Usage
+
+1.  **Edit Data:** Modify the `levels` list in `Level_Matcher_Gemini.py` to input your datasets (A, B, C).
+2.  **Run:**
+    ```bash
+    python Level_Matcher_Gemini.py
+    ```
+3.  **Output:**
+    *   **Adopted_E:** Weighted average energy of the cluster.
+    *   **Sources:** List of matching levels with confidence scores (e.g., `A_3000(100%) + C_3005(81%)`).
+    *   **Spin_Parity:** Adopted $J^\pi$ from the anchor level.
+
+## Logic & Conventions
+
+*   **Z-Score:** $\Delta E / \sqrt{\sigma_1^2 + \sigma_2^2}$.
+    *   $Z < 2.0$: High probability match.
+    *   $Z > 3.0$: Low probability match.
+*   **Soft Source List:**
+    *   Probabilities are calculated against the **Cluster Anchor**.
+    *   Levels from datasets already present in the cluster are excluded from the candidate list.
