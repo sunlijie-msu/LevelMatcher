@@ -1,6 +1,6 @@
-# Nuclear Level Matcher
+# Level Matcher - Physics-aware matching and clustering for nuclear levels
 
-An automated system for matching nuclear energy levels across disparate experimental datasets using Gradient Boosted Decision Trees (GBDT) and optimal assignment algorithms.
+An automated system for matching nuclear energy levels across separate experimental datasets using Gradient Boosted Decision Trees (GBDT) and optimal assignment algorithms.
 
 ## Overview
 This tool solves the correspondence problem in nuclear structure analysis by ranking candidate matches between datasets (e.g., Adopted Levels vs. Reaction Data) and finding a globally optimal one-to-one mapping.

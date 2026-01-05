@@ -1,27 +1,27 @@
 import pandas as pd
 import numpy as np
-from xgboost import XGBClassifier
+from xgboost import XGBRegressor
+# support Soft Labels (continuous probabilities like 0.3, 0.5) instead of just binary 0/1
 
 # ==========================================
 # 1. SETUP DATASETS
 # ==========================================
 levels = []
 
-# Dataset A: High resolution, good spin/parity
+# Dataset A:
 levels.append({'E_level': 1000.0, 'DE_level': 3.0, 'Spin': None, 'Parity': None, 'DS': 'A'})
 levels.append({'E_level': 2000.0, 'DE_level': 4.0, 'Spin': None, 'Parity': None, 'DS': 'A'})
 levels.append({'E_level': 3000.0, 'DE_level': 2.0, 'Spin': 1.0,  'Parity': '+',  'DS': 'A'})
-levels.append({'E_level': 3005.0, 'DE_level': 3.0, 'Spin': 2.0,  'Parity': '-',  'DS': 'A'})
+levels.append({'E_level': 3005.0, 'DE_level': 2.0, 'Spin': 2.0,  'Parity': '-',  'DS': 'A'})
 levels.append({'E_level': 4000.0, 'DE_level': 4.0, 'Spin': 2.0,  'Parity': '+',  'DS': 'A'})
 
-# Dataset B: Reaction data (good selection rules, energy might vary)
+# Dataset B:
 levels.append({'E_level': 1005.0, 'DE_level': 3.0, 'Spin': None, 'Parity': None, 'DS': 'B'})
 levels.append({'E_level': 2008.0, 'DE_level': 2.0, 'Spin': None, 'Parity': None, 'DS': 'B'})
-# Note: B_3000 (2-) should match A_3005 (2-), NOT A_3000 (1+)
 levels.append({'E_level': 3000.0, 'DE_level': 1.0, 'Spin': 2.0,  'Parity': '-',  'DS': 'B'}) 
 levels.append({'E_level': 5000.0, 'DE_level': 6.0, 'Spin': 2.0,  'Parity': '+',  'DS': 'B'})
 
-# Dataset C: Low resolution (Multiplets possible)
+# Dataset C:
 levels.append({'E_level': 1010.0, 'DE_level': 30.0, 'Spin': None, 'Parity': None, 'DS': 'C'})
 levels.append({'E_level': 2010.0, 'DE_level': 40.0, 'Spin': None, 'Parity': None, 'DS': 'C'})
 levels.append({'E_level': 3005.0, 'DE_level': 30.0, 'Spin': None, 'Parity': None, 'DS': 'C'})
@@ -37,37 +37,74 @@ df['ID'] = df.apply(lambda x: f"{x['DS']}_{int(x['E_level'])}", axis=1)
 # 2. TRAIN XGBOOST (Physics-Informed)
 # ==========================================
 # Features: [Z_Score, Physics_Veto]
-# Veto = 1 if Spin OR Parity mismatch. 0 otherwise.
+# Feature 1: Z-Score = abs(E1 - E2) / sqrt(err1^2 + err2^2)
+#            This represents the energy difference in units of "standard deviations".
+#            Z < 2.0 is typically a good match. Z > 3.0 is typically a non-match.
+# Feature 2: Physics_Veto = 1 if Spin / Parity mismatch. 0 otherwise.
 
-X_train = [
-    # --- Clear Matches ---
-    [0.0, 0], [0.5, 0], [1.0, 0], [1.5, 0], # Perfect/Good Energy, No Veto -> Match
-    
-    # --- Energy Mismatch but Acceptable ---
-    [2.0, 0], [2.5, 0], [3.0, 0],           # Marginal Energy, No Veto -> Match (Lower prob, but > 0.5)
-    
-    # --- Clear Non-Matches (Energy) ---
-    [4.0, 0], [5.0, 0], [10.0, 0],          # Too far away -> No Match
-    
-    # --- Physics Veto (CRITICAL) ---
-    # Even if Energy is perfect (Z=0), a Physics Veto MUST kill the match.
-    [0.0, 1], [0.1, 1], [0.5, 1], [1.0, 1], # Perfect Energy but Wrong Spin/Parity -> No Match
-    [2.0, 1], [5.0, 1]                      # Bad Energy AND Wrong Spin -> No Match
+# ==========================================
+# TRAINING DATA DEFINITION
+# ==========================================
+# We define the training data as a list of tuples for readability.
+# Format: (Z_Score, Physics_Veto, Target_Probability)
+#
+# X_train (Questions): The first two columns [Z_Score, Veto]
+# y_train (Answers):   The last column [Probability]
+#
+# Logic:
+# 1. Z-Score: Energy difference in sigma units. Lower is better.
+# 2. Physics_Veto: 1 means Spin/Parity mismatch. This kills the match (Prob=0).
+# 3. Probability: 1.0 (Certain) -> 0.0 (Impossible).
+
+training_data_points = [
+    # --- Excellent Matches (Z < 1.5) ---
+    (0.0, 0, 1.00),  # Perfect match
+    (0.5, 0, 0.99),  # Slight penalty to distinguish from perfect
+    (1.0, 0, 0.98),  # 1-sigma is still excellent
+    (1.5, 0, 0.95),
+
+    # --- Transition Zone (1.5 < Z < 3.0) ---
+    # We define a smooth curve here
+    (1.8, 0, 0.90),
+    (2.0, 0, 0.80),  # 2-sigma: Good candidate
+    (2.2, 0, 0.70),
+    (2.5, 0, 0.60),
+    (2.8, 0, 0.55),
+    (3.0, 0, 0.50),  # 3-sigma: The "Maybe" threshold (50/50)
+
+    # --- Weak Matches (Z > 3.0) ---
+    (3.2, 0, 0.40),
+    (3.5, 0, 0.20),  # Rapid drop-off after 3-sigma
+    (4.0, 0, 0.10),  # 4-sigma: Very unlikely
+    (5.0, 0, 0.01),  # 5-sigma: Effectively zero
+    (10.0, 0, 0.00), # Far away
+    (20.0, 0, 0.00), # Very Far
+    (100.0, 0, 0.00), # Extremely Far
+
+    # --- Physics Veto Cases (CRITICAL) ---
+    # If Veto=1, Probability is ALWAYS 0.0, regardless of Z-score.
+    (0.0, 1, 0.00), 
+    (1.0, 1, 0.00), 
+    (2.0, 1, 0.00), 
+    (3.0, 1, 0.00), 
+    (5.0, 1, 0.00),
+    (100.0, 1, 0.00)
 ]
 
-y_train = [
-    1, 1, 1, 1,   # Good
-    1, 1, 0,      # Marginal (Z=3.0 is usually cutoff)
-    0, 0, 0,      # Bad Energy
-    0, 0, 0, 0,   # Veto kills good energy (Strict enforcement)
-    0, 0          # Veto kills bad energy
-]
+# Split into X (Input Features) and y (Labels) for XGBoost
+X_train = np.array([[pt[0], pt[1]] for pt in training_data_points])
+y_train = np.array([pt[2] for pt in training_data_points])
 
 # Monotonic constraints: 
 # Feature 0 (Z-Score): Increasing Z reduces prob (-1)
 # Feature 1 (Veto): Increasing Veto (0->1) reduces prob (-1)
-model = XGBClassifier(monotone_constraints='(-1, -1)', n_estimators=100, max_depth=2, random_state=42)
-model.fit(X_train, y_train)
+level_matcher_model = XGBRegressor(objective='binary:logistic', # Regression for probabilities
+                                   monotone_constraints='(-1, -1)', # Enforce a decreasing constraint on both predictors
+                                   n_estimators=100, # Number of gradient boosted trees
+                                   max_depth=2, # Maximum tree depth for base learners
+                                   random_state=42) # Random number seed
+# Train the model
+level_matcher_model.fit(X_train, y_train)
 
 # ==========================================
 # 3. PREDICT MATCHES
@@ -92,7 +129,7 @@ for i, r1 in df.iterrows():
             veto = 1
 
         # Predict
-        prob = model.predict_proba([[z_score, veto]])[0][1]
+        prob = level_matcher_model.predict([[z_score, veto]])[0]
         
         if prob > 0.5:
             candidates.append({
@@ -105,115 +142,162 @@ for i, r1 in df.iterrows():
 candidates.sort(key=lambda x: x['prob'], reverse=True)
 
 # ==========================================
-# 4. GREEDY CLUSTERING (Constraint Solver)
+# 4. HIERARCHICAL CLUSTERING (Anchor-Based)
 # ==========================================
-# Goal: Create clusters where NO dataset appears more than once.
-# This handles multiplets by forcing the "best" match to take the slot.
+# Logic:
+# 1. Prioritize Datasets: A > B > C
+# 2. "A" levels are the primary Anchors.
+# 3. "B" levels match to "A" if possible, else form new anchors.
+# 4. "C" levels match to existing clusters, else form new anchors.
+# 5. Constraint: A cluster can contain AT MOST one level from each Dataset.
 
-# Initialize each level as its own cluster
-clusters = {id: {id} for id in df['ID']} # Map ID -> Set of IDs in its cluster
-dataset_map = {id: ds for id, ds in zip(df['ID'], df['DS'])}
+# Priority Order
+ds_priority = ['A', 'B', 'C']
 
-# Store all pairwise probabilities for lookup
-prob_map = {} 
-for cand in candidates:
-    id1, id2 = cand['ID1'], cand['ID2']
-    prob = cand['prob']
-    prob_map[(id1, id2)] = prob
-    prob_map[(id2, id1)] = prob # Symmetric
+# Initialize Clusters with Dataset A
+# Structure: [ {'Adopted_E': ..., 'Members': {'A': 'A_1000', 'B': 'B_1005'} } ]
+clusters = []
 
-    # Greedy Clustering Logic
-    c1 = clusters[id1]
-    c2 = clusters[id2]
+# Helper to get level data by ID
+def get_level_data(id):
+    return df[df['ID'] == id].iloc[0]
+
+# 1. Start with all levels from the highest priority dataset (A)
+primary_ds = ds_priority[0]
+for _, row in df[df['DS'] == primary_ds].iterrows():
+    clusters.append({
+        'Anchor_ID': row['ID'],
+        'Members': {primary_ds: row['ID']}, # Map DS -> ID
+        'Sum_E_Wt': row['E_level'] / (row['DE_level']**2),
+        'Sum_Wt': 1 / (row['DE_level']**2)
+    })
+
+# 2. Iterate through remaining datasets
+for current_ds in ds_priority[1:]:
+    # Get all levels for this dataset
+    current_levels = df[df['DS'] == current_ds]
     
-    if c1 is c2: continue # Already merged
-    
-    # Check Constraint: Do c1 and c2 have any conflicting datasets?
-    ds_in_c1 = {dataset_map[x] for x in c1}
-    ds_in_c2 = {dataset_map[x] for x in c2}
-    
-    if ds_in_c1.isdisjoint(ds_in_c2):
-        # Merge c2 into c1
-        new_cluster = c1.union(c2)
-        for member in new_cluster:
-            clusters[member] = new_cluster
-
-# Extract unique clusters
-unique_clusters = []
-seen = set()
-for c in clusters.values():
-    c_frozen = frozenset(c)
-    if c_frozen not in seen:
-        unique_clusters.append(c)
-        seen.add(c_frozen)
+    for _, row in current_levels.iterrows():
+        level_id = row['ID']
+        best_cluster_idx = -1
+        best_prob = 0.0
+        best_z = 9999.0 # Tie-breaker
+        
+        # Try to match with existing clusters
+        for idx, cluster in enumerate(clusters):
+            # CONSTRAINT: Cluster must not already have a level from current_ds
+            if current_ds in cluster['Members']:
+                continue
+                
+            # Compare against the ANCHOR of the cluster
+            # This ensures we respect the primary definition of the cluster
+            anchor_id = cluster['Anchor_ID']
+            anchor_row = get_level_data(anchor_id)
+            
+            # Calc Z-Score
+            err = np.sqrt(row['DE_level']**2 + anchor_row['DE_level']**2)
+            z = abs(row['E_level'] - anchor_row['E_level']) / err
+            
+            # Calc Veto
+            veto = 0
+            if pd.notna(row['Spin']) and pd.notna(anchor_row['Spin']) and row['Spin'] != anchor_row['Spin']: veto = 1
+            if pd.notna(row['Parity']) and pd.notna(anchor_row['Parity']) and row['Parity'] != anchor_row['Parity']: veto = 1
+            
+            p = level_matcher_model.predict([[z, veto]])[0]
+            
+            # Logic: Prefer higher probability. If tied, prefer lower Z-score.
+            if p > best_prob:
+                best_prob = p
+                best_cluster_idx = idx
+                best_z = z
+            elif abs(p - best_prob) < 0.01 and p > 0.1: # Tie (within 1%)
+                if z < best_z:
+                    best_prob = p
+                    best_cluster_idx = idx
+                    best_z = z
+        
+        # Decision: Match or New Cluster?
+        # Threshold can be from training data (e.g., 0.5 for 3-sigma)
+        if best_prob > 0.5 and best_cluster_idx != -1:
+            # Add to cluster
+            target_cluster = clusters[best_cluster_idx]
+            target_cluster['Members'][current_ds] = level_id
+            
+            # Update Weighted Average Stats
+            wt = 1 / (row['DE_level']**2)
+            target_cluster['Sum_E_Wt'] += row['E_level'] * wt
+            target_cluster['Sum_Wt'] += wt
+        else:
+            # Create New Cluster
+            clusters.append({
+                'Anchor_ID': level_id,
+                'Members': {current_ds: level_id},
+                'Sum_E_Wt': row['E_level'] / (row['DE_level']**2),
+                'Sum_Wt': 1 / (row['DE_level']**2)
+            })
 
 # ==========================================
-# 5. GENERATE ADOPTED LEVELS
+# 5. GENERATE ADOPTED LEVELS & SOFT LISTS
 # ==========================================
 adopted_levels = []
 
-for cluster in unique_clusters:
-    sub = df[df['ID'].isin(cluster)]
+for cluster in clusters:
+    # Calculate Adopted Energy
+    adopted_e = cluster['Sum_E_Wt'] / cluster['Sum_Wt']
     
-    # Weighted Average Energy
-    errs = sub['DE_level'].fillna(20.0)
-    weights = 1 / errs**2
-    mean_e = (sub['E_level'] * weights).sum() / weights.sum()
+    # Determine Spin/Parity (Naive: Take from Anchor or first available)
+    # Better: Take from highest priority member that has info
+    spin_parity = ""
+    for ds in ds_priority:
+        if ds in cluster['Members']:
+            mem_id = cluster['Members'][ds]
+            mem_row = get_level_data(mem_id)
+            if pd.notna(mem_row['Spin']):
+                spin_parity = f"{mem_row['Spin']}{mem_row['Parity'] if pd.notna(mem_row['Parity']) else ''}"
+                break
     
-    # Spin/Parity Extraction
-    spin_val = ""
-    if not sub['Spin'].dropna().empty:
-        spin_val = str(sub['Spin'].dropna().iloc[0])
-        
-    parity_val = ""
-    if not sub['Parity'].dropna().empty:
-        parity_val = str(sub['Parity'].dropna().iloc[0])
+    # Generate Soft Source List
+    # Rule: Show probability of ALL levels matching this cluster, 
+    # BUT exclude levels from datasets that are already IN the cluster (unless it IS the member).
     
-    # --- Generate "Soft" Source List with Probabilities ---
-    # 1. Identify Representative (Anchor) for 100% reference
-    # Hierarchy: A > B > C
-    cluster_ds = sub['DS'].tolist()
-    cluster_ids = sub['ID'].tolist()
-    
-    if 'A' in cluster_ds:
-        rep_idx = cluster_ds.index('A')
-    elif 'B' in cluster_ds:
-        rep_idx = cluster_ds.index('B')
-    else:
-        rep_idx = 0
-    representative = cluster_ids[rep_idx]
-
-    # 2. Check every level in the dataframe for a match to this cluster
     source_entries = []
-    all_ids = df['ID'].tolist()
     
-    for candidate_id in all_ids:
-        # If it's the representative, it's 100%
-        if candidate_id == representative:
-            source_entries.append(f"{candidate_id}(100%)")
+    # We iterate through ALL levels in the dataframe
+    for _, cand_row in df.iterrows():
+        cand_id = cand_row['ID']
+        cand_ds = cand_row['DS']
+        
+        # 1. If this candidate IS the member for this DS, it's 100%
+        if cand_ds in cluster['Members'] and cluster['Members'][cand_ds] == cand_id:
+            source_entries.append(f"{cand_id}(100%)")
             continue
             
-        # Otherwise, find max probability to ANY member of the cluster
-        max_prob = 0.0
-        for member in cluster:
-            if candidate_id == member:
-                # It is in the cluster, but not the rep. 
-                # If we have a direct link prob, use it. If not (e.g. merged via third party), might be tricky.
-                # For now, check prob_map. If missing (self?), assume 1.0? 
-                # No, user wants relative confidence.
-                pass
+        # 2. If this candidate is from a DS that is ALREADY in the cluster, SKIP IT.
+        # This prevents A_3005 from appearing in A_3000's cluster list.
+        if cand_ds in cluster['Members']:
+            continue
+             ANCHOR
+        # This prevents "chaining" through weak links and enforces the Anchor's physics.
+        anchor_id = cluster['Anchor_ID']
+        anchor_row = get_level_data(anchor_id)
+        
+        err = np.sqrt(cand_row['DE_level']**2 + anchor_row['DE_level']**2)
+        z = abs(cand_row['E_level'] - anchor_row['E_level']) / err
+        
+        veto = 0
+        if pd.notna(cand_row['Spin']) and pd.notna(anchor_row['Spin']) and cand_row['Spin'] != anchor_row['Spin']: veto = 1
+        if pd.notna(cand_row['Parity']) and pd.notna(anchor_row['Parity']) and cand_row['Parity'] != anchor_row['Parity']: veto = 1
+        
+        p = level_matcher_model.predict([[z, veto]])[0]
             
-            p = prob_map.get((candidate_id, member), 0.0)
-            if p > max_prob: max_prob = p
-            
-        # Threshold for display (e.g., 10%)
-        if max_prob > 0.1:
-            source_entries.append(f"{candidate_id}({int(max_prob*100)}%)")
+        if p > 0.2: # Display threshold (20%)
+            source_entries.append(f"{cand_id}({int(p
+            source_entries.append(f"{cand_id}({int(max_prob*100)}%)")
 
     adopted_levels.append({
-        'Adopted_E': round(mean_e, 1),
-        'Sources': " + ".join(sorted(source_entries)), # Sort for consistency
-        'Spin_Parity': spin_val + parity_val
+        'Adopted_E': round(adopted_e, 1),
+        'Sources': " + ".join(sorted(source_entries)),
+        'Spin_Parity': spin_parity
     })
 
 final_df = pd.DataFrame(adopted_levels).sort_values('Adopted_E')
