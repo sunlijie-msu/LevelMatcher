@@ -25,14 +25,15 @@ Nuclear structure analysis tool that matches energy levels across separate exper
 
 ## Algorithms
 - **Z-Score:** `abs(E1 - E2) / sqrt(err1^2 + err2^2)`.
-- **Anchor-Based Clustering:**
-  - **Hierarchy:** Dataset A is the primary anchor. B and C match to A.
-  - **Constraint:** A cluster can contain at most one level from each Dataset.
-  - **Tie-Breaking:** Prefer higher probability; if tied, prefer lower Z-Score.
-- **Soft Source List:**
+- **Graph Clustering (Greedy Merge with Overlap):**
+  - **Logic:** Iteratively merge clusters connected by high-probability matches.
+  - **Constraint 1 (Dataset):** A cluster can contain at most one level from each Dataset.
+  - **Constraint 2 (Consistency):** Merges are only allowed if *all* cross-dataset pairs in the resulting cluster are valid ML matches (present in the high-probability candidates list).
+  - **Doublet Support:** If two clusters cannot merge due to a conflict (e.g., Dataset A vs Dataset A), but a level (e.g., from Dataset C) matches *both* clusters consistently, that level is assigned to **both** clusters. This allows handling "Doublets" where one experimental level corresponds to multiple physical states.
+  - **Anchor Selection:** The member with the lowest energy uncertainty (`DE_level`) defines the cluster's physical properties.
+- **XREF List:**
   - Output format: `ID(Prob%) + ID(Prob%)`.
-  - Probabilities are calculated against the **Cluster Anchor**, not just any member.
-  - Exclude candidates from datasets already present in the cluster (unless they are the member).
+  - Probabilities are calculated against the **Cluster Anchor**.
 
 ## Development Workflow
 - **Training Data:** Modify `training_data_points` list in `Level_Matcher_Gemini.py` to adjust model sensitivity (e.g., changing Z=2.0 probability).
