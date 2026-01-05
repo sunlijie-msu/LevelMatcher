@@ -5,6 +5,7 @@ Nuclear structure analysis tool that matches energy levels across separate exper
 
 ## Core Architecture
 - **Single-File Script:** The primary logic resides in `Level_Matcher_Gemini.py`.
+- **Simplicity First:** Avoid creating new functions for simple logic. Keep the logic inline and use clear, concise comments to explain complex lines.
 - **Pipeline:**
   1.  **Data Ingestion:** Hardcoded `pandas` DataFrame setup (Datasets A, B, C).
   2.  **Physics-Informed Training:** `XGBRegressor` trained on `training_data_points` (synthetic list of tuples `(Z_Score, Veto, Probability)`).
@@ -13,6 +14,9 @@ Nuclear structure analysis tool that matches energy levels across separate exper
 
 ## Key Patterns & Conventions
 - **Soft Labels:** Use `XGBRegressor(objective='binary:logistic')` to output continuous probabilities (e.g., 0.79) rather than binary classes.
+- **Prediction Syntax:** `model.predict([[z, veto]])[0]`
+  - `[[...]]`: The model expects a 2D array (batch of inputs).
+  - `[0]`: The model returns a list of results; we take the first one for our single pair.
 - **Physics Veto:** 
   - If Spin/Parity mismatch -> `Veto=1`.
   - `Veto=1` forces Probability to `0.0` in training data.
