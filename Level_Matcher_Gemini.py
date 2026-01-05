@@ -123,6 +123,7 @@ for i, r1 in df.iterrows():
         veto = 0
         # Spin Mismatch
         if pd.notna(r1['Spin']) and pd.notna(r2['Spin']) and r1['Spin'] != r2['Spin']:
+            # pd.notna detects non-missing (existing) values in a dataset
             veto = 1
         # Parity Mismatch
         if pd.notna(r1['Parity']) and pd.notna(r2['Parity']) and r1['Parity'] != r2['Parity']:
@@ -276,7 +277,8 @@ for cluster in clusters:
         # This prevents A_3005 from appearing in A_3000's cluster list.
         if cand_ds in cluster['Members']:
             continue
-             ANCHOR
+            
+        # 3. Otherwise, calculate match probability to the Cluster ANCHOR
         # This prevents "chaining" through weak links and enforces the Anchor's physics.
         anchor_id = cluster['Anchor_ID']
         anchor_row = get_level_data(anchor_id)
@@ -291,8 +293,7 @@ for cluster in clusters:
         p = level_matcher_model.predict([[z, veto]])[0]
             
         if p > 0.2: # Display threshold (20%)
-            source_entries.append(f"{cand_id}({int(p
-            source_entries.append(f"{cand_id}({int(max_prob*100)}%)")
+            source_entries.append(f"{cand_id}({int(p*100)}%)")
 
     adopted_levels.append({
         'Adopted_E': round(adopted_e, 1),
