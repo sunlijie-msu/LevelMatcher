@@ -10,9 +10,9 @@ from xgboost import XGBRegressor
 # ==========================================
 levels = []
 for ds_code in ['A', 'B', 'C']:
-    filename = f"dataset_{ds_code}.json"
+    filename = f"test_dataset_{ds_code}.json"
     if os.path.exists(filename):
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             levels.extend(json.load(f))
 
 df = pd.DataFrame(levels)
@@ -31,35 +31,29 @@ df['ID'] = df.apply(lambda x: f"{x['DS']}_{int(x['E_level'])}", axis=1)
 
 # Training Data: (Z_Score, Veto, Probability)
 # Synthetic data encoding physics logic: Low Z + No Veto = High Prob.
-training_data_points = [
-    # --- Excellent Matches (Z < 1.5) ---
-    (0.0, 0, 1.00),
-    (0.5, 0, 0.99),
-    (1.0, 0, 0.98),
-    (1.5, 0, 0.95),
-    # --- Transition Zone (1.5 < Z < 3.0) ---
-    (1.8, 0, 0.90),
-    (2.0, 0, 0.80),
-    (2.2, 0, 0.70),
-    (2.5, 0, 0.60),
-    (2.8, 0, 0.55),
-    (3.0, 0, 0.50),
-    # --- Weak Matches (Z > 3.0) ---
-    (3.2, 0, 0.40),
-    (3.5, 0, 0.20),
-    (4.0, 0, 0.10),
-    (5.0, 0, 0.01),
-    (10.0, 0, 0.00),
-    (20.0, 0, 0.00),
-    (100.0, 0, 0.00),
-    # --- Physics Veto Cases ---
-    # Veto=1 forces Probability to 0.0
-    # We provide dense sampling near Z=0 to ensure the model learns this rule strictly.
+
+MATCH_EXCELLENT = [
+    (0.0, 0, 1.00), (0.5, 0, 0.99), (1.0, 0, 0.98), (1.5, 0, 0.95)
+]
+
+MATCH_TRANSITION = [
+    (1.8, 0, 0.90), (2.0, 0, 0.80), (2.2, 0, 0.70), (2.5, 0, 0.60), (2.8, 0, 0.55), (3.0, 0, 0.50)
+]
+
+MATCH_WEAK = [
+    (3.2, 0, 0.40), (3.5, 0, 0.20), (4.0, 0, 0.10), (5.0, 0, 0.01), (10.0, 0, 0.00), (20.0, 0, 0.00), (100.0, 0, 0.00)
+]
+
+# Veto=1 forces Probability to 0.0 (Strict Physics Rules)
+MATCH_VETOED = [
     (0.0, 1, 0.00), (0.1, 1, 0.00), (0.2, 1, 0.00), (0.3, 1, 0.00),
     (0.4, 1, 0.00), (0.5, 1, 0.00), (0.6, 1, 0.00), (0.7, 1, 0.00),
     (0.8, 1, 0.00), (0.9, 1, 0.00), (1.0, 1, 0.00), (1.5, 1, 0.00),
     (2.0, 1, 0.00), (3.0, 1, 0.00), (5.0, 1, 0.00), (100.0, 1, 0.00)
 ]
+
+training_data_points = MATCH_EXCELLENT + MATCH_TRANSITION + MATCH_WEAK + MATCH_VETOED
+
 # Split into X (Input Features) and y (Target Labels)
 X_train = np.array([[pt[0], pt[1]] for pt in training_data_points])
 y_train = np.array([pt[2] for pt in training_data_points])
