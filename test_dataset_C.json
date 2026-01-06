@@ -1,26 +1,33 @@
-[
-    {
-        "E_level": 1010,
-        "DE_level": 50,
-        "Spin_Parity": null,
-        "DS": "C"
-    },
-    {
-        "E_level": 2010,
-        "DE_level": 60,
-        "Spin_Parity": null,
-        "DS": "C"
-    },
-    {
-        "E_level": 3005,
-        "DE_level": 40,
-        "Spin_Parity": null,
-        "DS": "C"
-    },
-    {
-        "E_level": 5020,
-        "DE_level": 60,
-        "Spin_Parity": null,
-        "DS": "C"
+{
+    "levelsTable": {
+        "levels": [
+            {
+                "energy": { "value": 1010.0, "uncertainty": { "value": 30.0 }, "evaluatorInput": "1010 30" },
+                "spinParity": { "values": [], "evaluatorInput": "unknown" }
+            },
+            {
+                "energy": { "value": 2010.0, "uncertainty": { "value": 40.0 }, "evaluatorInput": "2010 40" },
+                "spinParity": { "values": [], "evaluatorInput": "unknown" }
+            },
+            {
+                "energy": { "value": 3005.0, "uncertainty": { "value": 30.0 }, "evaluatorInput": "3005 30" },
+                "spinParity": { "values": [], "evaluatorInput": "unknown" }
+            },
+            {
+                "energy": { "value": 4000.0, "uncertainty": { "value": 30.0 }, "evaluatorInput": "4000 30" },
+                "spinParity": {
+                    "values": [
+                        { "twoTimesSpin": 2, "isTentativeSpin": false, "parity": null, "isTentativeParity": false },
+                        { "twoTimesSpin": 4, "isTentativeSpin": false, "parity": null, "isTentativeParity": false },
+                        { "twoTimesSpin": 6, "isTentativeSpin": false, "parity": null, "isTentativeParity": false }
+                    ],
+                    "evaluatorInput": "1:3"
+                }
+            },
+            {
+                "energy": { "value": 5005.0, "uncertainty": { "value": 30.0 }, "evaluatorInput": "5005 30" },
+                "spinParity": { "values": [], "evaluatorInput": "unknown" }
+            }
+        ]
     }
-]
+}

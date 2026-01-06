@@ -40,7 +40,11 @@ def expand_j_pi(text, default_parity=None, is_parent_tentative=False):
     Returns: List of QuantumState objects.
     """
     states = []
-    text = text.strip()
+    if not text: return states
+    
+    # Normalize unicode chars (e.g. minus sign)
+    text = text.replace('−', '-').strip()
+    
     if not text: return states
 
     # SPECIAL CASE: Pure Parity (e.g. "+", "(-)")
@@ -54,7 +58,21 @@ def expand_j_pi(text, default_parity=None, is_parent_tentative=False):
         states.append(QuantumState(None, p_char, j_tentative=True, p_firm=p_firm))
         return states
 
-    # 1. Handle Grouped Parens e.g. "(1/2,3/2)+", "(1,2)"
+    # 1. Handle Mixed Tentative Parity Suffix e.g. "7/2(+)", "5/2(-)"
+    # Pattern: ^ (content) \( (\+|\-) \) $
+    tent_parity_match = re.match(r'^(.*)\((\+|\-)\)$', text)
+    if tent_parity_match:
+        content = tent_parity_match.group(1).strip()
+        p_char = tent_parity_match.group(2)
+        
+        # Recurse on the content (e.g. "7/2") with this tentative parity as default
+        recurse_states = expand_j_pi(content, default_parity=p_char, is_parent_tentative=is_parent_tentative)
+        for s in recurse_states:
+            if s.p is None: s.p = p_char # Apply if not set
+            s.p_firm = False # Tentative because it was in parens (+)
+        return recurse_states
+
+    # 2. Handle Grouped Parens e.g. "(1/2,3/2)+", "(1,2)"
     # Pattern: ^ \s* \( (content) \) (suffix) \s* $
     paren_match = re.match(r'^\s*\((.*)\)([\+\-]?)?\s*$', text)
     
