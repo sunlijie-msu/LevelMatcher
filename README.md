@@ -1,14 +1,17 @@
 # LevelMatcher
 
-Nuclear structure analysis tool using **XGBoost Regression** and **Graph Clustering** to match energy levels across experimental datasets.
+Physics-informed nuclear level matching tool using XGBoost Regression and Graph Clustering. Matches energy levels across experimental datasets to generate "Adopted Levels" and XREF list with probabilistic confidence scores.
 
 ## Key Features
-*   **Physics-Informed ML:** XGBoost model trained on synthetic physics rules (Z-Score + Spin/Parity Veto).
-*   **Soft Probabilities:** Outputs continuous match probabilities (0.0-1.0) rather than binary classifications.
-*   **Advanced Clustering:**
-    *   **Consistency Check:** Merges only if all members form a valid clique (all pairs >50% prob).
-    *   **Doublet Support:** Allows a single level to belong to multiple clusters if it bridges conflicting states (e.g., large uncertainty level matching two precise levels).
-    *   **Anchor-Based:** Physical properties defined by the most precise level in the cluster.
+
+*   **Physics-Informed XGBoost:** Uses `XGBRegressor` to output continuous match probabilities based on energy agreement (Z-Score) and physical properties (Spin/Parity Veto).
+*   **Physics Veto:** Enforces strict selection rules. Mismatched Spin/Parity sets probability to 0.0 regardless of energy agreement.
+*   **Graph Clustering (Greedy Merge):** Resolves multiplets by merging high-probability pairs into clusters.
+    *   **Consistency:** Validates merges against all existing members to ensure consistency (Clique-like).
+    *   **Doublet Support:** Allows levels to belong to multiple clusters if they match both consistently.
+    *   **Constraint:** Clusters contain at most one level per dataset (Dataset Conflict Resolution).
+    *   **Anchor Selection:** The member with the lowest energy uncertainty ($ \Delta E $) defines the cluster's physical properties.
+*   **Synthetic Training:** "Physics-informed" training data embedded directly in the script, eliminating external dependencies.
 
 ## Workflow
 1.  **Data:** Ingests datasets (A, B, C) with Energy, Uncertainty, Spin, and Parity.
