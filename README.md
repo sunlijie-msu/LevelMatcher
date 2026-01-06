@@ -1,6 +1,7 @@
-# LevelMatcher
+# Level Matcher
 
-Physics-informed nuclear level matching tool using XGBoost Regression and Graph Clustering. Matches energy levels across experimental datasets to generate "Adopted Levels" and XREF list with probabilistic confidence scores.
+Physics-informed nuclear level matching tool using XGBoost Regression and Graph Clustering.
+Matches energy levels across experimental datasets to generate "Adopted Levels" and XREF list with probabilistic confidence scores.
 
 ## Key Features
 
@@ -14,15 +15,15 @@ Physics-informed nuclear level matching tool using XGBoost Regression and Graph 
 *   **Synthetic Training:** "Physics-informed" training data embedded directly in the script, eliminating external dependencies.
 
 ## Workflow
-1.  **Data:** Ingests datasets (A, B, C) with Energy, Uncertainty, Spin, and Parity.
-2.  **Training:** Trains `XGBRegressor` to penalize high Z-scores and Spin/Parity mismatches.
-3.  **Inference:** Calculates pairwise probabilities for all cross-dataset levels.
-4.  **Clustering:**
+1.  **Data Ingestion:** Ingests datasets (A, B, C) with Energy, Uncertainty, Spin, and Parity.
+2.  **Model Training:** Trains `XGBRegressor` to penalize high Z-scores and Spin/Parity mismatches.
+3.  **Pairwise Inference:** Calculates pairwise probabilities for all cross-dataset level pairs.
+4.  **Graph Clustering:**
     *   Greedy merge of high-probability pairs.
     *   Enforces **Dataset Uniqueness** (one level per dataset per cluster).
     *   Enforces **ML Consistency** (all members must match each other).
     *   Handles **Doublets** by allowing overlap when merges are blocked by dataset conflicts.
-5.  **Output:** Generates "Adopted Levels" with weighted average energy and XREF lists.
+5.  **Adopted Level Generation:** Generates "Adopted Levels" with weighted average energy and XREF lists.
 
 ## Usage
 1.  Edit `levels` in `Level_Matcher_Gemini.py`.
