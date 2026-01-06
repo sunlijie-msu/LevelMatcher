@@ -68,7 +68,7 @@ y_train = np.array([pt[2] for pt in training_data_points])
 # Feature 0 (Z-Score): Increasing Z reduces prob (-1)
 # Feature 1 (Veto): Increasing Veto (0->1) reduces prob (-1)
 level_matcher_model = XGBRegressor(objective='binary:logistic', # Objective Function: Training Loss + Regularization. Optimizes the log loss function to predict probability of an instance belonging to a class.
-                                   monotone_constraints='(-1, -1)', # Enforce a decreasing constraint on both predictors
+                                   monotone_constraints='(-1, -1)', # Enforce a decreasing constraint on both predictors. In some cases, where there is a very strong prior belief that the true relationship has some quality, constraints can be used to improve the predictive performance of the model.
                                    n_estimators=200, # Number of gradient boosted trees
                                    max_depth=4, # Maximum tree depth for base learners
                                    random_state=42) # Random number seed
