@@ -26,7 +26,7 @@ Matches energy levels across experimental datasets to generate "Adopted Levels" 
 5.  **Adopted Level Generation:** Generates "Adopted Levels" with weighted average energy and XREF lists.
 
 ## Usage
-1.  Edit `levels` in `Level_Matcher_Gemini.py`.
+1.  Populate `dataset_A.json`, `dataset_B.json`, and `dataset_C.json` with experimental data.
 2.  Run: `python Level_Matcher_Gemini.py`
 3.  View output: Adopted Energy, XREF (with probabilities), and Anchor Spin/Parity.
 

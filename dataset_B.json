@@ -1,0 +1,6 @@
+[
+    {"E_level": 1005, "DE_level": 3, "Spin": null, "Parity": null, "DS": "B"},
+    {"E_level": 2008, "DE_level": 2, "Spin": null, "Parity": null, "DS": "B"},
+    {"E_level": 3000, "DE_level": 2, "Spin": 2, "Parity": "-", "DS": "B"},
+    {"E_level": 5000, "DE_level": 6, "Spin": 2, "Parity": "+", "DS": "B"}
+]

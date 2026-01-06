@@ -1,32 +1,19 @@
 import pandas as pd
 import numpy as np
+import json
+import os
 from xgboost import XGBRegressor
 # support Soft Labels (continuous probabilities like 0.3, 0.5) instead of just binary 0/1
 
 # ==========================================
-# 1. SETUP DATASETS
+# 1. DATA INGESTION (From JSON files)
 # ==========================================
 levels = []
-
-# Dataset A:
-levels.append({'E_level': 1000, 'DE_level': 3, 'Spin': None, 'Parity': None, 'DS': 'A'})
-levels.append({'E_level': 2000, 'DE_level': 4, 'Spin': None, 'Parity': None, 'DS': 'A'})
-levels.append({'E_level': 3000, 'DE_level': 2, 'Spin': 1,  'Parity': '+',  'DS': 'A'})
-levels.append({'E_level': 3005, 'DE_level': 1, 'Spin': 2,  'Parity': '-',  'DS': 'A'})
-levels.append({'E_level': 4000, 'DE_level': 4, 'Spin': 2,  'Parity': '+',  'DS': 'A'})
-levels.append({'E_level': 6000, 'DE_level': 5, 'Spin': None, 'Parity': None, 'DS': 'A'})
-
-# Dataset B:
-levels.append({'E_level': 1005, 'DE_level': 3, 'Spin': None, 'Parity': None, 'DS': 'B'})
-levels.append({'E_level': 2008, 'DE_level': 2, 'Spin': None, 'Parity': None, 'DS': 'B'})
-levels.append({'E_level': 3000, 'DE_level': 2, 'Spin': 2,  'Parity': '-',  'DS': 'B'}) 
-levels.append({'E_level': 5000, 'DE_level': 6, 'Spin': 2,  'Parity': '+',  'DS': 'B'})
-
-# Dataset C:
-levels.append({'E_level': 1010, 'DE_level': 50, 'Spin': None, 'Parity': None, 'DS': 'C'})
-levels.append({'E_level': 2010, 'DE_level': 60, 'Spin': None, 'Parity': None, 'DS': 'C'})
-levels.append({'E_level': 3005, 'DE_level': 40, 'Spin': None, 'Parity': None, 'DS': 'C'})
-levels.append({'E_level': 5020, 'DE_level': 60, 'Spin': None, 'Parity': None, 'DS': 'C'})
+for ds_code in ['A', 'B', 'C']:
+    filename = f"dataset_{ds_code}.json"
+    if os.path.exists(filename):
+        with open(filename, 'r') as f:
+            levels.extend(json.load(f))
 
 df = pd.DataFrame(levels)
 
