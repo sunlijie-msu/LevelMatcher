@@ -32,5 +32,5 @@ Matches energy levels across experimental datasets to generate "Adopted Levels" 
 
 ## Logic
 *   **Z-Score:** $ |E_1 - E_2| / \sqrt{\sigma_1^2 + \sigma_2^2} $
-*   **Veto:** Probability = 0.0 if Spin/Parity mismatch.
+*   **Consistency Check:** Spin/Parity strings are parsed using a recursive descent parser. Supports ranges (e.g., "1/2:7/2"), lists (e.g., "3/2, 5/2"), and tentative assignments (e.g., "(1/2, 3/2)+"). Matches are allowed if there is **any overlap** in valid quantum numbers.
 *   **Constraints:** Monotonic constraints ensure probability decreases as Z-score increases.

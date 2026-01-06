@@ -1,8 +1,38 @@
 [
-    {"E_level": 1000, "DE_level": 3, "Spin": null, "Parity": null, "DS": "A"},
-    {"E_level": 2000, "DE_level": 4, "Spin": null, "Parity": null, "DS": "A"},
-    {"E_level": 3000, "DE_level": 2, "Spin": 1, "Parity": "+", "DS": "A"},
-    {"E_level": 3005, "DE_level": 1, "Spin": 2, "Parity": "-", "DS": "A"},
-    {"E_level": 4000, "DE_level": 4, "Spin": 2, "Parity": "+", "DS": "A"},
-    {"E_level": 6000, "DE_level": 5, "Spin": null, "Parity": null, "DS": "A"}
+    {
+        "E_level": 1000,
+        "DE_level": 3,
+        "Spin_Parity": null,
+        "DS": "A"
+    },
+    {
+        "E_level": 2000,
+        "DE_level": 4,
+        "Spin_Parity": null,
+        "DS": "A"
+    },
+    {
+        "E_level": 3000,
+        "DE_level": 2,
+        "Spin_Parity": "3/2+,5/2+",
+        "DS": "A"
+    },
+    {
+        "E_level": 3005,
+        "DE_level": 1,
+        "Spin_Parity": "2-",
+        "DS": "A"
+    },
+    {
+        "E_level": 4000,
+        "DE_level": 4,
+        "Spin_Parity": "2+",
+        "DS": "A"
+    },
+    {
+        "E_level": 6000,
+        "DE_level": 5,
+        "Spin_Parity": null,
+        "DS": "A"
+    }
 ]
