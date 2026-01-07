@@ -2,33 +2,83 @@
     "levelsTable": {
         "levels": [
             {
-                "energy": { "value": 1005.0, "uncertainty": { "value": 3.0 }, "evaluatorInput": "1005 3" },
-                "spinParity": { "values": [], "evaluatorInput": "unknown" }
-            },
-            {
-                "energy": { "value": 2008.0, "uncertainty": { "value": 2.0 }, "evaluatorInput": "2008 2" },
-                "spinParity": { "values": [], "evaluatorInput": "unknown" }
-            },
-            {
-                "energy": { "value": 3000.0, "uncertainty": { "value": 1.0 }, "evaluatorInput": "3000 1" },
+                "energy": {
+                    "value": 1005.0,
+                    "uncertainty": {
+                        "value": 3.0
+                    },
+                    "evaluatorInput": "1005 3"
+                },
                 "spinParity": {
-                    "values": [ { "twoTimesSpin": 2, "isTentativeSpin": false, "parity": "-", "isTentativeParity": false } ],
+                    "values": [],
+                    "evaluatorInput": "unknown"
+                }
+            },
+            {
+                "energy": {
+                    "value": 2008.0,
+                    "uncertainty": {
+                        "value": 2.0
+                    },
+                    "evaluatorInput": "2008 2"
+                },
+                "spinParity": {
+                    "values": [],
+                    "evaluatorInput": "unknown"
+                }
+            },
+            {
+                "energy": {
+                    "value": 3000.0,
+                    "uncertainty": {
+                        "value": 1.0
+                    },
+                    "evaluatorInput": "3000 1"
+                },
+                "spinParity": {
+                    "values": [
+                        {
+                            "twoTimesSpin": 2,
+                            "isTentativeSpin": false,
+                            "parity": "-",
+                            "isTentativeParity": false
+                        }
+                    ],
                     "evaluatorInput": "1-"
                 }
             },
             {
-                "energy": { "value": 4000.0, "uncertainty": { "value": 2.0 }, "evaluatorInput": "4000 2" },
+                "energy": {
+                    "value": 4000.0,
+                    "uncertainty": {
+                        "value": 2.0
+                    },
+                    "evaluatorInput": "4000 2"
+                },
                 "spinParity": {
-                    "values": [ 
-                        { "twoTimesSpin": 4, "isTentativeSpin": false, "parity": "+", "isTentativeParity": true },
-                        { "twoTimesSpin": 6, "isTentativeSpin": false, "parity": "+", "isTentativeParity": true }
+                    "values": [
+                        {
+                            "twoTimesSpin": 4,
+                            "isTentativeSpin": false,
+                            "parity": "+",
+                            "isTentativeParity": true
+                        }
                     ],
-                    "evaluatorInput": "2(+), 3(+)"
+                    "evaluatorInput": "2(+)"
                 }
             },
             {
-                "energy": { "value": 5000.0, "uncertainty": { "value": 3.0 }, "evaluatorInput": "5000 3" },
-                "spinParity": { "values": [], "evaluatorInput": "unknown" }
+                "energy": {
+                    "value": 5000.0,
+                    "uncertainty": {
+                        "value": 3.0
+                    },
+                    "evaluatorInput": "5000 3"
+                },
+                "spinParity": {
+                    "values": [],
+                    "evaluatorInput": "(4-)"
+                }
             }
         ]
     }

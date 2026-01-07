@@ -1,7 +1,9 @@
 # Level Matcher
 
-Physics-informed nuclear level matching tool using XGBoost (eXtreme Gradient Boosting) Regression and Graph Clustering.
-Matches energy levels across experimental datasets to generate "Adopted Levels" and XREF list with probabilistic confidence scores.
+A physics-informed nuclear level matching tool employing XGBoost (eXtreme Gradient Boosting) regression with graph clustering techniques has been developed by the FRIB Nuclear Data Group.
+
+This tool facilitates matching energy levels across experimental datasets, generating "Adopted Levels" and a cross-reference list with corresponding probabilistic confidence scores.
+
 
 ## Key Features
 

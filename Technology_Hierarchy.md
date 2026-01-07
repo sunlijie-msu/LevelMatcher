@@ -48,3 +48,12 @@
     1.  **Sparsity Awareness:** Nuclear data is full of missing values (unknown $J^\pi$). XGBoost handles `NaN` natively by learning the optimal "default direction" for missing data, rather than requiring dangerous guesses (imputation).
     2.  **Stability on Small Data:** Unlike LightGBM, XGBoost's **level-wise growth** and advanced **regularization** ($L1$/$L2$) prevent the model from "memorizing" experimental noise in small datasets ($N < 500$).
     3.  **Physics Compliance:** The Boosting strategy effectively enforces hard vetoes (e.g., Selection Rules) better than Bagging methods.
+
+
+
+Feature engineering is the process of transforming raw data into meaningful input features that make the machine learning model to detect patterns, relationships, and interactions.
+
+Well-engineered features can significantly boost model performance, leading to improved accuracy and predictive power.
+
+XGBoost are capable of handling complex data relationships.
+Handling Missing Values: can be replaced with mean/median/mode using model-based imputation. XGBoost can inherently handle NaNs as missing.
