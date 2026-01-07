@@ -16,7 +16,7 @@
 *   **Weakness for Physics:** Averaging "dilutes" hard constraints. If a level matches in energy but fails a spin veto, averaging might still assign a high probability (e.g., 90% Match + 10% Veto $\approx$ 90% Match).
 
 ### Strategy B: Boosting
-*   **Logic:** **Sequential** execution.
+*   **Logic:** **Sequential** execution. Each new tree is trained to correct the errors made by the previous tree and this process is called boosting.
 *   **Mechanism:** Iterative correction. Tree $N$ targets the errors of Tree $N-1$.
 *   **Key Algorithms:**
     *   **Adaptive Boosting:** Adjusts **sample weights** (focuses on hard-to-classify data points).
@@ -43,7 +43,7 @@
 *   **Strategy:** **Boosting**
     *   *Reasoning:* Boosting handles **physics constraints** (e.g., Spin/Parity vetoes) effectively by applying strong negative corrections to invalid matches. Bagging (Random Forest) tends to "average out" these critical vetoes.
 *   **Algorithm:** Gradient Boosting.
-*   **Recommended Package:** **XGBoost**
+*   **Recommended Package:** **XGBoost** XGBoost is an optimized implementation of Gradient Boosting and is a type of ensemble learning method that combines multiple weak models to form a stronger model.
 *   **Why it is the Best:**
     1.  **Sparsity Awareness:** Nuclear data is full of missing values (unknown $J^\pi$). XGBoost handles `NaN` natively by learning the optimal "default direction" for missing data, rather than requiring dangerous guesses (imputation).
     2.  **Stability on Small Data:** Unlike LightGBM, XGBoost's **level-wise growth** and advanced **regularization** ($L1$/$L2$) prevent the model from "memorizing" experimental noise in small datasets ($N < 500$).

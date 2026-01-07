@@ -121,19 +121,19 @@
                             "twoTimesSpin": 2,
                             "isTentativeSpin": true,
                             "parity": "+",
-                            "isTentativeParity": false
+                            "isTentativeParity": true
                         },
                         {
                             "twoTimesSpin": 4,
                             "isTentativeSpin": true,
                             "parity": "+",
-                            "isTentativeParity": false
+                            "isTentativeParity": true
                         },
                         {
                             "twoTimesSpin": 6,
                             "isTentativeSpin": true,
                             "parity": "+",
-                            "isTentativeParity": false
+                            "isTentativeParity": true
                         }
                     ],
                     "evaluatorInput": "(1+,2+,3+)"
@@ -153,19 +153,19 @@
                             "twoTimesSpin": 6,
                             "isTentativeSpin": true,
                             "parity": "-",
-                            "isTentativeParity": false
+                            "isTentativeParity": true
                         },
                         {
                             "twoTimesSpin": 8,
                             "isTentativeSpin": true,
                             "parity": "-",
-                            "isTentativeParity": false
+                            "isTentativeParity": true
                         },
                         {
                             "twoTimesSpin": 10,
                             "isTentativeSpin": true,
                             "parity": "-",
-                            "isTentativeParity": false
+                            "isTentativeParity": true
                         }
                     ],
                     "evaluatorInput": "(3-,4-,5-)"

@@ -76,7 +76,14 @@
                     "evaluatorInput": "5000 3"
                 },
                 "spinParity": {
-                    "values": [],
+                    "values": [
+                        {
+                            "twoTimesSpin": 8,
+                            "isTentativeSpin": true,
+                            "parity": "-",
+                            "isTentativeParity": true
+                        }
+                    ],
                     "evaluatorInput": "(4-)"
                 }
             }

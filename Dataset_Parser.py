@@ -1,25 +1,22 @@
 import json
 import re
 import os
+import argparse
 
 def parse_jpi(jpi_str):
     """
     Parses a Jπ string into the project's structured JSON format.
-    Handles:
-    - Single values: "2+", "1-"
-    - Tentative values: "(1)-", "2(+)", "(2+)"
-    - Lists: "1-, 2-"
-    - Ranges: "1:3"
-    - Global tentativeness: "(1, 2)+" or "(1+, 2+)"
+    Handles ranges, lists, suffixes, and complex tentativeness logic (e.g. (1+, 2+), 3/2, 5/2(+)).
     """
+    if not jpi_str:
+        return []
+
     jpi_str = jpi_str.strip().rstrip('.')
     if not jpi_str or jpi_str.lower() == 'unknown':
         return []
-    
-    # Handle range 1:3 -> 1, 2, 3
-    # Logic: if contains ':', try to parse as integer range
-    if ':' in jpi_str:
-        # Example: 1:3
+
+    # 1. Check for Range e.g., 1:3
+    if ':' in jpi_str and all(c.isdigit() or c.isspace() or c == ':' for c in jpi_str):
         try:
             parts = jpi_str.split(':')
             if len(parts) == 2:
@@ -32,72 +29,119 @@ def parse_jpi(jpi_str):
                     "isTentativeParity": False
                 } for s in range(start, end + 1)]
         except ValueError:
-            pass # Fallback to standard parsing if not simple ints
+            pass 
 
-    # Handle lists and global parentheses
-    # Example: (1+, 2+, 3+) implies all tentative
-    is_global_tentative = False
-    content = jpi_str
-    if jpi_str.startswith('(') and jpi_str.endswith(')') and ',' in jpi_str:
-        is_global_tentative = True
-        content = jpi_str[1:-1]
+    # 2. General Parsing Strategy
+    is_wrapper_tentative = False
+    content_str = jpi_str
     
-    items = [x.strip() for x in content.split(',')]
-    results = []
+    # Global Suffix Parity: (1, 2)+ or (1, 2)(+)
+    suffix_pattern = r'^\((.*)\)(\(?[\+\-]\)?)$'
+    suffix_match = re.match(suffix_pattern, jpi_str)
     
-    for item in items:
-        # Parse Spin and Parity from strings like "2+", "(1)-", "2(+)", "5/2-"
+    global_suffix_parity_info = None 
+
+    if suffix_match and ',' in suffix_match.group(1):
+        content_str = suffix_match.group(1)
+        is_wrapper_tentative = True 
         
-        parity = None
-        is_tentative_parity = False
-        
-        # Regex to find parity part: (+), (-), +, -
-        # We look for a + or - at the end, possibly in parens
+        suffix_str = suffix_match.group(2)
+        s_match = re.search(r'(\(?)([\+\-])(\)?)$', suffix_str)
+        if s_match:
+             global_suffix_parity_info = {
+                 'symbol': s_match.group(2),
+                 'is_tentative': (s_match.group(1) == '(' or s_match.group(3) == ')'),
+                 'source': 'global_suffix'
+             }
+             
+    # Global Parens without suffix: (1+, 2+)
+    elif jpi_str.startswith('(') and jpi_str.endswith(')') and ',' in jpi_str:
+        content_str = jpi_str[1:-1]
+        is_wrapper_tentative = True
+
+    # 3. Split Items
+    raw_items = [x.strip() for x in content_str.split(',')]
+    parsed_items = []
+    
+    for item in raw_items:
+        current_spin_str = item
+        current_parity_info = None 
+
+        # Extract Parity from end of item
         p_match = re.search(r'(\(?)([\+\-])(\)?)$', item)
-        spin_part = item
         
         if p_match:
             full_p_str = p_match.group(0)
             p_symbol = p_match.group(2)
-            has_parens = p_match.group(1) == '(' or p_match.group(3) == ')'
+            p_is_tentative = (p_match.group(1) == '(' or p_match.group(3) == ')')
             
-            parity = p_symbol
-            is_tentative_parity = has_parens
+            current_parity_info = {
+                'symbol': p_symbol,
+                'is_tentative': p_is_tentative,
+                'source': 'local'
+            }
+            current_spin_str = item[:item.rfind(full_p_str)].strip()
             
-            # Remove the parity part from the item to isolate spin
-            # We use rsplit to ensure we only remove the last occurrence found by regex
-            spin_part = item[:item.rfind(full_p_str)]
+        parsed_items.append({
+            'spin_str': current_spin_str,
+            'parity_info': current_parity_info,
+        })
         
-        spin_part = spin_part.strip()
+    # 4. Parity Distribution / Backfill
+    if global_suffix_parity_info:
+        for p_item in parsed_items:
+            if p_item['parity_info'] is None:
+                p_item['parity_info'] = global_suffix_parity_info
+    # else:
+        # REMOVED Backfill Logic per strict user rule:
+        # "3/2,5/2,7/2(+) means 3, 5, 7(+) and 3,5 have no parities! only 7 has a tentative + parity!"
+        # We only apply parity to multiple items if there is a global wrapper or suffix.
+
+    # 5. Finalize Results
+    results = []
+    
+    for p_item in parsed_items:
+        s_str = p_item['spin_str']
+        item_spin_tentative = is_wrapper_tentative
         
-        # Check for spin tentativeness: (1) or global parens
-        is_tentative_spin = is_global_tentative
-        if spin_part.startswith('(') and spin_part.endswith(')'):
-            is_tentative_spin = True
-            spin_part = spin_part[1:-1].strip()
-        
-        # Parse numeric spin value
-        try:
-            two_times_spin = 0
-            if '/' in spin_part:
-                n, d = spin_part.split('/')
-                # Assuming denominator is 2 for half-integer spins
-                two_times_spin = int(n)
-            elif spin_part.isdigit():
-                two_times_spin = int(spin_part) * 2
-            else:
-                # If we cannot parse the spin (e.g. empty or non-numeric), skip this item
-                continue
-                
-            results.append({
-                "twoTimesSpin": two_times_spin,
-                "isTentativeSpin": is_tentative_spin,
-                "parity": parity,
-                "isTentativeParity": is_tentative_parity
-            })
-        except ValueError:
+        # Check for local spin parens e.g. (1)
+        if '(' in s_str or ')' in s_str:
+            item_spin_tentative = True
+            s_str = s_str.replace('(', '').replace(')', '')
+            
+        s_str = s_str.strip()
+        if not s_str: 
             continue
 
+        try:
+            val = float(eval(s_str))
+            two_spin = int(round(val * 2))
+        except:
+            continue 
+           
+        p_info = p_item['parity_info']
+        out_parity = None
+        out_par_tentative = False
+        
+        if p_info:
+            out_parity = p_info['symbol']
+            
+            if p_info['source'] == 'global_suffix':
+                 out_par_tentative = p_info['is_tentative']
+                 
+            elif p_info['source'] == 'local' or p_info['source'] == 'inherited':
+                if is_wrapper_tentative:
+                     out_par_tentative = True
+                else:
+                     out_par_tentative = p_info['is_tentative']
+        
+        results.append({
+            "twoTimesSpin": two_spin,
+            "isTentativeSpin": item_spin_tentative,
+            "parity": out_parity,
+            "isTentativeParity": out_par_tentative
+        })
+        
     return results
 
 def parse_log_line(line):
@@ -179,4 +223,8 @@ def convert_log_to_datasets(log_path):
         print(f"Generated {filename} with {len(levels)} levels.")
 
 if __name__ == "__main__":
-    convert_log_to_datasets("evaluatorInput.log")
+    parser = argparse.ArgumentParser(description="Convert ENSDF-style log files to structured JSON datasets.")
+    parser.add_argument("input_file", nargs='?', default="test_input_comprehensive.log", help="Path to the input log file")
+    
+    args = parser.parse_args()
+    convert_log_to_datasets(args.input_file)

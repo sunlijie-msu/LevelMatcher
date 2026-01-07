@@ -8,6 +8,8 @@
 
 - **Update Documentation:** Valid code changes must be immediately reflected in the 'Explanation of Code Structure' header or relevant docstrings. Never leave comments outdated.
 
+- **Clean Codebase:** Regularly remove redundant, obsolete, or 'spaghetti' scripts to prevent confusion. Maintain a focused file structure where only active, necessary files exist.
+
 **Strictly Forbidden:** Do not self-use `git restore` or `git checkout` to revert changes. Nuclear data coding requires high-precision work, not typical software development. The common LLM tendency to resort to git for error recovery is strictly prohibited. You must identify and fix errors carefully to maintain absolute rigor.
 
 ## Naming Conventions
