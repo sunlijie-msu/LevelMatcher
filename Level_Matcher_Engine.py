@@ -4,7 +4,7 @@ import json
 import os
 import re
 from xgboost import XGBRegressor
-from physics_parser import PhysicsFeatureEngine
+from data_parser import extract_features, get_training_data
 
 # ==========================================
 # 1. DATA INGESTION (From JSON files)
@@ -34,8 +34,8 @@ for dataset_code in ['A', 'B', 'C']:
                             'dataset_code': dataset_code,
                             'energy_value': float(energy_value),
                             'energy_uncertainty': float(energy_uncertainty) if energy_uncertainty is not None else 10.0,
-                            'Spin_Parity_List': spin_parity_list,
-                            'Spin_Parity': spin_parity_string
+                            'spin_parity_list': spin_parity_list,
+                            'spin_parity': spin_parity_string
                         })
             elif isinstance(data, list):
                 # Fallback for flat list format
@@ -50,28 +50,23 @@ dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int
 # ==========================================
 # 2. MODEL TRAINING (Physics-Informed XGBoost)
 # ==========================================
-# Features: [Z_Score, J_Score (Spin), Pi_Score (Parity), J_Tentative, Pi_Tentative, Ambiguity]
-# Constraints:
-# 1. Z-Score (-1): Higher Z-Score -> Lower Probability
-# 2. J_Score (+1): Higher Score (1.0=Match) -> Higher Probability
-# 3. Pi_Score (+1): Higher Score (1.0=Match) -> Higher Probability
-# 4. J_Tentative (-1): Higher Tentativeness -> Lower Probability
-# 5. Pi_Tentative (-1): Higher Tentativeness -> Lower Probability
-# 6. Ambiguity (-1): Higher Ambiguity (more candidates) -> Lower Probability
+# Features: [EnergySim, SpinSim, ParitySim, SpinCertainty, ParityCertainty, Specificity]
+# Constraints (All Monotonic Increasing):
+# 1. EnergySim (+1): Higher Score (1.0=Match) -> Higher Probability
+# 2. SpinSim (+1): Higher Score (1.0=Match) -> Higher Probability
+# 3. ParitySim (+1): Higher Score (1.0=Match) -> Higher Probability
+# 4. SpinCertainty (+1): Higher Certainty (1.0=Firm) -> Higher Probability
+# 5. ParityCertainty (+1): Higher Certainty (1.0=Firm) -> Higher Probability
+# 6. Specificity (+1): Higher Specificity (1.0=Single Option) -> Higher Probability
 
 if __name__ == "__main__":
     # Get Training Data from Physics Parser
-    training_features, training_labels = PhysicsFeatureEngine.get_training_data()
+    training_features, training_labels = get_training_data()
 
     # Monotonic constraints strictly enforce physics rules in the model:
-    # Feature 0 (Z-Score): -1
-    # Feature 1 (J_Score): +1
-    # Feature 2 (Pi_Score): +1
-    # Feature 3 (J_Tentative): -1
-    # Feature 4 (Pi_Tentative): -1
-    # Feature 5 (Ambiguity): -1
+    # All features are designed so that Higher Value == Better Match
     level_matcher_model = XGBRegressor(objective='binary:logistic', 
-                                       monotone_constraints='(-1, 1, 1, -1, -1, -1)', 
+                                       monotone_constraints='(1, 1, 1, 1, 1, 1)', 
                                        n_estimators=500, 
                                        max_depth=6, 
                                        learning_rate=0.05,
@@ -97,7 +92,7 @@ if __name__ == "__main__":
             if level_1['dataset_code'] == level_2['dataset_code']: continue
 
             # Physics-Grounded Feature Extraction
-            input_vector = PhysicsFeatureEngine.extract_features(level_1, level_2)
+            input_vector = extract_features(level_1, level_2)
             
             # Predict match probability
             probability = level_matcher_model.predict([input_vector])[0]
@@ -115,11 +110,11 @@ if __name__ == "__main__":
 
     print("\n=== MATCHING CANDIDATES (>10%) ===")
     for candidate in candidates:
-        # Unpack features for display: [Z_Score, J_Score, Pi_Score, J_Tentative, Pi_Tentative, Ambiguity]
-        z_score, j_score, parity_score, j_tentative, parity_tentative, ambiguity = candidate['features']
+        # Unpack features for display: [EnergySim, SpinSim, ParitySim, SpinCertainty, ParityCertainty, Specificity]
+        energy_similarity, spin_similarity, parity_similarity, spin_certainty, parity_certainty, specificity = candidate['features']
         print(f"{candidate['ID1']} <-> {candidate['ID2']} | Probability: {candidate['probability']:.1%} "
-              f"(Z={z_score:.2f}, SpinScore={j_score:.2f}, ParityScore={parity_score:.2f}, "
-              f"SpinTentative={j_tentative:.0f}, ParityTentative={parity_tentative:.0f}, Ambiguity={ambiguity:.2f})")
+              f"(EnergySim={energy_similarity:.2f}, SpinSim={spin_similarity:.2f}, ParitySim={parity_similarity:.2f}, "
+              f"SpinCertainty={spin_certainty:.0f}, ParityCertainty={parity_certainty:.0f}, Specificity={specificity:.2f})")
 
     # ==========================================
     # 4. CLUSTERING (Graph Clustering with Overlap Support)
@@ -250,14 +245,14 @@ if __name__ == "__main__":
                 level_data_2 = anchor_level_data
                 
                 # Use updated feature engine with long names
-                input_vector = PhysicsFeatureEngine.extract_features(level_data_1, level_data_2)
+                input_vector = extract_features(level_data_1, level_data_2)
                 probability = level_matcher_model.predict([input_vector])[0]
                 xref_parts.append(f"{member_id}({probability:.0%})")
         
         adopted_levels.append({
             'Adopted_Energy': round(adopted_energy, 1),
             'XREF': " + ".join(xref_parts),
-            'Spin_Parity': anchor_level_data.get('Spin_Parity', '') # Preserving case for standard nuclear labels
+            'Spin_Parity': anchor_level_data.get('spin_parity', '') # Preserving case for standard nuclear labels
         })
 
     adopted_dataframe = pd.DataFrame(adopted_levels).sort_values('Adopted_Energy')
