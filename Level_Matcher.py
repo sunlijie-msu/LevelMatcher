@@ -45,7 +45,9 @@ if __name__ == "__main__":
     # 4. Spin_Certainty (+1)
     # 5. Parity_Certainty (+1)
     # 6. Specificity (+1)
-    level_matcher_model = XGBRegressor(objective='binary:logistic', # Learning Objective Function: Training Loss + Regularization. Optimizes the log loss function to predict probability of an instance belonging to a class.
+    level_matcher_model = XGBRegressor(objective='binary:logistic', # Sun: Learning Objective Function: Training Loss + Regularization.
+                                       # Sun: The loss function computes the difference between the true y value and the predicted y value.
+                                       # Sun: The regularization term discourages overly complex trees.
                                        monotone_constraints='(1, 1, 1, 1, 1, 1)', # Enforce an increasing constraint on all predictors. In some cases, where there is a very strong prior belief that the true relationship has some quality, constraints can be used to improve the predictive performance of the model.
                                        n_estimators=100, # Number of gradient boosted trees
                                        max_depth=3, # Maximum depth of a tree. Increasing this value will make the model more complex and more likely to overfit. 0 indicates no limit on depth. Beware that XGBoost aggressively consumes memory when training a deep tree.
