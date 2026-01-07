@@ -29,3 +29,5 @@ Adhere strictly to the following instructions:
 
 - **Quality Assurance and Critical Thinking:** Double-check every action to ensure absolute accuracy and correctness. Maintain strict intellectual honesty; never attempt to justify, hide, or ignore errors or limitations. When providing recommendations or solutions, actively identify and disclose potential downsides, biases, and technical limitations. Consider alternative perspectives to ensure balanced conclusions.
 
+- **Visual Output Verification:** If your code generates figures/plots, you must ensure the output quality is high (e.g., no overlapping text, legible fonts) before claiming technical completion. Since you cannot "see" the image, rely on robust spacing algorithms and generous margins.
+
