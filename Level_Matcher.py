@@ -8,12 +8,11 @@ from Feature_Engineer import extract_features, get_training_data, load_levels_fr
 1.  **Data Ingestion**: Loads standardized nuclear level data using `Feature_Engineer`.
 2.  **Model Training**: Trains an XGBoost model using physics-informed monotonic constraints.
 3.  **Inference**: Calculates match probabilities for all cross-dataset pairs.
-4.  **Clustering**: Groups matching levels into unique clusters, handling conflicts via logic.
-5.  **Reporting**: Generates "Adopted Levels" with weighted energy averages and cross-references.
+4.  **Clustering**: Groups matching levels into unique clusters with anchor-based probability reporting.
 """
 
 # ==========================================
-# 1. Test Data Ingestion (From JSON files)
+# Sun: 1. Test Data Ingestion (From JSON files)
 # ==========================================
 levels = load_levels_from_json(['A', 'B', 'C'])
 
@@ -22,7 +21,7 @@ dataframe = pd.DataFrame(levels)
 dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int(row['energy_value'])}", axis=1)
 
 # ==========================================
-# 2. Model Training (Physics-Informed XGBoost)
+# Sun: 2. Model Training (Physics-Informed XGBoost)
 # ==========================================
 # Features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
 # Constraints (All Monotonic Increasing):
@@ -58,132 +57,152 @@ if __name__ == "__main__":
     level_matcher_model.fit(training_features, training_labels)
 
     # ==========================================
-    # 3. Pairwise Inference
+    # Sun: 3. Pairwise Inference
     # ==========================================
+    # Extract match probabilities for all cross-dataset level pairs using the trained XGBoost model
     candidates = []
-    
-    # Extract row list for efficient iteration
-    rows_list = [row for _, row in dataframe.iterrows()]
+    rows_list = list(dataframe.iterrows())
     
     for i in range(len(rows_list)):
         for j in range(i + 1, len(rows_list)):
-            level_1 = rows_list[i]
-            level_2 = rows_list[j]
+            _, level_1 = rows_list[i]
+            _, level_2 = rows_list[j]
             
-            # Cross-Dataset matching only
-            if level_1['dataset_code'] == level_2['dataset_code']: continue
+            # Skip same-dataset pairs (only match across different datasets)
+            if level_1['dataset_code'] == level_2['dataset_code']:
+                continue
 
-            # Physics-Grounded Feature Extraction
-            input_vector = extract_features(level_1, level_2)
+            # Extract physics-informed features for this level pair
+            feature_vector = extract_features(level_1, level_2)
             
-            # Predict match probability
-            probability = level_matcher_model.predict([input_vector])[0]
+            # Predict match probability using trained XGBoost model
+            match_probability = level_matcher_model.predict([feature_vector])[0]
             
-            if probability > 0.1:
-                # Store matching candidate
+            # Store candidates with probability > 10%
+            if match_probability > 0.1:
                 candidates.append({
-                    'ID1': level_1['level_id'], 'dataset_1': level_1['dataset_code'],
-                    'ID2': level_2['level_id'], 'dataset_2': level_2['dataset_code'],
-                    'probability': probability,
-                    'features': input_vector
+                    'ID1': level_1['level_id'],
+                    'ID2': level_2['level_id'],
+                    'dataset_1': level_1['dataset_code'],
+                    'dataset_2': level_2['dataset_code'],
+                    'probability': match_probability,
+                    'features': feature_vector
                 })
 
+    # Sort by probability (highest first)
     candidates.sort(key=lambda x: x['probability'], reverse=True)
 
-    print("\n=== MATCHING CANDIDATES (>10%) ===")
-    for candidate in candidates:
-        # Unpack features for display: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
-        energy_similarity, spin_similarity, parity_similarity, spin_certainty, parity_certainty, specificity = candidate['features']
-        print(f"{candidate['ID1']} <-> {candidate['ID2']} | Probability: {candidate['probability']:.1%} "
-              f"(Energy_Similarity={energy_similarity:.2f}, Spin_Similarity={spin_similarity:.2f}, Parity_Similarity={parity_similarity:.2f}, "
-              f"Spin_Certainty={spin_certainty:.0f}, Parity_Certainty={parity_certainty:.0f}, Specificity={specificity:.2f})")
+    # Write matching candidates to file
+    with open('matching_candidates.txt', 'w', encoding='utf-8') as output_file:
+        output_file.write("=== MATCHING CANDIDATES (>10%) ===\n\n")
+        output_file.write(f"Total Candidates Found: {len(candidates)}\n\n")
+        
+        for candidate in candidates:
+            energy_sim, spin_sim, parity_sim, spin_cert, parity_cert, specificity = candidate['features']
+            output_file.write(
+                f"{candidate['ID1']} <-> {candidate['ID2']} | "
+                f"Probability: {candidate['probability']:.1%}\n"
+                f"  Features: Energy_Sim={energy_sim:.2f}, Spin_Sim={spin_sim:.2f}, "
+                f"Parity_Sim={parity_sim:.2f}, Spin_Cert={spin_cert:.0f}, "
+                f"Parity_Cert={parity_cert:.0f}, Specificity={specificity:.2f}\n\n"
+            )
+    
+    print(f"\n[INFO] Pairwise Inference Complete: {len(candidates)} matching candidates (>10%) written to 'matching_candidates.txt'")
 
     # ==========================================
-    # 4. Clustering (Graph Clustering with Overlap Support)
+    # Sun: 4. Graph Clustering with Overlap Support
     # ==========================================
-    # Algorithm:
-    # 1. Initialize every level as a unique cluster.
-    # 2. Iterate through high-probability candidates.
-    # 3. Merge clusters if they don't contain conflicting levels.
-    # 4. Support "Doublets": If two clusters cannot merge due to conflict (e.g. A_3000 vs A_3005),
-    #    but a level (C_3005) matches both, allow C_3005 to belong to BOTH clusters.
-
+    # Sun: Core Strategy: Build clusters by merging compatible cross-dataset levels
+    # Sun: Key Feature: Doublet support allows one level to belong to multiple clusters when conflicts exist
+    
+    # Step 1: Initialize data structures
     level_lookup = {row['level_id']: row for _, row in dataframe.iterrows()}
     
-    # Map ID -> List of Cluster Objects (A level can belong to multiple clusters)
-    # Each cluster is a dictionary mapping dataset_code to level_id
+    # Sun: Each level starts as its own cluster (dictionary: dataset_code -> level_id)
     initial_clusters = [{row['dataset_code']: row['level_id']} for _, row in dataframe.iterrows()]
+    
+    # Sun: Track which clusters each level belongs to (one level can be in multiple clusters)
     id_to_clusters = {}
     for cluster in initial_clusters:
         member_id = list(cluster.values())[0]
         id_to_clusters[member_id] = [cluster]
 
-    # Valid High-Probability pairs for consistency checks (Prob > 0.5)
-    # We enforce that all members of a cluster must be strongly compatible.
-    # A low-probability "Technical Match" (e.g. 20%) is not enough to sustain a cluster merge.
-    valid_pairs = set((candidate['ID1'], candidate['ID2']) for candidate in candidates if candidate['probability'] >= 0.5)
-    valid_pairs.update((candidate['ID2'], candidate['ID1']) for candidate in candidates if candidate['probability'] >= 0.5)
-
+    # Step 2: Build compatibility set (only strong matches with probability > 30%)
+    # Sun: We only merge clusters if all members are mutually compatible
+    valid_pairs = set()
     for candidate in candidates:
-        if candidate['probability'] < 0.5: break # Only merge strong candidates
+        if candidate['probability'] >= 0.3:
+            valid_pairs.add((candidate['ID1'], candidate['ID2']))
+            valid_pairs.add((candidate['ID2'], candidate['ID1']))
+
+    # Step 3: Merge compatible clusters by iterating through strong candidates
+    for candidate in candidates:
+        if candidate['probability'] < 0.3:
+            break  # Sun: Skip weak matches
+        
         id_1, id_2 = candidate['ID1'], candidate['ID2']
         
-        # Work on snapshots of the cluster lists since we might modify them
+        # Sun: Snapshot current cluster memberships before modification
         cluster_list_1 = list(id_to_clusters[id_1])
         cluster_list_2 = list(id_to_clusters[id_2])
 
+        # Sun: Try to merge each cluster pair that contains id_1 and id_2
         for cluster_1 in cluster_list_1:
             for cluster_2 in cluster_list_2:
-                if cluster_1 is cluster_2: continue # Already same cluster
+                if cluster_1 is cluster_2:
+                    continue  # Sun: Already in same cluster
                 
                 datasets_1 = set(cluster_1.keys())
                 datasets_2 = set(cluster_2.keys())
                 
-                # Check 1: Dataset Conflict
+                # Scenario A: Dataset conflict exists (both clusters have levels from same dataset)
                 if not datasets_1.isdisjoint(datasets_2):
-                    # They overlap in datasets (e.g. both have a 'Dataset A' level)
-                    # CONFLICT DETECTED.
-                    # Try "Soft Assignment" (Doublet Logic).
+                    # Sun: Example: cluster_1 has A_3000, cluster_2 has A_3005
+                    # Sun: Cannot merge these clusters, but try "doublet assignment"
                     
-                    # Try Adding id_1 to cluster_2? (Only if cluster_2 lacks dataset_1)
+                    # Sun: Can we add id_1 to cluster_2?
                     if candidate['dataset_1'] not in datasets_2:
-                        # Consistency check: id_1 must match ALL members of cluster_2
+                        # Sun: Check if id_1 is compatible with ALL existing members of cluster_2
                         if all((id_1, member_id) in valid_pairs for member_id in cluster_2.values()):
-                            if id_1 not in cluster_2.values(): # avoid duplication
+                            if id_1 not in cluster_2.values():
                                 cluster_2[candidate['dataset_1']] = id_1
-                                if cluster_2 not in id_to_clusters[id_1]: id_to_clusters[id_1].append(cluster_2)
+                                if cluster_2 not in id_to_clusters[id_1]:
+                                    id_to_clusters[id_1].append(cluster_2)
                     
-                    # Try Adding id_2 to cluster_1? (Only if cluster_1 lacks dataset_2)
+                    # Sun: Can we add id_2 to cluster_1?
                     if candidate['dataset_2'] not in datasets_1:
-                        # Consistency check: id_2 must match ALL members of cluster_1
+                        # Sun: Check if id_2 is compatible with ALL existing members of cluster_1
                         if all((id_2, member_id) in valid_pairs for member_id in cluster_1.values()):
                             if id_2 not in cluster_1.values():
                                 cluster_1[candidate['dataset_2']] = id_2
-                                if cluster_1 not in id_to_clusters[id_2]: id_to_clusters[id_2].append(cluster_1)
+                                if cluster_1 not in id_to_clusters[id_2]:
+                                    id_to_clusters[id_2].append(cluster_1)
                     
-                    continue
+                    continue  # Sun: Move to next cluster pair
 
-                # Check 2: Consistency (All-to-All)
-                # If we merge cluster_1 and cluster_2, every member of cluster_1 must match every member of cluster_2
+                # Scenario B: No dataset conflict (can potentially merge)
+                # Sun: Verify all-to-all compatibility before merging
                 consistent = True
                 for member_1 in cluster_1.values():
                     for member_2 in cluster_2.values():
                         if (member_1, member_2) not in valid_pairs:
-                            consistent = False; break
-                    if not consistent: break
+                            consistent = False
+                            break
+                    if not consistent:
+                        break
                 
                 if consistent:
-                    # Perform Merge: cluster_2 into cluster_1
+                    # Sun: Perform merge: absorb cluster_2 into cluster_1
                     cluster_1.update(cluster_2)
-                    # Update references for all members of cluster_2
+                    
+                    # Sun: Update all members of cluster_2 to point to cluster_1
                     for member_id in cluster_2.values():
-                        # Remove cluster_2 from their list
-                        if cluster_2 in id_to_clusters[member_id]: id_to_clusters[member_id].remove(cluster_2)
-                        # Add cluster_1 if not present
-                        if cluster_1 not in id_to_clusters[member_id]: id_to_clusters[member_id].append(cluster_1)
-                    # cluster_2 is effectively dissolved into cluster_1
+                        if cluster_2 in id_to_clusters[member_id]:
+                            id_to_clusters[member_id].remove(cluster_2)
+                        if cluster_1 not in id_to_clusters[member_id]:
+                            id_to_clusters[member_id].append(cluster_1)
 
-    # Extract unique active clusters
+    # Step 4: Extract unique active clusters
     unique_clusters = []
     seen = set()
     for cluster_list in id_to_clusters.values():
@@ -193,93 +212,37 @@ if __name__ == "__main__":
                 unique_clusters.append(cluster)
                 seen.add(cluster_id)
     
-    # Sort clusters by average energy for consistent display
-    def get_cluster_avg_energy(c):
-        energies = [level_lookup[mid]['energy_value'] for mid in c.values()]
+    # Step 5: Sort clusters by average energy for consistent output
+    def calculate_cluster_average_energy(cluster):
+        energies = [level_lookup[member_id]['energy_value'] for member_id in cluster.values()]
         return sum(energies) / len(energies)
-    unique_clusters.sort(key=get_cluster_avg_energy)
+    
+    unique_clusters.sort(key=calculate_cluster_average_energy)
 
-    print("\n=== CLUSTERING RESULTS ===")
+    print("\n=== FINAL CLUSTERING RESULTS ===")
     for i, cluster in enumerate(unique_clusters):
-        # Find Anchor
+        # Anchor Selection (Level with smallest uncertainty)
         anchor_id = min(cluster.values(), key=lambda x: level_lookup[x]['energy_uncertainty'] if pd.notna(level_lookup[x]['energy_uncertainty']) else 999)
-        members_str = ", ".join([f"{ds}:{mid}" for ds, mid in sorted(cluster.items())])
-        print(f"Cluster {i+1}: Anchor={anchor_id} | Members=[{members_str}]")
-
-    # ==========================================
-    # 5. Reporting / Adopted Level Generation
-    # ==========================================
-    adopted_levels = []
-    
-    # Define columns for the output table
-    dataset_columns = sorted(list(set(row['dataset_code'] for _, row in dataframe.iterrows())))
-    
-    for cluster in unique_clusters:
-        if not cluster: continue
+        anchor_data = level_lookup[anchor_id]
+        anchor_energy = anchor_data['energy_value']
+        anchor_jpi = anchor_data.get('spin_parity', '')
+        if anchor_jpi == "unknown": anchor_jpi = "N/A"
         
-        # Anchor Selection
-        anchor_level_id = min(cluster.values(), key=lambda x: level_lookup[x]['energy_uncertainty'] if pd.notna(level_lookup[x]['energy_uncertainty']) else 999)
-        anchor_level_data = level_lookup[anchor_level_id]
+        print(f"\nCluster {i+1}:")
+        print(f"  Anchor: {anchor_id} | E={anchor_energy:.1f} keV | Jπ={anchor_jpi}")
+        print(f"  Members:")
         
-        # Weighted Average Energy calculation
-        energy_and_error_pairs = []
-        for member_id in cluster.values():
-            level_data = level_lookup[member_id]
-            error = level_data['energy_uncertainty'] if pd.notna(level_data['energy_uncertainty']) else 10
-            energy_and_error_pairs.append((level_data['energy_value'], error))
-        
-        weights = [1.0 / (error**2) for energy, error in energy_and_error_pairs]
-        sum_of_weights = sum(weights)
-        adopted_energy = sum(pair[0] * weight for pair, weight in zip(energy_and_error_pairs, weights)) / sum_of_weights
-        
-        # Row Construction
-        jpi_opt = anchor_level_data.get('spin_parity', '')
-        if jpi_opt == "unknown": jpi_opt = ""
-        
-        row_data = {
-            'E_Adopted': f"{adopted_energy:.1f}",
-            'Jpi_Adopted': jpi_opt
-        }
-        
-        # Fill Dataset Columns
-        for ds in dataset_columns:
-            if ds in cluster:
-                member_id = cluster[ds]
-                level_data = level_lookup[member_id]
-                e_val = level_data['energy_value']
-                jpi = level_data.get('spin_parity', '')
-                if not jpi or jpi == "unknown": jpi = ""
-                
-                # Probability
-                if member_id == anchor_level_id:
-                    prob_str = "Anchor"
-                else:
-                    input_vector = extract_features(level_data, anchor_level_data)
-                    prob = level_matcher_model.predict([input_vector])[0]
-                    prob_str = f"{prob:.0%}"
-                
-                # Format: "Energy Jpi (Prob)"
-                if jpi:
-                    cell_str = f"{e_val:.1f} {jpi} ({prob_str})"
-                else:
-                    cell_str = f"{e_val:.1f} ({prob_str})"
-                    
-                row_data[ds] = cell_str
+        # Display each member with probability
+        for dataset_code in sorted(cluster.keys()):
+            member_id = cluster[dataset_code]
+            member_data = level_lookup[member_id]
+            member_energy = member_data['energy_value']
+            member_jpi = member_data.get('spin_parity', '')
+            if member_jpi == "unknown": member_jpi = "N/A"
+            
+            if member_id == anchor_id:
+                print(f"    [{dataset_code}] {member_id}: E={member_energy:.1f} keV, Jπ={member_jpi} (Anchor)")
             else:
-                row_data[ds] = "-"
-        
-        adopted_levels.append(row_data)
-
-    adopted_dataframe = pd.DataFrame(adopted_levels)
-    # Reorder columns: E_Adopted, Jpi_Adopted, then Datasets
-    cols = ['E_Adopted', 'Jpi_Adopted'] + dataset_columns
-    adopted_dataframe = adopted_dataframe[cols]
-    
-    print("\n=== ADOPTED LEVELS TABLE ===")
-    # Adjust pandas display settings for alignment
-    pd.set_option('display.max_colwidth', None)
-    pd.set_option('display.width', 1000)
-    
-    # Calculate a dynamic col_space based on content or stick to a reasonable default
-    # 18 chars is usually enough for "8888.8 88(+) (100%)"
-    print(adopted_dataframe.to_string(index=False, col_space=18, justify='left'))
+                input_vector = extract_features(member_data, anchor_data)
+                probability = level_matcher_model.predict([input_vector])[0]
+                print(f"    [{dataset_code}] {member_id}: E={member_energy:.1f} keV, Jπ={member_jpi} (Match Prob: {probability:.1%})")
