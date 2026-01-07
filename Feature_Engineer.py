@@ -43,7 +43,7 @@ Scoring_Config = {
         # Controls how strictly energy values must match. 
         # - Higher Value (e.g. 1.0) = Stricter (Score drops fast if energy differs).
         # - Lower Value (e.g. 0.1) = Looser (Score stays high even with differences).
-        'Sigma_Scale': 0.5,
+        'Sigma_Scale': 0.1,
         
         # Default energy uncertainty (in keV) used when input data lacks uncertainty.
         'Default_Uncertainty': 10.0
@@ -72,40 +72,73 @@ Scoring_Config = {
 def load_levels_from_json(dataset_codes):
     """
     Parses JSON files for the given dataset codes and returns a list of standardized level dictionaries.
+    Standardized Keys: energy_value, energy_uncertainty, spin_parity_list, spin_parity.
     """
     levels = []
     for dataset_code in dataset_codes:
-        filename = f"test_dataset_{dataset_code}.json"
+        # Use filename as per legacy expectation
+        filename = f"dataset_{dataset_code}.json"
+        
+        # Fallback to test_dataset if main not found
+        if not os.path.exists(filename):
+            filename = f"test_dataset_{dataset_code}.json"
+
         if os.path.exists(filename):
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # Handle new ENSDF JSON schema (levelsTable -> levels)
+                
+                # Format 1: New ENSDF JSON schema (levelsTable -> levels)
                 if isinstance(data, dict) and 'levelsTable' in data:
                     raw_levels = data['levelsTable'].get('levels', [])
                     for item in raw_levels:
-                        # Extract Energy
                         energy_value = item.get('energy', {}).get('value')
-                        
-                        # Extract Energy Uncertainty
                         energy_uncertainty = item.get('energy', {}).get('uncertainty', {}).get('value')
-                        
-                        # Extract Spin_Parity Values
                         spin_parity_list = item.get('spinParity', {}).get('values', [])
                         spin_parity_string = item.get('spinParity', {}).get('evaluatorInput') 
                         
                         if energy_value is not None:
                             levels.append({
                                 'dataset_code': dataset_code,
+                                'level_id': f"{dataset_code}_{int(energy_value)}",
                                 'energy_value': float(energy_value),
                                 'energy_uncertainty': float(energy_uncertainty) if energy_uncertainty is not None else 10.0,
                                 'spin_parity_list': spin_parity_list,
                                 'spin_parity': spin_parity_string
                             })
+                            
+                # Format 2: Legacy Flat List ([{"E_level": ...}, ...])
                 elif isinstance(data, list):
-                    # Fallback for flat list format
                     for item in data:
-                        item['dataset_code'] = dataset_code
-                        levels.append(item)
+                        # Extract and Normalize
+                        e_val = item.get('E_level')
+                        de_val = item.get('DE_level', 10.0)
+                        spin = item.get('Spin')
+                        parity = item.get('Parity')
+                        
+                        # Construct Spin List
+                        sp_list = []
+                        sp_str = ""
+                        if spin is not None:
+                            sp_entry = {
+                                'twoTimesSpin': int(spin * 2), # Legacy Spin is J (float), schema needs 2J
+                                'isTentativeSpin': False, # Legacy data usually firm if present
+                                'parity': parity if parity else "",
+                                'isTentativeParity': False
+                            }
+                            sp_list.append(sp_entry)
+                            sp_str = f"{spin}{parity if parity else ''}"
+                        elif parity:
+                             # Parity only
+                             sp_str = f"{parity}"
+
+                        levels.append({
+                            'dataset_code': dataset_code,
+                            'level_id': f"{dataset_code}_{int(e_val)}",
+                            'energy_value': float(e_val),
+                            'energy_uncertainty': float(de_val),
+                            'spin_parity_list': sp_list,
+                            'spin_parity': sp_str
+                        })
     return levels
 
 
@@ -244,46 +277,88 @@ def get_training_data():
     Feature Order: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
     All features are Monotonic Increasing (High Score == Better Match).
     """
-    training_records = []
-
-    # 1. Gold Standard Match
-    # Perfect Energy(1.0), Firm Spin(1.0), Firm Parity(1.0), Firm Certainty(1.0), Specific(1.0)
-    training_records.append(([1.0, 1.0, 1.0, 1.0, 1.0, 1.0], 1.00))
-    # Good Energy (0.8 ~ Z=0.6)
-    training_records.append(([0.8, 1.0, 1.0, 1.0, 1.0, 1.0], 0.95))
-
-    # 2. Spin Veto
-    # Hard conflict in spin (0.0). Match is impossible.
-    training_records.append(([1.0, 0.0, 1.0, 1.0, 1.0, 1.0], 0.00))
-
-    # 3. Parity Veto
-    # Hard conflict in parity (0.0). Match is impossible.
-    training_records.append(([1.0, 1.0, 0.0, 1.0, 1.0, 1.0], 0.00))
-
-    # 4. Tentative Sensitivity
-    # (2+) vs 2+ is a good match (0.9 physics score) but less certain (Certainty=0.0).
-    # We penalize slightly for lack of certainty.
-    training_records.append(([1.0, 0.9, 1.0, 0.0, 1.0, 1.0], 0.90))
-
-    # 5. Energy Degradation
-    # Good physics, but Energy is far away (Energy_Similarity=0.1)
-    training_records.append(([0.1, 1.0, 1.0, 1.0, 1.0, 1.0], 0.10))
-    # Very far (Energy_Similarity=0.0)
-    training_records.append(([0.0, 1.0, 1.0, 1.0, 1.0, 1.0], 0.00))
-
-    # 6. High Ambiguity (Low Specificity)
-    # Search space is large (Specificity ~0.4), lowering probability.
-    training_records.append(([1.0, 1.0, 1.0, 1.0, 1.0, 0.4], 0.80))
+    training_points = []
     
-    # 7. Information Void
-    # No J or Pi information (0.5 scores). Match relies entirely on energy.
-    training_records.append(([1.0, 0.5, 0.5, 1.0, 1.0, 1.0], 0.85))
-    # Bad energy with no physics info
-    training_records.append(([0.1, 0.5, 0.5, 1.0, 1.0, 1.0], 0.10))
+    # Generate synthetic data covering the feature space
+    # Simulating: Energy (0-1), Spin (0-1), Parity (0-1), Certainties (0/1), Specificity (0-1)
+    
+    # Case 1: The "Perfect Match" Zone
+    # High Energy (>0.8), Good Physics (>0.9)
+    # Result: High Probability (>0.9)
+    for e in np.linspace(0.8, 1.0, 5):
+        for s in [1.0, 0.9]: # Firm, Tentative
+            for p in [1.0, 0.9]:
+                prob = 0.9 + (e-0.8)/2 * (s * p) 
+                training_points.append(([e, s, p, 1.0, 1.0, 1.0], min(prob, 0.99)))
 
+    # Case 2: The "Physics Veto" Zone
+    # Any Energy, but Spin or Parity == 0.0 (Mismatch)
+    # Result: 0.0 Probability
+    for e in np.linspace(0.0, 1.0, 10):
+        # Spin Veto
+        training_points.append(([e, 0.0, 1.0, 1.0, 1.0, 1.0], 0.0))
+        # Parity Veto
+        training_points.append(([e, 1.0, 0.0, 1.0, 1.0, 1.0], 0.0))
+        # Both Veto
+        training_points.append(([e, 0.0, 0.0, 1.0, 1.0, 1.0], 0.0))
 
-    training_features = np.array([record[0] for record in training_records])
-    training_labels = np.array([record[1] for record in training_records])
+    # Case 3: The "Energy Mismatch" Zone
+    # Perfect Physics, but Energy is far off (<0.1)
+    # Result: Low Probability (~0.0)
+    for e in np.linspace(0.0, 0.2, 5):
+        training_points.append(([e, 1.0, 1.0, 1.0, 1.0, 1.0], e * 0.5)) # Decays to 0
+
+    # Case 4: The "Grey Zone" (Ambiguous Physics)
+    # Energy is Good, but Physics is Neutral (0.5) (e.g. "unknown" spins)
+    # Result: Probability relies on Energy
+    for e in np.linspace(0.0, 1.0, 20):
+        # Neutral Physics
+        prob = e * 0.85 # Max 0.85 if physics is unknown
+        training_points.append(([e, 0.5, 0.5, 1.0, 1.0, 1.0], prob))
+
+    # Case 5: "Weak Physics Match"
+    # Energy Good, Spin/Parity Weak (0.2 - 0.25)
+    # Result: Low to Mid Probability
+    for e in np.linspace(0.5, 1.0, 5):
+        training_points.append(([e, 0.25, 1.0, 1.0, 1.0, 1.0], e * 0.4))
+        training_points.append(([e, 1.0, 0.2, 1.0, 1.0, 1.0], e * 0.4))
+
+    # Case 6: Random Noise / Background
+    # Generate random points to fill the space
+    np.random.seed(42)
+    for _ in range(500):
+        e = np.random.uniform(0, 1)
+        s = np.random.choice([0.0, 0.25, 0.5, 0.9, 1.0])
+        p = np.random.choice([0.0, 0.2, 0.5, 0.9, 1.0])
+        cert_s = np.random.choice([0.0, 1.0])
+        cert_p = np.random.choice([0.0, 1.0])
+        spec = np.random.uniform(0.5, 1.0)
+        
+        # Rule Based Labeling
+        if s == 0.0 or p == 0.0:
+            label = 0.0
+        elif e < 0.1:
+            label = 0.0
+        else:
+            # Base probability is Energy * Physics Quality
+            # Physics Factor: Average of Spin/Parity, penalized if < 0.5 is rare
+            phys_factor = (s + p) / 2.0
+            
+            # If Physics is neutral (0.5), we rely on Energy
+            if s == 0.5 and p == 0.5:
+                label = e * 0.8
+            else:
+                # If Physics is active, it boosts or suppresses
+                label = e * phys_factor
+                
+            # Certainty Penalty
+            if cert_s == 0.0 or cert_p == 0.0:
+                label *= 0.9
+                
+        training_points.append(([e, s, p, cert_s, cert_p, spec], label))
+
+    training_features = np.array([record[0] for record in training_points])
+    training_labels = np.array([record[1] for record in training_points])
     return training_features, training_labels
 
 
