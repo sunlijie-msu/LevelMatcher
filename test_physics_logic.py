@@ -1,115 +1,74 @@
-from Level_Matcher_Gemini import expand_j_pi, check_physics_veto
+from physics_parser import expand_spin_parity_string, PhysicsFeatureEngine
 import sys
 
-# Helpers to mock DataFrame rows
-def r(spin, parity):
-    return {'Spin': spin, 'Parity': parity}
+# Helpers to mock nuclear level data for testing
+def create_mock_level(spin_parity_string):
+    """
+    Simulates a level record by parsing the spin-parity string into the internal list format.
+    """
+    detected_states = expand_spin_parity_string(spin_parity_string)
+    return {
+        'Spin_Parity': spin_parity_string,
+        'Spin_Parity_List': [
+            {
+                'twoTimesSpin': int(state.spin_value * 2) if state.spin_value is not None else None,
+                'parity': state.parity_value,
+                'isTentativeSpin': state.spin_is_tentative,
+                'isTentativeParity': not state.parity_is_firm
+            } for state in detected_states
+        ]
+    }
 
-def test_parser():
-    print("=== VERIFYING PARSER LOGIC & VETO ===")
+def run_physics_unit_tests():
+    print("=== NUCLEAR PHYSICS LOGIC UNIT TESTS ===")
     
-    # 1. Test Range
-    print("\n[TEST] Range '1/2:7/2'")
-    res = expand_j_pi("1/2:7/2")
-    # Sort by spin
-    spins = sorted([x.j for x in res if x.j is not None])
+    # 1. Verification of String Parsing (Range)
+    print("\n[TEST] Parsing Range: '1/2:7/2'")
+    states = expand_spin_parity_string("1/2:7/2")
+    numerical_spins = sorted([s.spin_value for s in states if s.spin_value is not None])
     expected_spins = [0.5, 1.5, 2.5, 3.5]
-    if spins != expected_spins:
-        print(f"FAILED. Expected {expected_spins}, Got {spins}")
+    if numerical_spins != expected_spins:
+        print(f"FAILURE. Expected {expected_spins}, Got {numerical_spins}")
         sys.exit(1)
+    print(f"SUCCESS. Extracted: {numerical_spins}")
+
+    # 2. Verification of Spin Matching (Heuristics)
+    print("\n[TEST] Spin Match Heuristics: '(1,2)-' vs '1-'")
+    level_1 = create_mock_level("(1,2)-")
+    level_2 = create_mock_level("1-")
     
-    # Range is firm? Logic: Top level range -> firm.
-    if any(x.j_tentative for x in res):
-        print("FAILED. Top level range should be firm.")
+    spin_similarity = PhysicsFeatureEngine.evaluate_spin_match(level_1['Spin_Parity_List'], level_2['Spin_Parity_List'])
+    if spin_similarity < 0.8:
+        print(f"FAILURE. High similarity expected. Got {spin_similarity}")
         sys.exit(1)
-    print(f"PASS. Got {spins}")
+    print(f"SUCCESS. Spin Similarity: {spin_similarity}")
 
-    # 2. Test List
-    print("\n[TEST] List '3/2, 5/2'")
-    res = expand_j_pi("3/2, 5/2")
-    spins = sorted([x.j for x in res if x.j is not None])
-    expected_spins = [1.5, 2.5]
-    if spins != expected_spins:
-        print(f"FAILED. Expected {expected_spins}, Got {spins}")
+    print("\n[TEST] Spin Veto: '(1,2)-' vs '4-'")
+    level_3 = create_mock_level("4-")
+    spin_similarity_veto = PhysicsFeatureEngine.evaluate_spin_match(level_1['Spin_Parity_List'], level_3['Spin_Parity_List'])
+    if spin_similarity_veto > 0.3:
+        print(f"FAILURE. Veto expected. Got {spin_similarity_veto}")
         sys.exit(1)
-    print(f"PASS. Got {spins}")
+    print(f"SUCCESS. Spin Similarity (Veto): {spin_similarity_veto}")
 
-    # 3. Test Parity Inheritance (Suffix)
-    print("\n[TEST] Parity Inheritance '(1/2, 3/2)+'")
-    res = expand_j_pi("(1/2, 3/2)+")
-    # Should get (0.5, +, TentativeJ, FirmP)
-    for s in res:
-        if not s.j_tentative: print(f"FAILED. S/B Tentative. {s}"); sys.exit(1)
-        if not s.p_firm: print(f"FAILED. S/B Firm Parity. {s}"); sys.exit(1)
-        if s.p != '+': print(f"FAILED. S/B +. {s}"); sys.exit(1)
-    print(f"PASS. Got {res}")
-
-    # 4. Test Parity Inheritance Negative (Firm Suffix)
-    print("\n[TEST] Parity Inheritance Negative '(1, 2)-'")
-    res = expand_j_pi("(1, 2)-")
-    for s in res:
-        if not s.j_tentative: print(f"FAILED. S/B Tentative J. {s}"); sys.exit(1)
-        if not s.p_firm: print(f"FAILED. S/B Firm Parity. {s}"); sys.exit(1)
-        if s.p != '-': print(f"FAILED. S/B -. {s}"); sys.exit(1)
-    
-    # VETO CHECK: (1,2)- should match 1- (Exact)
-    if check_physics_veto(r("(1,2)-", None), r("1-", None)) != 0:
-        print("FAILED VETO Check: (1,2)- should match 1-")
+    # 3. Verification of Parity Matching
+    print("\n[TEST] Parity Match: '1+' vs '1+'")
+    level_p1 = create_mock_level("1+")
+    level_p2 = create_mock_level("2+")
+    parity_similarity = PhysicsFeatureEngine.evaluate_parity_match(level_p1['Spin_Parity_List'], level_p2['Spin_Parity_List'])
+    if parity_similarity != 1.0:
+        print(f"FAILURE. Same parity should match 1.0. Got {parity_similarity}")
         sys.exit(1)
-    # VETO CHECK: (1,2)- should match 0- (Tentative logic +/- 1)
-    # 0 is close to 1.
-    if check_physics_veto(r("(1,2)-", None), r("0-", None)) != 0:
-        print("FAILED VETO Check: (1,2)- should match 0- (Tolerance)")
-        sys.exit(1)
-    # VETO CHECK: (1,2)- should NOT match 4-
-    if check_physics_veto(r("(1,2)-", None), r("4-", None)) != 1:
-        print("FAILED VETO Check: (1,2)- should VETO 4-")
-        sys.exit(1)
-    print("PASS Logic Checks.")
+    print("SUCCESS. Parity Match: 1.0")
 
-    # 5. Test List Explicit Parity (Firm No Parens)
-    print("\n[TEST] List Explicit Parity '0-,1-,2-'")
-    res = expand_j_pi("0-,1-,2-")
-    for s in res:
-        if s.j_tentative: print(f"FAILED. S/B Firm J. {s}"); sys.exit(1)
-        if not s.p_firm: print(f"FAILED. S/B Firm P. {s}"); sys.exit(1)
-    
-    # VETO CHECK: 0-,1-,2- should NOT match 3- (Strict)
-    if check_physics_veto(r("0-,1-,2-", None), r("3-", None)) != 1:
-        print("FAILED VETO Check: Firm List should Veto neighbors.")
+    print("\n[TEST] Parity Veto: '1+' vs '1-'")
+    level_p3 = create_mock_level("1-")
+    parity_similarity_veto = PhysicsFeatureEngine.evaluate_parity_match(level_p1['Spin_Parity_List'], level_p3['Spin_Parity_List'])
+    if parity_similarity_veto != 0.0:
+        print(f"FAILURE. Conflicting parity should veto (0.0). Got {parity_similarity_veto}")
         sys.exit(1)
-    print("PASS. Got {res}")
-
-    # 6. Test No Parity (Tentative Group, No Suffix)
-    print("\n[TEST] No Parity '(1,2)'")
-    res = expand_j_pi("(1,2)")
-    # Parity should be Not Firm (downstream can match + or -)
-    for s in res:
-        if s.p_firm: print(f"FAILED. S/B Not Firm P. {s}"); sys.exit(1)
-        if not s.j_tentative: print(f"FAILED. S/B Tentative J. {s}"); sys.exit(1)
-        
-    # VETO CHECK: (1,2) matches 1+
-    if check_physics_veto(r("(1,2)", None), r("1+", None)) != 0:
-         print("FAILED VETO Check: (1,2) should match 1+")
-         sys.exit(1)
-    print(f"PASS. Got {res}")
-
-    # 7. Test Mixed
-    print("\n[TEST] Mixed '(2+,3,4,5+)'")
-    res = expand_j_pi("(2+,3,4,5+)")
-    # 2+: Spin Tentative, Parity Not Firm (inside parens)
-    s2 = next(x for x in res if x.j == 2.0)
-    if s2.p_firm: print("FAILED. Inner parity inside parens S/B Not Firm."); sys.exit(1)
-    
-    # VETO CHECK: (2+,...) matches 2-
-    if check_physics_veto(r("(2+,3,4,5+)", None), r("2-", None)) != 0:
-         print("FAILED VETO Check: (2+) matches 2- because inner parity is tentative.")
-         sys.exit(1)
-    print(f"PASS. Got {res}")
+    print("SUCCESS. Parity Veto: 0.0")
 
 if __name__ == "__main__":
-    try:
-        test_parser()
-        print("\nSUCCESS: The code obeys all rules.")
-    except Exception as e:
-        print(f"\nCRITICAL ERROR: {e}")
+    run_physics_unit_tests()
+

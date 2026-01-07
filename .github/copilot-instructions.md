@@ -5,9 +5,13 @@ Nuclear structure analysis tool that matches energy levels across separate exper
 
 - **Simplicity First:** Avoid creating new functions for simple logic. Keep the logic inline and use clear comments to explain complex lines.
 
+- **No Acronyms:** Do not use acronyms for variable names or documentation. Spell out long variable names completely (e.g., use `tentative` instead of `tent`, `error` instead of `err`). Long, descriptive naming for variables is preferred for clarity.
+
 ## Key Patterns & Conventions
 - **Preserve Comments:** Do not summarize, shorten, or delete existing user's comments. Keep them exactly as they are.
 - **Edit vs Replace:** Always use editing tools (`replace_string_in_file`, `edit_notebook_file`) to modify existing code. Do not use file creation/overwriting tools (`create_file`) on existing files unless explicitly asked to "rewrite" or "reset" the file.
+**Strictly Forbidden:** Do not self-use `git restore` or `git checkout` to revert changes. Nuclear data coding requires high-precision work, not typical software development. The common LLM tendency to resort to git for error recovery is strictly prohibited. You must identify and fix errors carefully to maintain absolute rigor.
+
 - **Soft Labels:** Use `XGBRegressor(objective='binary:logistic')` to output continuous probabilities (e.g., 0.79) rather than binary classes.
 - **Prediction Syntax:** `model.predict([[z, veto]])[0]`
   - `[[...]]`: The model expects a 2D array (batch of inputs).
