@@ -1,5 +1,5 @@
 """
-DATA PARSER & PHYSICS FEATURE COMPILER
+DATA PARSER & PHYSICS FEATURE ENGINEERING
 ======================================
 
 Explanation of Logic:
@@ -28,29 +28,39 @@ import re
 import numpy as np
 
 # ==========================================
-# Feature Engineering & Data Transformation
+# Configuration: Scoring Parameters
 # ==========================================
-
+# This section defines the weights used to calculate similarity between levels.
+# Range: 0.0 (No Match) to 1.0 (Perfect Match).
+# Modify these values to adjust the physics logic sensitivity.
 
 Scoring_Config = {
     'Energy': {
+        # Controls how strictly energy values must match. 
+        # - Higher Value (e.g. 1.0) = Stricter (Score drops fast if energy differs).
+        # - Lower Value (e.g. 0.1) = Looser (Score stays high even with differences).
         'Sigma_Scale': 0.5,
+        
+        # Default energy uncertainty (in keV) used when input data lacks uncertainty.
         'Default_Uncertainty': 10.0
     },
     'Spin': {
-        'Match_Firm': 1.0,         # Exact match (e.g. 2+ vs 2+)
-        'Match_Tentative': 0.9,    # Tentative match (e.g. (2+) vs 2+)
-        'Mismatch_Weak': 0.25,     # Adjacent spins (e.g. (2) vs 3)
-        'Mismatch_Strong': 0.0,    # Hard conflict (e.g. 2 vs 3)
-        'Veto': 0.0               # Impossible match
+        # Similarity scores for Spin (J) comparisons (0.0 to 1.0)
+        'Match_Firm': 1.0,         # Strongest Match: 2+ vs 2+
+        'Match_Tentative': 0.9,    # Good Match: (2+) vs 2+
+        'Mismatch_Weak': 0.25,     # Weak Conflict: 2 vs (3) (Differs by 1, tentative)
+        'Mismatch_Strong': 0.0,    # Strong Conflict: 2 vs 3 (Differs by 1, firm)
+        'Veto': 0.0               # Impossible: 2 vs 4 (Differs by >1)
     },
     'Parity': {
-        'Match_Firm': 1.0,
-        'Match_Tentative': 0.9,
-        'Mismatch_Tentative': 0.2,
-        'Mismatch_Firm': 0.0
+        # Similarity scores for Parity (Pi) comparisons (0.0 to 1.0)
+        'Match_Firm': 1.0,         # Strongest Match: + vs +
+        'Match_Tentative': 0.9,    # Good Match: (+) vs +
+        'Mismatch_Tentative': 0.2, # Weak Conflict: + vs (-)
+        'Mismatch_Firm': 0.0       # Strong Conflict: + vs -
     },
     'General': {
+        # Score used when data is missing (e.g. unknown).
         'Neutral_Score': 0.5
     }
 }
