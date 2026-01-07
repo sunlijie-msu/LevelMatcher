@@ -116,9 +116,11 @@ if __name__ == "__main__":
         member_id = list(cluster.values())[0]
         id_to_clusters[member_id] = [cluster]
 
-    # Valid High-Probability pairs for consistency checks
-    valid_pairs = set((candidate['ID1'], candidate['ID2']) for candidate in candidates)
-    valid_pairs.update((candidate['ID2'], candidate['ID1']) for candidate in candidates)
+    # Valid High-Probability pairs for consistency checks (Prob > 0.5)
+    # We enforce that all members of a cluster must be strongly compatible.
+    # A low-probability "Technical Match" (e.g. 20%) is not enough to sustain a cluster merge.
+    valid_pairs = set((candidate['ID1'], candidate['ID2']) for candidate in candidates if candidate['probability'] >= 0.5)
+    valid_pairs.update((candidate['ID2'], candidate['ID1']) for candidate in candidates if candidate['probability'] >= 0.5)
 
     for candidate in candidates:
         if candidate['probability'] < 0.5: break # Only merge strong candidates
@@ -188,16 +190,32 @@ if __name__ == "__main__":
             if cluster_id not in seen:
                 unique_clusters.append(cluster)
                 seen.add(cluster_id)
+    
+    # Sort clusters by average energy for consistent display
+    def get_cluster_avg_energy(c):
+        energies = [level_lookup[mid]['energy_value'] for mid in c.values()]
+        return sum(energies) / len(energies)
+    unique_clusters.sort(key=get_cluster_avg_energy)
+
+    print("\n=== CLUSTERING RESULTS ===")
+    for i, cluster in enumerate(unique_clusters):
+        # Find Anchor
+        anchor_id = min(cluster.values(), key=lambda x: level_lookup[x]['energy_uncertainty'] if pd.notna(level_lookup[x]['energy_uncertainty']) else 999)
+        members_str = ", ".join([f"{ds}:{mid}" for ds, mid in sorted(cluster.items())])
+        print(f"Cluster {i+1}: Anchor={anchor_id} | Members=[{members_str}]")
 
     # ==========================================
     # 5. REPORTING / ADOPTED LEVEL GENERATION
     # ==========================================
     adopted_levels = []
+    
+    # Define columns for the output table
+    dataset_columns = sorted(list(set(row['dataset_code'] for _, row in dataframe.iterrows())))
+    
     for cluster in unique_clusters:
         if not cluster: continue
         
-        # Anchor Selection: Lowest energy uncertainty
-        # If uncertainty is missing, treat as high error (999 keV)
+        # Anchor Selection
         anchor_level_id = min(cluster.values(), key=lambda x: level_lookup[x]['energy_uncertainty'] if pd.notna(level_lookup[x]['energy_uncertainty']) else 999)
         anchor_level_data = level_lookup[anchor_level_id]
         
@@ -205,36 +223,61 @@ if __name__ == "__main__":
         energy_and_error_pairs = []
         for member_id in cluster.values():
             level_data = level_lookup[member_id]
-            error = level_data['energy_uncertainty'] if pd.notna(level_data['energy_uncertainty']) else 10 # Default to 10 keV if unknown
+            error = level_data['energy_uncertainty'] if pd.notna(level_data['energy_uncertainty']) else 10
             energy_and_error_pairs.append((level_data['energy_value'], error))
         
         weights = [1.0 / (error**2) for energy, error in energy_and_error_pairs]
         sum_of_weights = sum(weights)
         adopted_energy = sum(pair[0] * weight for pair, weight in zip(energy_and_error_pairs, weights)) / sum_of_weights
         
-        # Cross-Reference String Generation
-        cross_reference_parts = []
-        sorted_member_ids = sorted(cluster.values(), key=lambda x: (level_lookup[x]['dataset_code'], level_lookup[x]['energy_value']))
+        # Row Construction
+        jpi_opt = anchor_level_data.get('spin_parity', '')
+        if jpi_opt == "unknown": jpi_opt = ""
         
-        for member_id in sorted_member_ids:
-            if member_id == anchor_level_id:
-                cross_reference_parts.append(f"{member_id}(Anchor)")
-            else:
-                # Recalculate probability against Anchor for display clarity
-                level_data_1 = level_lookup[member_id]
-                level_data_2 = anchor_level_data
+        row_data = {
+            'E_Adopted': f"{adopted_energy:.1f}",
+            'Jpi_Adopted': jpi_opt
+        }
+        
+        # Fill Dataset Columns
+        for ds in dataset_columns:
+            if ds in cluster:
+                member_id = cluster[ds]
+                level_data = level_lookup[member_id]
+                e_val = level_data['energy_value']
+                jpi = level_data.get('spin_parity', '')
+                if not jpi or jpi == "unknown": jpi = ""
                 
-                # Use updated feature engine with long names
-                input_vector = extract_features(level_data_1, level_data_2)
-                probability = level_matcher_model.predict([input_vector])[0]
-                cross_reference_parts.append(f"{member_id}({probability:.0%})")
+                # Probability
+                if member_id == anchor_level_id:
+                    prob_str = "Anchor"
+                else:
+                    input_vector = extract_features(level_data, anchor_level_data)
+                    prob = level_matcher_model.predict([input_vector])[0]
+                    prob_str = f"{prob:.0%}"
+                
+                # Format: "Energy Jpi (Prob)"
+                if jpi:
+                    cell_str = f"{e_val:.1f} {jpi} ({prob_str})"
+                else:
+                    cell_str = f"{e_val:.1f} ({prob_str})"
+                    
+                row_data[ds] = cell_str
+            else:
+                row_data[ds] = "-"
         
-        adopted_levels.append({
-            'Adopted_Energy': round(adopted_energy, 1),
-            'XREF': " + ".join(cross_reference_parts),
-            'Spin_Parity': anchor_level_data.get('spin_parity', '') # Preserving case for standard nuclear labels
-        })
+        adopted_levels.append(row_data)
 
-    adopted_dataframe = pd.DataFrame(adopted_levels).sort_values('Adopted_Energy')
-    print("\n=== ADOPTED LEVELS ===")
-    print(adopted_dataframe.to_string(index=False))
+    adopted_dataframe = pd.DataFrame(adopted_levels)
+    # Reorder columns: E_Adopted, Jpi_Adopted, then Datasets
+    cols = ['E_Adopted', 'Jpi_Adopted'] + dataset_columns
+    adopted_dataframe = adopted_dataframe[cols]
+    
+    print("\n=== ADOPTED LEVELS TABLE ===")
+    # Adjust pandas display settings for alignment
+    pd.set_option('display.max_colwidth', None)
+    pd.set_option('display.width', 1000)
+    
+    # Calculate a dynamic col_space based on content or stick to a reasonable default
+    # 18 chars is usually enough for "8888.8 88(+) (100%)"
+    print(adopted_dataframe.to_string(index=False, col_space=18, justify='left'))

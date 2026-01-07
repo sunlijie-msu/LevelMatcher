@@ -71,23 +71,20 @@ Scoring_Config = {
 
 def load_levels_from_json(dataset_codes):
     """
-    Parses JSON files for the given dataset codes and returns a list of standardized level dictionaries.
+    Parses JSON files (modern schema) for the given dataset codes and returns a list of standardized level dictionaries.
+    Target files: test_dataset_{code}.json
     Standardized Keys: energy_value, energy_uncertainty, spin_parity_list, spin_parity.
     """
     levels = []
     for dataset_code in dataset_codes:
-        # Use filename as per legacy expectation
-        filename = f"dataset_{dataset_code}.json"
-        
-        # Fallback to test_dataset if main not found
-        if not os.path.exists(filename):
-            filename = f"test_dataset_{dataset_code}.json"
+        # Strictly use the test_dataset_{code}.json files with the new schema
+        filename = f"test_dataset_{dataset_code}.json"
 
         if os.path.exists(filename):
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
-                # Format 1: New ENSDF JSON schema (levelsTable -> levels)
+                # Format: New ENSDF JSON schema (levelsTable -> levels)
                 if isinstance(data, dict) and 'levelsTable' in data:
                     raw_levels = data['levelsTable'].get('levels', [])
                     for item in raw_levels:
@@ -105,40 +102,6 @@ def load_levels_from_json(dataset_codes):
                                 'spin_parity_list': spin_parity_list,
                                 'spin_parity': spin_parity_string
                             })
-                            
-                # Format 2: Legacy Flat List ([{"E_level": ...}, ...])
-                elif isinstance(data, list):
-                    for item in data:
-                        # Extract and Normalize
-                        e_val = item.get('E_level')
-                        de_val = item.get('DE_level', 10.0)
-                        spin = item.get('Spin')
-                        parity = item.get('Parity')
-                        
-                        # Construct Spin List
-                        sp_list = []
-                        sp_str = ""
-                        if spin is not None:
-                            sp_entry = {
-                                'twoTimesSpin': int(spin * 2), # Legacy Spin is J (float), schema needs 2J
-                                'isTentativeSpin': False, # Legacy data usually firm if present
-                                'parity': parity if parity else "",
-                                'isTentativeParity': False
-                            }
-                            sp_list.append(sp_entry)
-                            sp_str = f"{spin}{parity if parity else ''}"
-                        elif parity:
-                             # Parity only
-                             sp_str = f"{parity}"
-
-                        levels.append({
-                            'dataset_code': dataset_code,
-                            'level_id': f"{dataset_code}_{int(e_val)}",
-                            'energy_value': float(e_val),
-                            'energy_uncertainty': float(de_val),
-                            'spin_parity_list': sp_list,
-                            'spin_parity': sp_str
-                        })
     return levels
 
 
