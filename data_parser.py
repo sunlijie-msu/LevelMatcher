@@ -108,6 +108,13 @@ def load_levels_from_json(dataset_codes):
                         levels.append(item)
     return levels
 
+
+# Feature engineering is one of the most critical steps in building high-performance machine learning models.
+
+# Feature engineering is the process of transforming raw data into meaningful features that make it easier for the machine learning model to understand patterns.
+
+# Well-engineered features can significantly boost XGBoost’s performance, leading to improved accuracy and predictive power.
+
 def calculate_energy_similarity(energy_1, energy_uncertainty_1, energy_2, energy_uncertainty_2):
     """
     Calculates energy similarity based on Gaussian kernel of Z-score.
