@@ -1,47 +1,21 @@
 import pandas as pd
 import numpy as np
-import json
-import os
-import re
 from xgboost import XGBRegressor
-from data_parser import extract_features, get_training_data
+from data_parser import extract_features, get_training_data, load_levels_from_json
+
+"""
+Explanation of Code Structure:
+1.  **Data Ingestion**: Loads standardized nuclear level data using `data_parser`.
+2.  **Model Training**: Trains an XGBoost model using physics-informed monotonic constraints.
+3.  **Inference**: Calculates match probabilities for all cross-dataset pairs.
+4.  **Clustering**: Groups matching levels into unique clusters, handling conflicts via logic.
+5.  **Reporting**: Generates "Adopted Levels" with weighted energy averages and cross-references.
+"""
 
 # ==========================================
-# 1. DATA INGESTION (From JSON files)
+# 1. Test Data Ingestion (From JSON files)
 # ==========================================
-levels = []
-for dataset_code in ['A', 'B', 'C']:
-    filename = f"test_dataset_{dataset_code}.json"
-    if os.path.exists(filename):
-        with open(filename, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Handle new ENSDF JSON schema (levelsTable -> levels)
-            if isinstance(data, dict) and 'levelsTable' in data:
-                raw_levels = data['levelsTable'].get('levels', [])
-                for item in raw_levels:
-                    # Extract Energy
-                    energy_value = item.get('energy', {}).get('value')
-                    
-                    # Extract Energy Uncertainty
-                    energy_uncertainty = item.get('energy', {}).get('uncertainty', {}).get('value')
-                    
-                    # Extract Spin_Parity Values
-                    spin_parity_list = item.get('spinParity', {}).get('values', [])
-                    spin_parity_string = item.get('spinParity', {}).get('evaluatorInput') 
-                    
-                    if energy_value is not None:
-                        levels.append({
-                            'dataset_code': dataset_code,
-                            'energy_value': float(energy_value),
-                            'energy_uncertainty': float(energy_uncertainty) if energy_uncertainty is not None else 10.0,
-                            'spin_parity_list': spin_parity_list,
-                            'spin_parity': spin_parity_string
-                        })
-            elif isinstance(data, list):
-                # Fallback for flat list format
-                for item in data:
-                    item['dataset_code'] = dataset_code
-                    levels.append(item)
+levels = load_levels_from_json(['A', 'B', 'C'])
 
 dataframe = pd.DataFrame(levels)
 # Generate unique level IDs for tracking (e.g., A_1000)
@@ -50,13 +24,13 @@ dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int
 # ==========================================
 # 2. MODEL TRAINING (Physics-Informed XGBoost)
 # ==========================================
-# Features: [EnergySim, SpinSim, ParitySim, SpinCertainty, ParityCertainty, Specificity]
+# Features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
 # Constraints (All Monotonic Increasing):
-# 1. EnergySim (+1): Higher Score (1.0=Match) -> Higher Probability
-# 2. SpinSim (+1): Higher Score (1.0=Match) -> Higher Probability
-# 3. ParitySim (+1): Higher Score (1.0=Match) -> Higher Probability
-# 4. SpinCertainty (+1): Higher Certainty (1.0=Firm) -> Higher Probability
-# 5. ParityCertainty (+1): Higher Certainty (1.0=Firm) -> Higher Probability
+# 1. Energy_Similarity (+1): Higher Score (1.0=Match) -> Higher Probability
+# 2. Spin_Similarity (+1): Higher Score (1.0=Match) -> Higher Probability
+# 3. Parity_Similarity (+1): Higher Score (1.0=Match) -> Higher Probability
+# 4. Spin_Certainty (+1): Higher Certainty (1.0=Firm) -> Higher Probability
+# 5. Parity_Certainty (+1): Higher Certainty (1.0=Firm) -> Higher Probability
 # 6. Specificity (+1): Higher Specificity (1.0=Single Option) -> Higher Probability
 
 if __name__ == "__main__":
@@ -65,12 +39,18 @@ if __name__ == "__main__":
 
     # Monotonic constraints strictly enforce physics rules in the model:
     # All features are designed so that Higher Value == Better Match
-    level_matcher_model = XGBRegressor(objective='binary:logistic', 
-                                       monotone_constraints='(1, 1, 1, 1, 1, 1)', 
-                                       n_estimators=500, 
-                                       max_depth=6, 
+    # 1. Energy_Similarity (+1)
+    # 2. Spin_Similarity (+1)
+    # 3. Parity_Similarity (+1)
+    # 4. Spin_Certainty (+1)
+    # 5. Parity_Certainty (+1)
+    # 6. Specificity (+1)
+    level_matcher_model = XGBRegressor(objective='binary:logistic', # Learning Objective Function: Training Loss + Regularization. Optimizes the log loss function to predict probability of an instance belonging to a class.
+                                       monotone_constraints='(1, 1, 1, 1, 1, 1)', # Enforce an increasing constraint on all predictors. In some cases, where there is a very strong prior belief that the true relationship has some quality, constraints can be used to improve the predictive performance of the model.
+                                       n_estimators=500, # Number of gradient boosted trees
+                                       max_depth=6, # Maximum depth of a tree. Increasing this value will make the model more complex and more likely to overfit. 0 indicates no limit on depth. Beware that XGBoost aggressively consumes memory when training a deep tree.
                                        learning_rate=0.05,
-                                       random_state=42)
+                                       random_state=42) # Random number seed
     
     # Train the model on the generated training data
     level_matcher_model.fit(training_features, training_labels)
@@ -110,11 +90,11 @@ if __name__ == "__main__":
 
     print("\n=== MATCHING CANDIDATES (>10%) ===")
     for candidate in candidates:
-        # Unpack features for display: [EnergySim, SpinSim, ParitySim, SpinCertainty, ParityCertainty, Specificity]
+        # Unpack features for display: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
         energy_similarity, spin_similarity, parity_similarity, spin_certainty, parity_certainty, specificity = candidate['features']
         print(f"{candidate['ID1']} <-> {candidate['ID2']} | Probability: {candidate['probability']:.1%} "
-              f"(EnergySim={energy_similarity:.2f}, SpinSim={spin_similarity:.2f}, ParitySim={parity_similarity:.2f}, "
-              f"SpinCertainty={spin_certainty:.0f}, ParityCertainty={parity_certainty:.0f}, Specificity={specificity:.2f})")
+              f"(Energy_Similarity={energy_similarity:.2f}, Spin_Similarity={spin_similarity:.2f}, Parity_Similarity={parity_similarity:.2f}, "
+              f"Spin_Certainty={spin_certainty:.0f}, Parity_Certainty={parity_certainty:.0f}, Specificity={specificity:.2f})")
 
     # ==========================================
     # 4. CLUSTERING (Graph Clustering with Overlap Support)
@@ -216,8 +196,8 @@ if __name__ == "__main__":
     for cluster in unique_clusters:
         if not cluster: continue
         
-        # Anchor Selection: Lowest energy uncertainty (DE_level)
-        # If DE_level is missing, treat as high error (999 keV)
+        # Anchor Selection: Lowest energy uncertainty
+        # If uncertainty is missing, treat as high error (999 keV)
         anchor_level_id = min(cluster.values(), key=lambda x: level_lookup[x]['energy_uncertainty'] if pd.notna(level_lookup[x]['energy_uncertainty']) else 999)
         anchor_level_data = level_lookup[anchor_level_id]
         
@@ -232,13 +212,13 @@ if __name__ == "__main__":
         sum_of_weights = sum(weights)
         adopted_energy = sum(pair[0] * weight for pair, weight in zip(energy_and_error_pairs, weights)) / sum_of_weights
         
-        # Cross-Reference (XREF) String Generation
-        xref_parts = []
+        # Cross-Reference String Generation
+        cross_reference_parts = []
         sorted_member_ids = sorted(cluster.values(), key=lambda x: (level_lookup[x]['dataset_code'], level_lookup[x]['energy_value']))
         
         for member_id in sorted_member_ids:
             if member_id == anchor_level_id:
-                xref_parts.append(f"{member_id}(Anchor)")
+                cross_reference_parts.append(f"{member_id}(Anchor)")
             else:
                 # Recalculate probability against Anchor for display clarity
                 level_data_1 = level_lookup[member_id]
@@ -247,11 +227,11 @@ if __name__ == "__main__":
                 # Use updated feature engine with long names
                 input_vector = extract_features(level_data_1, level_data_2)
                 probability = level_matcher_model.predict([input_vector])[0]
-                xref_parts.append(f"{member_id}({probability:.0%})")
+                cross_reference_parts.append(f"{member_id}({probability:.0%})")
         
         adopted_levels.append({
             'Adopted_Energy': round(adopted_energy, 1),
-            'XREF': " + ".join(xref_parts),
+            'XREF': " + ".join(cross_reference_parts),
             'Spin_Parity': anchor_level_data.get('spin_parity', '') # Preserving case for standard nuclear labels
         })
 

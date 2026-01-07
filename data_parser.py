@@ -2,30 +2,34 @@
 DATA PARSER & PHYSICS FEATURE ENGINEERING
 ======================================
 
-Explanation of Logic:
+Explanation of Code Structure:
 -------------------------
-1.  **Input Parsing**: Raw string inputs (e.g., "1/2:7/2") are converted into standardized formats.
-    - Handles ranges (`:`), lists (`,`), and tentative assignments (`()`).
-    - Produces a list of possible (Spin, Parity) states for each nuclear level.
+1.  **Data Loading** (`load_levels_from_json`):
+    - Ingests nuclear level data from JSON files (ENSDF schema).
+    - Standardizes attributes into flat dictionaries: `energy_value`, `energy_uncertainty`, `spin_parity_list`.
 
-2.  **Feature Extraction** (`extract_features`):
-    - Takes two dictionary objects representing nuclear levels (parsed from input JSON).
-    - Calculates similarity scores across 3 physical dimensions:
-        A. **Energy**: Uses Gaussian similarity (1.0 = exact match, 0.0 = far apart).
-        B. **Physics**: Checks Spin and Parity compatibility (1.0 = match, 0.0 = conflict).
-        C. **Quality**: Evaluates data certainty (Tentativeness) and Specificity (Multiplicity).
+2.  **Physics Feature Extraction** (`calculate_*_similarity`):
+    - Mathematical comparison of level attributes using `Scoring_Config` weights.
+    - **Energy**: Gaussian similarity based on Z-score overlap (0.0 to 1.0).
+    - **Spin (J)**: Physics-informed scoring (1.0 for match, 0.0 for prohibition). Handles ranges and tentative assignments.
+    - **Parity (Pi)**: Strict parity checking (Match vs Mismatch).
 
-3.  **Feature Vector Construction**:
-    - Returns a standardized generated feature vector where **Higher Score is Always Better**.
-    - Vector: `[Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]`
+3.  **Feature Vector Construction** (`extract_features`):
+    - Aggregates individual scores into a numerical vector for the ML model.
+    - Vector Format: `[Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]`
+    - Metrics:
+        - *Similarity*: How well values match (Physics inputs).
+        - *Certainty*: Penalty for unsure/tentative data (1.0=Firm, 0.0=Tentative).
+        - *Specificity*: Penalty for ambiguous multiple options (1.0=Specific, <1.0=Ambiguous).
 
-4.  **Training Data Generation**:
-    - Provides synthetic "Gold Standard" examples to train the XGBoost model.
-    - Enforces physics rules (e.g., Parity Mismatch = 0% probability) via these examples.
+4.  **Training Data Generation** (`get_training_data`):
+    - Generates synthetic "Gold Standard" pairs to teach the XGBoost model core physics constraints.
 """
 
 import re
 import numpy as np
+import json
+import os
 
 # ==========================================
 # Configuration: Scoring Parameters
@@ -64,6 +68,45 @@ Scoring_Config = {
         'Neutral_Score': 0.5
     }
 }
+
+def load_levels_from_json(dataset_codes):
+    """
+    Parses JSON files for the given dataset codes and returns a list of standardized level dictionaries.
+    """
+    levels = []
+    for dataset_code in dataset_codes:
+        filename = f"test_dataset_{dataset_code}.json"
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Handle new ENSDF JSON schema (levelsTable -> levels)
+                if isinstance(data, dict) and 'levelsTable' in data:
+                    raw_levels = data['levelsTable'].get('levels', [])
+                    for item in raw_levels:
+                        # Extract Energy
+                        energy_value = item.get('energy', {}).get('value')
+                        
+                        # Extract Energy Uncertainty
+                        energy_uncertainty = item.get('energy', {}).get('uncertainty', {}).get('value')
+                        
+                        # Extract Spin_Parity Values
+                        spin_parity_list = item.get('spinParity', {}).get('values', [])
+                        spin_parity_string = item.get('spinParity', {}).get('evaluatorInput') 
+                        
+                        if energy_value is not None:
+                            levels.append({
+                                'dataset_code': dataset_code,
+                                'energy_value': float(energy_value),
+                                'energy_uncertainty': float(energy_uncertainty) if energy_uncertainty is not None else 10.0,
+                                'spin_parity_list': spin_parity_list,
+                                'spin_parity': spin_parity_string
+                            })
+                elif isinstance(data, list):
+                    # Fallback for flat list format
+                    for item in data:
+                        item['dataset_code'] = dataset_code
+                        levels.append(item)
+    return levels
 
 def calculate_energy_similarity(energy_1, energy_uncertainty_1, energy_2, energy_uncertainty_2):
     """
@@ -191,7 +234,7 @@ def extract_features(level_1, level_2):
 def get_training_data():
     """
     Returns (training_features, training_labels) for training the XGBoost Model.
-    Feature Order: [EnergySim, SpinSim, ParitySim, SpinCertainty, ParityCertainty, Specificity]
+    Feature Order: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
     All features are Monotonic Increasing (High Score == Better Match).
     """
     training_records = []
@@ -216,9 +259,9 @@ def get_training_data():
     training_records.append(([1.0, 0.9, 1.0, 0.0, 1.0, 1.0], 0.90))
 
     # 5. Energy Degradation
-    # Good physics, but Energy is far away (EnergySim=0.1)
+    # Good physics, but Energy is far away (Energy_Similarity=0.1)
     training_records.append(([0.1, 1.0, 1.0, 1.0, 1.0, 1.0], 0.10))
-    # Very far (EnergySim=0.0)
+    # Very far (Energy_Similarity=0.0)
     training_records.append(([0.0, 1.0, 1.0, 1.0, 1.0, 1.0], 0.00))
 
     # 6. High Ambiguity (Low Specificity)

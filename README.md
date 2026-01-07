@@ -1,6 +1,6 @@
 # Level Matcher
 
-Physics-informed nuclear level matching tool using XGBoost Regression and Graph Clustering.
+Physics-informed nuclear level matching tool using XGBoost (eXtreme Gradient Boosting) Regression and Graph Clustering.
 Matches energy levels across experimental datasets to generate "Adopted Levels" and XREF list with probabilistic confidence scores.
 
 ## Key Features
@@ -27,10 +27,18 @@ Matches energy levels across experimental datasets to generate "Adopted Levels" 
 
 ## Usage
 1.  Populate `test_dataset_A.json`, `test_dataset_B.json`, and `test_dataset_C.json` with experimental data.
-2.  Run: `python Level_Matcher_Gemini.py`
-3.  View output: Adopted Energy, XREF (with probabilities), and Anchor Spin/Parity.
+2.  Run: `python Level_Matcher_Engine.py`
+3.  View output: Adopted Energy, Cross-Reference (with probabilities), and Anchor Spin/Parity.
+
+## Architecture
+*   **`Level_Matcher_Engine.py`**: Main application logic. Handles model training, inference, graph clustering, and reporting.
+*   **`data_parser.py`**: Core physics engine. Contains physics constants (`Scoring_Config`), feature extraction logic, and data ingestion (ENSDF JSON).
+*   **Physics Logic**:
+    *   **Energy Similarity**: Gaussian kernel of Z-Score.
+    *   **Spin/Parity Similarity**: Weighted scoring system (Firm Match, Tentative Match, Conflict, Veto).
+    *   **Quality Metrics**: Certainty (Tentativeness) and Specificity (Multiplicity) inputs for the ML model.
 
 ## Logic
 *   **Z-Score:** $ |E_1 - E_2| / \sqrt{\sigma_1^2 + \sigma_2^2} $
-*   **Consistency Check:** Spin/Parity strings are parsed using a recursive descent parser. Supports ranges (e.g., "1/2:7/2"), lists (e.g., "3/2, 5/2"), and tentative assignments (e.g., "(1/2, 3/2)+"). Matches are allowed if there is **any overlap** in valid quantum numbers.
-*   **Constraints:** Monotonic constraints ensure probability decreases as Z-score increases.
+*   **Consistency Check:** Spin/Parity strings are parsed and scored. Supports ranges (e.g., "1/2:7/2"), lists (e.g., "3/2, 5/2"), and tentative assignments (e.g., "(1/2, 3/2)+").
+*   **Constraints:** Monotonic increasing constraints (1, 1, ...) ensure probability increases as similarity scores increase.
