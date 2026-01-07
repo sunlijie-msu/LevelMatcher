@@ -1,6 +1,6 @@
 # Machine Learning Hierarchy & Application Strategy for Nuclear Level Matching
 
-## Level 1: The Fundamental Unit
+## Level 1: The Fundamental Unit of Tree-Based Models
 ### Decision Tree
 *   **Concept:** A single flowchart structure representing sequential decisions.
 *   **Characteristics:** Weak and unstable on its own; prone to overfitting.
@@ -54,6 +54,8 @@
 Feature engineering is the process of transforming raw data into meaningful input features that make the machine learning model to detect patterns, relationships, and interactions.
 
 Well-engineered features can significantly boost model performance, leading to improved accuracy and predictive power.
+
+Feature engineering is one of the most critical steps in building high-performance tree-based models.
 
 XGBoost are capable of handling complex data relationships.
 Handling Missing Values: can be replaced with mean/median/mode using model-based imputation. XGBoost can inherently handle NaNs as missing.
