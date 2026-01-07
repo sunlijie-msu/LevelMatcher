@@ -224,7 +224,7 @@ def convert_log_to_datasets(log_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert ENSDF-style log files to structured JSON datasets.")
-    parser.add_argument("input_file", nargs='?', default="test_input_comprehensive.log", help="Path to the input log file")
+    parser.add_argument("input_file", nargs='?', default="evaluatorInput.log", help="Path to the input log file")
     
     args = parser.parse_args()
     convert_log_to_datasets(args.input_file)

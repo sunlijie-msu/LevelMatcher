@@ -31,9 +31,9 @@
                 "energy": {
                     "value": 3000.0,
                     "uncertainty": {
-                        "value": 1.0
+                        "value": 2.0
                     },
-                    "evaluatorInput": "3000 1"
+                    "evaluatorInput": "3000 2"
                 },
                 "spinParity": {
                     "values": [
@@ -71,9 +71,9 @@
                 "energy": {
                     "value": 5000.0,
                     "uncertainty": {
-                        "value": 3.0
+                        "value": 2.0
                     },
-                    "evaluatorInput": "5000 3"
+                    "evaluatorInput": "5000 2"
                 },
                 "spinParity": {
                     "values": [

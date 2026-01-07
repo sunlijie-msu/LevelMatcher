@@ -20,7 +20,7 @@
 
 - **Self-Explanatory Naming:** Ensure all function and variable names are self-explanatory. Use `calculate_` for math/logic processing (for example, `calculate_spin_similarity` instead of `evaluate_spin_match`) and explicit variable names (for example, `energy_similarity` instead of `energy_score`).
 
-- **Preserve Comments:** Do not summarize, shorten, or delete existing user written educational/explanatory comments. Keep them exactly as they are.
+- **Preserve Comments:** Do not summarize, shorten, or delete existing user written educational/explanatory comments (for example, comments starting with `# Sun:`). These comments are crucial for understanding the code's purpose and logic.
 
 
 Adhere strictly to the following instructions:

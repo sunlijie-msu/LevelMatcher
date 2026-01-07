@@ -4,7 +4,7 @@ from xgboost import XGBRegressor
 from Feature_Engineer import extract_features, get_training_data, load_levels_from_json
 
 """
-Explanation of Code Structure:
+# Sun: Explanation of Code Structure:
 1.  **Data Ingestion**: Loads standardized nuclear level data using `Feature_Engineer`.
 2.  **Model Training**: Trains an XGBoost model using physics-informed monotonic constraints.
 3.  **Inference**: Calculates match probabilities for all cross-dataset pairs.
@@ -22,7 +22,7 @@ dataframe = pd.DataFrame(levels)
 dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int(row['energy_value'])}", axis=1)
 
 # ==========================================
-# 2. MODEL TRAINING (Physics-Informed XGBoost)
+# 2. Model Training (Physics-Informed XGBoost)
 # ==========================================
 # Features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
 # Constraints (All Monotonic Increasing):
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     level_matcher_model.fit(training_features, training_labels)
 
     # ==========================================
-    # 3. PAIRWISE INFERENCE
+    # 3. Pairwise Inference
     # ==========================================
     candidates = []
     
@@ -99,7 +99,7 @@ if __name__ == "__main__":
               f"Spin_Certainty={spin_certainty:.0f}, Parity_Certainty={parity_certainty:.0f}, Specificity={specificity:.2f})")
 
     # ==========================================
-    # 4. CLUSTERING (Graph Clustering with Overlap Support)
+    # 4. Clustering (Graph Clustering with Overlap Support)
     # ==========================================
     # Algorithm:
     # 1. Initialize every level as a unique cluster.
@@ -207,7 +207,7 @@ if __name__ == "__main__":
         print(f"Cluster {i+1}: Anchor={anchor_id} | Members=[{members_str}]")
 
     # ==========================================
-    # 5. REPORTING / ADOPTED LEVEL GENERATION
+    # 5. Reporting / Adopted Level Generation
     # ==========================================
     adopted_levels = []
     

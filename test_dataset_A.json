@@ -5,9 +5,9 @@
                 "energy": {
                     "value": 1000.0,
                     "uncertainty": {
-                        "value": 3.0
+                        "value": 2.0
                     },
-                    "evaluatorInput": "1000 3"
+                    "evaluatorInput": "1000 2"
                 },
                 "spinParity": {
                     "values": [],

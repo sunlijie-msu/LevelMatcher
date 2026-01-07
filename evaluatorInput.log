@@ -1,5 +1,5 @@
 # Dataset A:
-E_level = 1000(3) keV; Jπ: unknown.
+E_level = 1000(2) keV; Jπ: unknown.
 E_level = 2000(2) keV; Jπ: unknown.
 E_level = 3000(2) keV; Jπ: 2+.
 E_level = 3005(2) keV; Jπ: 1-.
@@ -12,9 +12,9 @@ E_level = 5005(2) keV; Jπ: (3-,4-,5-).
 # Dataset B:
 E_level = 1005(3) keV; Jπ: unknown.
 E_level = 2008(2) keV; Jπ: unknown.
-E_level = 3000(1) keV; Jπ: 1-.
+E_level = 3000(2) keV; Jπ: 1-.
 E_level = 4000(2) keV; Jπ: 2(+).
-E_level = 5000(3) keV; Jπ: (4-).
+E_level = 5000(2) keV; Jπ: (4-).
 
 
 # Dataset C:
