@@ -214,3 +214,6 @@ Verify installation:
 ```bash
 python Library_Verification.py
 ```
+
+## Contact
+For questions or support, contact the FRIB Nuclear Data Group at nucleardata@frib.msu.edu
