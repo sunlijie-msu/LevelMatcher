@@ -20,6 +20,14 @@ import json
 import os
 import re
 
+# Tunable clustering layout knobs for quick manual adjustments
+clustering_box_pad = 1.0                # Box padding; increase for wider/taller boxes
+clustering_min_distance = 500           # Minimum vertical spacing between rows
+clustering_fig_height_multiplier = 1.0  # Height scaling; raise to add vertical breathing room
+clustering_fig_width_inches = 10.0      # Overall figure width in inches; shrink to reduce horizontal scale
+clustering_x_spacing = 0.45             # Horizontal distance between dataset columns (reduce for tighter columns)
+clustering_x_margin = 0.3               # Extra blank space padding on left/right of the outer columns
+
 # ============================================================================
 # SHARED UTILITY FUNCTIONS
 # ============================================================================
@@ -264,7 +272,11 @@ def parse_clustering_results(clustering_file_path):
     return clusters
 
 def plot_clustering_results():
-    """Generate clustering visualization matching the Level Scheme layout exactly, with cluster labels added."""
+    """
+    Generates a textual table-like visualization of clustering results.
+    Aligned horizontally by cluster, sorted vertically by energy.
+    Reads directly from clustering_results.txt.
+    """
     clustering_file_path = 'clustering_results.txt'
     clusters = parse_clustering_results(clustering_file_path)
     
@@ -272,169 +284,88 @@ def plot_clustering_results():
         print("[WARNING] No clusters found in clustering_results.txt")
         return
     
+    # Sort clusters by anchor energy (Low Energy at Bottom)
+    clusters.sort(key=lambda x: x.get('anchor_energy', 0))
+    
     datasets = ['A', 'B', 'C']
-    figure, axis = plt.subplots(figsize=(15, 10))
     
-    # X-axis positions for each dataset column - IDENTICAL TO LEVEL SCHEME
-    x_positions = {'A': 0, 'B': 2.5, 'C': 5.0}
-    line_width = 0.8
-    maximum_energy = 0
+    # Calculate figure size based on density (tunable multiplier)
+    fig_height = max(8, len(clusters) * clustering_fig_height_multiplier)
+    figure, axis = plt.subplots(figsize=(clustering_fig_width_inches, fig_height))
     
-    # Build lookup for cluster info by level
-    cluster_info_by_level = {}
-    for cluster in clusters:
+    # X-axis positions (tunable spacing)
+    x_positions = {ds: index * clustering_x_spacing for index, ds in enumerate(datasets)}
+    
+    # Y-Position Calculation
+    # Use anchor energies as base, then spread them to prevent text overlap
+    anchor_energies = [c.get('anchor_energy', 0) for c in clusters]
+    y_positions = spread_text_positions(anchor_energies, min_distance=clustering_min_distance)
+    
+    if len(y_positions) > 0:
+        y_max_limit = y_positions[-1] + 300
+    else: 
+        y_max_limit = 1000
+
+    # Plot Text for each cluster
+    for i, cluster in enumerate(clusters):
+        y_pos = y_positions[i]
+        cluster_id = cluster['cluster_number']
+        
+        # Plot members
         for member in cluster['members']:
-            key = (member['dataset'], member['level_id'])
-            if key not in cluster_info_by_level:
-                cluster_info_by_level[key] = {
-                    'cluster_numbers': [],
-                    'is_anchor': member['is_anchor'],
-                    'match_probability': member['match_probability']
-                }
-            cluster_info_by_level[key]['cluster_numbers'].append(cluster['cluster_number'])
-    
-    for dataset_code in datasets:
-        raw_levels = load_dataset(dataset_code)
-        
-        # Extract level data - IDENTICAL TO LEVEL SCHEME
-        levels_data = []
-        for level in raw_levels:
-            # Energy
-            if isinstance(level.get('energy'), dict):
-                energy_value = level.get('energy', {}).get('value')
-                uncertainty = level.get('energy', {}).get('uncertainty', {}).get('value')
+            ds = member['dataset']
+            if ds not in x_positions: continue
+            
+            x_pos = x_positions[ds]
+            
+            # Text Content
+            # Format: 'Energy(Unc)', 'Jpi', 'Prob', 'ClusterID'
+            e_str = f"{member['energy']:.0f}({int(member['uncertainty'])})"
+            jpi_str = member['jpi']
+            
+            if member['is_anchor']:
+                prob_str = "Anchor"
+            elif member.get('match_probability') is not None:
+                prob_str = f"{member['match_probability']:.1%}"
             else:
-                energy_value = level.get('energy_value')
-                uncertainty = level.get('energy_uncertainty')
-                
-            if energy_value is None:
-                continue
-            energy_value = float(energy_value)
+                prob_str = "N/A"
             
-            # Spin/Parity
-            spin_parity_string = ""
-            if isinstance(level.get('spinParity'), dict):
-                spin_parity_string = level.get('spinParity', {}).get('evaluatorInput', '')
-            else:
-                spin_parity_string = level.get('spin_parity_string', '')
+            # Combine into block - 2 lines for wider, shorter box
+            text_block = (
+                f"C{cluster_id} | {e_str}\n"
+                f"{jpi_str} | {prob_str}"
+            )
             
-            uncertainty_string = f"({int(uncertainty)})" if uncertainty is not None else ""
-            label_left = f"{int(energy_value)}{uncertainty_string}"
-            label_right = spin_parity_string if spin_parity_string else "unknown"
-            
-            # Get level ID for cluster lookup
-            level_id = level.get('level_id', f"{dataset_code}_{int(energy_value)}")
-            
-            levels_data.append({
-                'energy': energy_value,
-                'label_left': label_left,
-                'label_right': label_right,
-                'level_id': level_id,
-                'dataset': dataset_code
-            })
-            
-            if energy_value > maximum_energy:
-                maximum_energy = energy_value
+            axis.text(x_pos, y_pos, text_block, 
+                     ha='center', va='center', 
+                     fontsize=12, family='Times New Roman',
+                     bbox=dict(boxstyle=f"round,pad={clustering_box_pad}", fc="white", ec="gray", alpha=0.9))
 
-        # Sort by energy - IDENTICAL TO LEVEL SCHEME
-        levels_data.sort(key=lambda x: x['energy'])
-        
-        # Calculate text positions with collision resolution - IDENTICAL TO LEVEL SCHEME
-        energies = [x['energy'] for x in levels_data]
-        text_y_positions = spread_text_positions(energies, min_distance=250)
-        
-        # Calculate vertical offsets for level bars - IDENTICAL TO LEVEL SCHEME
-        bar_offsets = [0.0] * len(energies)
-        for index in range(len(energies) - 1):
-            if energies[index + 1] - energies[index] < 150:
-                bar_offsets[index] -= 30
-                bar_offsets[index + 1] += 30
-        
-        # Plot levels - IDENTICAL TO LEVEL SCHEME
-        x_center = x_positions[dataset_code]
-        x_start = x_center - line_width / 2
-        x_end = x_center + line_width / 2
-        
-        for index, item in enumerate(levels_data):
-            energy = item['energy']
-            y_text = text_y_positions[index]
-            bar_offset = bar_offsets[index]
-            
-            # Draw level line with vertical offset for close-by levels - IDENTICAL
-            bar_y_position = energy + bar_offset
-            axis.hlines(y=bar_y_position, xmin=x_start, xmax=x_end, colors='black', linewidth=1.5)
-            
-            # Check if text is displaced significantly - IDENTICAL
-            is_displaced = abs(bar_y_position - y_text) > 50
-            
-            if is_displaced:
-                # Energy label with connector - IDENTICAL
-                axis.annotate(item['label_left'], 
-                            xy=(x_start, bar_y_position), xycoords='data',
-                            xytext=(x_start - 0.2, y_text), textcoords='data',
-                            arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
-                            va='center', ha='right', fontsize=20, family='Times New Roman')
-                
-                # Spin/Parity label with connector - IDENTICAL
-                axis.annotate(item['label_right'], 
-                            xy=(x_end, bar_y_position), xycoords='data',
-                            xytext=(x_end + 0.2, y_text), textcoords='data',
-                            arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
-                            va='center', ha='left', fontsize=20, family='Times New Roman')
-            else:
-                # Standard text placement - IDENTICAL
-                axis.text(x_start - 0.1, y_text, item['label_left'], va='center', ha='right', fontsize=20, family='Times New Roman')
-                axis.text(x_end + 0.1, y_text, item['label_right'], va='center', ha='left', fontsize=20, family='Times New Roman')
-            
-            # ADD CLUSTER LABELS - ONLY NEW PART
-            key = (dataset_code, item['level_id'])
-            if key in cluster_info_by_level:
-                info = cluster_info_by_level[key]
-                cluster_numbers = sorted(set(info['cluster_numbers']))
-                
-                if len(cluster_numbers) > 1:
-                    cluster_label_text = ','.join([f"C{c}" for c in cluster_numbers])
-                else:
-                    cluster_label_text = f"C{cluster_numbers[0]}"
-                
-                if (not info['is_anchor']) and (info['match_probability'] is not None):
-                    cluster_label_text = f"{cluster_label_text}, {info['match_probability']:.0%}"
-                
-                # Place cluster labels: A/B in a fixed left gutter to avoid energy text; C in right gutter
-                if dataset_code == 'A':
-                    cluster_x = -1.3  # closer to Dataset A axis
-                    horizontal_alignment = 'right'
-                    label_y = y_text
-                elif dataset_code == 'B':
-                    cluster_x = x_center  # place above the bar center
-                    horizontal_alignment = 'center'
-                    label_y = y_text + 80  # raise above level to avoid overlap
-                else:
-                    cluster_x = x_end + 1.2
-                    horizontal_alignment = 'left'
-                    label_y = y_text
-                
-                axis.text(cluster_x, label_y, cluster_label_text,
-                         va='center', ha=horizontal_alignment, fontsize=15, style='italic', color='black', family='Times New Roman')
-
-    # Styling - IDENTICAL TO LEVEL SCHEME
-    axis.set_xlim(-1.5, 6.5)
-    axis.set_ylim(0, maximum_energy * 1.15)
-    axis.set_xticks([0, 2.5, 5.0])
-    axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C'], fontsize=20, fontweight='bold', family='Times New Roman')
+    # Determine Y-Axis Limits
+    axis.set_ylim(-200, y_max_limit)
+    right_limit = (len(datasets) - 1) * clustering_x_spacing + clustering_x_margin
+    left_limit = -clustering_x_margin
+    axis.set_xlim(left_limit, right_limit)
     
+    # X-Axis Labels
+    axis.set_xticks([index * clustering_x_spacing for index in range(len(datasets))])
+    axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C'], 
+                         fontsize=16, fontweight='bold', family='Times New Roman')
+    
+    # Y-Axis Label
+    axis.set_ylabel("Energy / Cluster Index (Spread)", fontsize=16, family='Times New Roman')
+    
+    # Styling: Remove spines for clean table look
     axis.spines['top'].set_visible(False)
     axis.spines['right'].set_visible(False)
     axis.spines['bottom'].set_visible(False)
-    axis.spines['left'].set_linewidth(1.5)
+    axis.spines['left'].set_visible(False)
     
-    axis.set_ylabel("Energy (keV)", fontsize=20, family='Times New Roman')
-    axis.tick_params(axis='x', length=0)
-    axis.tick_params(axis='y', labelsize=16)
+    axis.tick_params(left=True, bottom=False, labelsize=14)
     for label in axis.get_yticklabels():
         label.set_family('Times New Roman')
     
-    axis.set_title("Clustering Results", fontsize=20, fontweight='bold', pad=20, family='Times New Roman')
+    axis.set_title("Clustering Results (Aligned by Cluster)", fontsize=20, fontweight='bold', pad=20, family='Times New Roman')
     
     plt.tight_layout()
     output_file = 'Clustering_Visualization.png'

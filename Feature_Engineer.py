@@ -56,7 +56,7 @@ Scoring_Config = {
     'Spin': {
         # Similarity scores for Spin (J) comparisons (0.0 to 1.0)
         'Match_Firm': 1.0,         # both firm, e.g., 2 vs 2
-        'Match_Strong': 0.9,    # any tentative, e.g., 2 vs (2)
+        'Match_Strong': 0.8,    # any tentative, e.g., 2 vs (2)
         'Mismatch_Weak': 0.2,      # any tentative, e.g., 2 vs (3) with ΔJ=1
         'Mismatch_Strong': 0.05,    # both firm, e.g., 2 vs 3 with ΔJ=1
         'Mismatch_Firm': 0.0               # any ΔJ ≥ 2
@@ -64,8 +64,8 @@ Scoring_Config = {
     'Parity': {
         # Similarity scores for Parity (Pi) comparisons (0.0 to 1.0)
         'Match_Firm': 1.0,         # both firm, e.g., + vs + or - vs -
-        'Match_Strong': 0.9,    # any tentative, e.g., + vs (+)
-        'Mismatch_Weak': 0.1, # any tentative, e.g., + vs (-)
+        'Match_Strong': 0.8,    # any tentative, e.g., + vs (+)
+        'Mismatch_Weak': 0.05, # any tentative, e.g., + vs (-)
         'Mismatch_Firm': 0.0       # both firm, e.g., + vs -
     },
     'General': {
@@ -396,106 +396,88 @@ def extract_features(level_1, level_2):
 
 def generate_synthetic_training_data():
     """
-    Generates synthetic training data encoding nuclear physics domain knowledge for XGBoost supervised learning.
+    Generates synthetic training data for XGBoost using the defined Scoring_Config.
     
-    Training Strategy - Six physics-informed scenarios (580+ labeled examples):
-      1. Perfect matches (20 pts): High energy similarity (>0.8) + firm/tentative physics (1.0/0.9) → probability >0.9
-         - Teaches model that good energy overlap + compatible physics = strong match
-      
-      2. Physics vetoes (30 pts): Any energy + incompatible spin (0.0) or parity (0.0) → probability 0.0
-         - Enforces hard constraint: physics mismatch always rejects, regardless of energy
-      
-      3. Energy mismatches (5 pts): Perfect physics (1.0) + poor energy similarity (<0.2) → probability decays to 0.0
-         - Teaches model that physics alone insufficient without energy overlap
-      
-      4. Ambiguous physics (20 pts): Varying energy + unknown spin/parity (0.5 neutral) → energy-dependent probability (max 0.85)
-         - Handles cases where Jπ unavailable, model relies on energy similarity only
-      
-      5. Weak physics matches (15 pts): Good energy (>0.5) + marginal spin/parity compatibility (0.05-0.2) → reduced probability
-         - Teaches graduated response to near-mismatches (e.g., adjacent spins with one tentative)
-      
-      6. Random background (500 pts): Uniform sampling of four-dimensional feature space + rule-based labeling
-         - Fills feature space to prevent overfitting, applies consistent physics logic
-    
-    Output Format:
-      - training_features: numpy array shape (580+, 4) with columns [Energy_Sim, Spin_Sim, Parity_Sim, Specificity]
-      - training_labels: numpy array shape (580+,) with match probabilities in range [0.0, 0.99]
-    
-    Physics Constraints Encoded:
-      - Monotonicity: All features positively correlated with match probability (higher value → higher probability)
-      - Veto power: Spin or parity incompatibility (score 0.0) → probability 0.0 regardless of other features
-      - Energy primacy: Even with unknown physics, good energy overlap → moderate probability
-      - Specificity penalty: Ambiguous Jπ options (low specificity <1.0) → reduced confidence via feature 4
+    Strategy:
+    - Uses a grid-based approach to cover all physics scenarios defined in Scoring_Config.
+    - Applies a unified physics logic function (calculate_label) rather than hardcoded edge cases.
+    - Ensures the model learns:
+        1. Vetoes: Mismatches (Score ~0.0) -> Label 0.0.
+        2. Neutrality: Unknown physics (Score 0.5) -> High dependence on Energy.
+        3. Match Quality: Higher scores -> Higher probability.
     """
     training_points = []
     
-    # Case 1 - Perfect match zone (high energy + good physics → high probability)
-    # Energy > 0.8, Spin/Parity = 1.0 or 0.9 → Probability > 0.9
-    for e in np.linspace(0.8, 1.0, 5):
-        for s in [1.0, 0.9]: # Firm, Tentative
-            for p in [1.0, 0.9]:
-                prob = 0.9 + (e-0.8)/2 * (s * p) 
-                training_points.append(([e, s, p, 1.0], min(prob, 0.99)))
+    # 1. Gather all possible discrete scores from Config
+    spin_scores = list(Scoring_Config['Spin'].values()) + [Scoring_Config['General']['Neutral_Score']]
+    parity_scores = list(Scoring_Config['Parity'].values()) + [Scoring_Config['General']['Neutral_Score']]
+    
+    # 2. Define Physics Logic for Labeling (Empirically tuned)
+    def calculate_label(e, s, p, spec):
+        # HARD VETO: If physics explicitly mismatches (score <= near-zero), reject.
+        # Allow small tolerance if config uses 0.05 for mismatched.
+        if s <= Scoring_Config['Spin'].get('Mismatch_Strong', 0.05) or \
+           p <= Scoring_Config['Parity'].get('Mismatch_Weak', 0.1) / 2: # Logic: Parity mismatch is usually binary (0 or 1).
+             return 0.0
 
-    # Case 2 - Physics veto zone (spin or parity incompatible → zero probability)
-    # Any energy, but Spin=0.0 or Parity=0.0 (strong incompatibility) → Probability=0.0
-    for e in np.linspace(0.0, 1.0, 10):
-        # Spin Veto
-        training_points.append(([e, 0.0, 1.0, 1.0], 0.0))
-        # Parity Veto
-        training_points.append(([e, 1.0, 0.0, 1.0], 0.0))
-        # Both Veto
-        training_points.append(([e, 0.0, 0.0, 1.0], 0.0))
+        # ADJUSTMENT FOR NEUTRAL/TENTATIVE:
+        # Map raw scores to "Confidence Factors" to prevent multiplicative decay from killing good matches.
+        # If Score is Neutral (0.5), treat it as "No Info" -> Factor ~0.9 (slight penalty vs perfect).
+        def value_map(val):
+            if val == Scoring_Config['General']['Neutral_Score']: return 0.85
+            return val
 
-    # Case 3 - Energy mismatch zone (poor energy overlap → low probability)
-    # Perfect physics but Energy < 0.2 → Probability decays to zero
-    for e in np.linspace(0.0, 0.2, 5):
-        training_points.append(([e, 1.0, 1.0, 1.0], e * 0.5))
+        s_factor = value_map(s)
+        p_factor = value_map(p)
 
-    # Case 4 - Ambiguous physics zone (unknown spin/parity → energy-dependent)
-    # Energy good, but Spin=Parity=0.5 (neutral/unknown) → Probability relies on energy
-    for e in np.linspace(0.0, 1.0, 20):
-        prob = e * 0.85  # Maximum 0.85 when physics unknown
-        training_points.append(([e, 0.5, 0.5, 1.0], prob))
+        # PROBABILITY FORMULA:
+        # Base confidence from Energy * Physics Quality
+        # Use geometric mean of physics factors to balance them.
+        physics_confidence = np.sqrt(s_factor * p_factor)
+        
+        prob = e * physics_confidence * spec
+        return min(max(prob, 0.0), 0.99)
 
-    # Case 5 - Weak physics match (marginal compatibility → reduced probability)
-    # Energy good, Spin/Parity weak (0.2 or 0.1) → Low-to-mid probability
-    for e in np.linspace(0.5, 1.0, 5):
-        training_points.append(([e, 0.2, 1.0, 1.0], e * 0.4))
-        training_points.append(([e, 1.0, 0.1, 1.0], e * 0.3))
-        training_points.append(([e, 0.05, 1.0, 1.0], e * 0.2))
+    # 3. Systematic Grid Generation (Cover the feature space)
+    # Energy grid: dense near 0 (mismatch) and 1 (match)
+    energy_grid = np.concatenate([
+        np.linspace(0.0, 0.3, 10),  # Low energy (mismatch zone)
+        np.linspace(0.3, 0.8, 10),  # Mid energy
+        np.linspace(0.8, 1.0, 20)   # High energy (match zone)
+    ])
 
-    # Case 6 - Random background (fill feature space with rule-based labels)
-    # Generate 500 random points, apply physics rules to determine labels
+    for e in energy_grid:
+        for s in set(spin_scores):
+            for p in set(parity_scores):
+                # Specificity mostly 1.0, but add some noise/variation
+                for spec in [1.0, 0.7, 0.5]:
+                     label = calculate_label(e, s, p, spec)
+                     training_points.append(([e, s, p, spec], label))
+
+    # 4. Random Sampling (Fill gaps and prevent overfitting)
     np.random.seed(42)
     for _ in range(500):
         e = np.random.uniform(0, 1)
-        s = np.random.choice([0.0, 0.05, 0.2, 0.5, 0.9, 1.0])
-        p = np.random.choice([0.0, 0.1, 0.2, 0.5, 0.9, 1.0])
-        spec = np.random.uniform(0.5, 1.0)
+        s = np.random.choice(list(set(spin_scores)))
+        p = np.random.choice(list(set(parity_scores)))
+        # Generate specificity roughly following 1/sqrt(N) distribution
+        spec = np.random.choice([1.0, 0.707, 0.577, 0.5, 0.4]) 
         
-        # Apply rule-based labeling using physics constraints
-        if s == 0.0 or p == 0.0:
-            # Physics veto → zero probability
-            label = 0.0
-        elif e < 0.1:
-            # Poor energy overlap → zero probability
-            label = 0.0
-        else:
-            # Calculate base probability from energy and physics quality
-            phys_factor = (s + p) / 2.0
-            
-            if s == 0.5 and p == 0.5:
-                # Unknown physics → rely on energy only
-                label = e * 0.8
-            else:
-                # Active physics → modulate energy-based probability
-                label = e * phys_factor
-                
+        label = calculate_label(e, s, p, spec)
         training_points.append(([e, s, p, spec], label))
+
+    # 5. Additional Boost for "Perfect" cases to ensure 1.0-like behavior
+    # Forces model to be very confident when everything is perfect
+    for _ in range(50):
+        e = np.random.uniform(0.95, 1.0)
+        s = Scoring_Config['Spin']['Match_Firm']
+        p = Scoring_Config['Parity']['Match_Firm']
+        spec = 1.0
+        training_points.append(([e, s, p, spec], 0.99))
 
     training_features = np.array([record[0] for record in training_points])
     training_labels = np.array([record[1] for record in training_points])
+    
     return training_features, training_labels
 
 
