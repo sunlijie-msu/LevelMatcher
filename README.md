@@ -6,8 +6,8 @@ This tool facilitates matching energy levels across experimental datasets, gener
 
 ## Key Features
 
-*   **Physics-Informed XGBoost Regressor:** Trained on synthetic physics constraints to predict match probabilities (0.0 to 1.0) for nuclear level pairs based on six engineered features: Energy Similarity, Spin Similarity, Parity Similarity, Spin Certainty, Parity Certainty, and Specificity.
-*   **Monotonic Constraints:** All six features enforce monotonic increasing relationships (higher feature value → higher match probability), ensuring physics compliance.
+*   **Physics-Informed XGBoost Regressor:** Trained on synthetic physics constraints to predict match probabilities (0.0 to 1.0) for nuclear level pairs based on four engineered features: Energy Similarity, Spin Similarity, Parity Similarity, and Specificity.
+*   **Monotonic Constraints:** All four features enforce monotonic increasing relationships (higher feature value → higher match probability), ensuring physics compliance.
 *   **Rule-Based Graph Clustering:** Deterministic algorithm merges high-confidence matches into clusters while enforcing:
     *   **Dataset Uniqueness:** Maximum one level per dataset per cluster
     *   **Mutual Consistency:** All cluster members must be mutually compatible (clique-like structure)
@@ -23,8 +23,8 @@ This tool facilitates matching energy levels across experimental datasets, gener
     *   `calculate_energy_similarity()`: Gaussian kernel scoring based on Z-score
     *   `calculate_spin_similarity()`: Nuclear selection rule enforcement (0.0 veto for forbidden transitions)
     *   `calculate_parity_similarity()`: Parity conservation checking
-    *   `extract_features()`: Constructs six-dimensional feature vectors for ML model
-    *   `get_training_data()`: Generates synthetic training set encoding physics constraints
+    *   `extract_features()`: Constructs four-dimensional feature vectors for machine learning model
+    *   `generate_synthetic_training_data()`: Generates 580+ synthetic training points encoding physics constraints across six scenarios
 *   **`Dataset_Parser.py`**: Converts ENSDF evaluator log files to structured JSON format. Handles complex Jπ notation including ranges, lists, tentative assignments, and nested parentheses.
 *   **`Level_Scheme_Visualizer.py`**: Generates publication-quality level scheme diagrams with automatic collision resolution for text labels.
 
@@ -72,14 +72,14 @@ Scoring_Config = {
     *   Generates unique level identifiers (e.g., `A_1000`)
 
 2.  **Model Training (Supervised Learning):**
-    *   Generates 600+ synthetic training samples encoding physics rules
+    *   Generates 580+ synthetic training samples encoding physics rules across six scenarios (perfect matches, physics vetoes, energy mismatches, ambiguous physics, weak matches, random background)
     *   Trains XGBoost regressor with `objective='binary:logistic'`
-    *   Enforces `monotone_constraints='(1, 1, 1, 1, 1, 1)'` on all six features
+    *   Enforces `monotone_constraints='(1, 1, 1, 1)'` on all four features
     *   Hyperparameters: `n_estimators=100`, `max_depth=3`, `learning_rate=0.05`
 
 3.  **Pairwise Inference:**
     *   Compares all cross-dataset level pairs (A vs B, A vs C, B vs C)
-    *   Extracts six-dimensional feature vector for each pair
+    *   Extracts four-dimensional feature vector for each pair
     *   Predicts match probability using trained model
     *   Writes results to `level_pairs_inference.txt` (pairs above `pairwise_output_threshold`)
 
@@ -160,17 +160,33 @@ Conservation rules:
 - **Match (π₁ = π₂):** Score = 1.0 (firm) or 0.9 (tentative)
 - **Mismatch (π₁ ≠ π₂):** Score = 0.0 (both firm, vetoed) or 0.2 (any tentative, weak)
 
+### Specificity (Ambiguity Penalty)
+Measures how unique a level's spin-parity assignment is:
+
+$$\text{Specificity} = \frac{1}{\sqrt{\text{multiplicity}}}$$
+
+The square root formula provides balanced penalization of ambiguous levels:
+- multiplicity=1 (unique Jπ assignment) → Specificity = 1.0 (100%, no penalty)
+- multiplicity=2 (two possible Jπ assignments) → Specificity = 0.71 (29% penalty)
+- multiplicity=4 (four possible Jπ assignments) → Specificity = 0.50 (50% penalty)
+- multiplicity=9 (nine possible Jπ assignments) → Specificity = 0.33 (67% penalty)
+
+This naturally represents uncertainty growth in quantum measurements. Alternative formulas considered:
+- Logarithmic 1/(1+log10(mult)): Too gentle (mult=9 → 51%, only 49% penalty)
+- Reciprocal 1/mult: Too aggressive (mult=9 → 11%, 89% penalty)
+- Linear tunable 1/(1+α*(mult-1)): Requires manual tuning of α parameter
+
 ### Feature Vector Structure
 ```python
 [Energy_Similarity,      # 0.0 to 1.0 (Gaussian kernel)
  Spin_Similarity,        # 0.0 to 1.0 (physics-informed scoring)
  Parity_Similarity,      # 0.0 to 1.0 (physics-informed scoring)
- Spin_Certainty,         # 0.0 (tentative) or 1.0 (firm)
- Parity_Certainty,       # 0.0 (tentative) or 1.0 (firm)
- Specificity]            # 1.0 / (1.0 + log10(multiplicity))
+ Specificity]            # 1.0 / sqrt(multiplicity), measures assignment uniqueness
 ```
 
 All features are monotonic increasing: higher values → higher match probability.
+
+**Note on removed features:** Earlier versions included Spin Certainty and Parity Certainty features, but these were found to be redundant. Tentativeness information is already encoded in the similarity scores (firm matches score 1.0, tentative matches score 0.9), making separate certainty features unnecessary.
 
 ## Output Files
 

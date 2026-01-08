@@ -2,7 +2,7 @@
 Feature Engineering For Nuclear Level Matching
 ======================================
 
-Explanation of Code Structure:
+# High-level Structure and Workflow Explanation:
 -------------------------
 1.  **Data Loading** (`load_levels_from_json`):
     - Ingests nuclear level data from JSON files (ENSDF schema).
@@ -11,19 +11,25 @@ Explanation of Code Structure:
 
 2.  **Physics Feature Extraction** (`calculate_*_similarity`):
     - Mathematical comparison of level attributes using `Scoring_Config` weights.
-    - **Energy**: Gaussian similarity based on Z-score overlap (0.0 to 1.0).
-    - **Spin (J)**: Physics-informed scoring (1.0 for match, 0.0 for mismatch). Handles ranges and tentative assignments.
-    - **Parity (Pi)**: Physics-informed scoring (1.0 for match, 0.0 for mismatch). Handles tentative assignments.
+    - **Energy**: Gaussian similarity exp(-Sigma_Scale×z²) where z=ΔE/σ_combined. Range: 0.0 (far apart) to 1.0 (identical).
+    - **Spin (J)**: Physics-informed scoring with optimistic matching strategy. Range: 0.0 (incompatible) to 1.0 (firm match). Tentative assignments penalized to 0.9.
+    - **Parity (π)**: Physics-informed scoring with optimistic matching strategy. Range: 0.0 (opposite parity) to 1.0 (firm match). Tentative assignments penalized to 0.9.
 
 3.  **Feature Vector Construction** (`extract_features`):
-    - Aggregates individual scores into a numerical vector for the ML model.
+    - Aggregates individual scores into a four-dimensional vector for the ML model.
     - Vector Format: `[Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]`
-    - Metrics:
-        - *Similarity*: How well values match (Physics inputs). Tentativeness encoded within similarity scores.
-        - *Specificity*: Penalty for multiple options (1.0=Specific, <1.0=Ambiguous).
+    - All features monotonic increasing (higher value → stronger evidence for match):
+        - *Energy_Similarity*: Gaussian kernel measuring energy overlap accounting for measurement uncertainties.
+        - *Spin_Similarity*: Best-case compatibility score across all spin options (optimistic strategy).
+        - *Parity_Similarity*: Best-case compatibility score across all parity options (optimistic strategy).
+        - *Specificity*: Ambiguity penalty = 1/sqrt(multiplicity). Penalizes levels with multiple Jπ options.
+    - Note: Tentativeness encoded within similarity scores (firm match=1.0, tentative match=0.9).
+    - Note: Certainty features removed as redundant (predictable from similarity scores for matches).
 
-4.  **Training Data Generation** (`get_training_data`):
-    - Generates synthetic "Gold Standard" pairs to teach the XGBoost model core physics constraints.
+4.  **Training Data Generation** (`generate_synthetic_training_data`):
+    - Generates 580+ synthetic labeled pairs encoding nuclear physics domain knowledge.
+    - Covers six physics scenarios: perfect matches, physics vetoes, energy mismatches, ambiguous physics, weak matches, random background.
+    - Output feeds XGBoost model to learn match probability prediction from four-dimensional feature space.
 """
 
 import re
@@ -127,15 +133,15 @@ def calculate_energy_similarity(energy_1, energy_uncertainty_1, energy_2, energy
     # Example: Level A (E=1000±5 keV) vs Level B (E=1010±3 keV)
     #   ΔE=10 keV, σ_c=√(25+9)=5.83 keV, z=1.72 → similarity=exp(-0.1×1.72²)=0.744 (74.4%)
     #
-    # Similarity table vs energy separation (z in σ units):
-    # ┌─────────────┬────────┬────────┬────────┬────────┬────────┐
-    # │ Sigma_Scale │   1σ   │   2σ   │   3σ   │   4σ   │   5σ   │
-    # ├─────────────┼────────┼────────┼────────┼────────┼────────┤
-    # │ 0.1 loose │  90.5% │  67.0% │  40.7% │  20.2% │   8.2% │ lenient: tolerates large separations
-    # │ 0.2 moderate│  81.9% │  44.9% │  16.5% │   4.1% │   0.7% │ standard: penalizes >2σ strongly
-    # │ 0.5 strict  │  60.7% │  13.5% │   1.1% │   0.0% │   0.0% │ aggressive: rejects >2σ
-    # │ 1.0 extreme │  36.8% │   1.8% │   0.0% │   0.0% │   0.0% │ ultra-strict: even 1σ penalized
-    # └─────────────┴────────┴────────┴────────┴────────┴────────┘
+    # Energy similarity decay with increasing energy separation (z in sigma units):
+    # Sigma_Scale=0.1 (loose):   1σ→90.5%, 2σ→67.0%, 3σ→40.7%, 4σ→20.2%, 5σ→8.2%
+    #   Lenient: tolerates large separations
+    # Sigma_Scale=0.2 (moderate): 1σ→81.9%, 2σ→44.9%, 3σ→16.5%, 4σ→4.1%, 5σ→0.7%
+    #   Standard: penalizes >2σ strongly
+    # Sigma_Scale=0.5 (strict):   1σ→60.7%, 2σ→13.5%, 3σ→1.1%, 4σ→0.0%, 5σ→0.0%
+    #   Aggressive: rejects >2σ
+    # Sigma_Scale=1.0 (extreme):  1σ→36.8%, 2σ→1.8%, 3σ→0.0%, 4σ→0.0%, 5σ→0.0%
+    #   Ultra-strict: even 1σ penalized
     """
     if energy_1 is None or energy_2 is None: return 0.0
     combined_uncertainty = np.sqrt(energy_uncertainty_1**2 + energy_uncertainty_2**2)
@@ -333,8 +339,11 @@ def extract_features(level_1, level_2):
     parity_similarity = calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2)
 
     # Feature 4: Specificity score (penalize ambiguous multiple options)
-    # Formula: specificity = 1/(1+log10(multiplicity))
+    # Formula: specificity = 1/sqrt(multiplicity)
     #   where multiplicity = options_count_1 × options_count_2
+    #
+    # Physical interpretation: Ambiguity penalty scales with combination space.
+    # Square root naturally represents uncertainty growth in quantum measurements.
     #
     # ENSDF spin option counts (typical real data):
     #   Single:   "2+" → 1 option
@@ -342,24 +351,31 @@ def extract_features(level_1, level_2):
     #   Multiple: "1/2,3/2,5/2" → 3 options
     #   Multiple:  "1/2:11/2" expand to "1/2,3/2,5/2,7/2,9/2,11/2" 6 options
     #
-    # Specificity table for realistic ENSDF scenarios:
-    # ┌──────────────┬────────┬────────┬────────┬────────┬────────┬────────┐
-    # │ Multiplicity │    1   │    2   │    3   │    4   │    6   │    9   │
-    # ├──────────────┼────────┼────────┼────────┼────────┼────────┼────────┤
-    # │ Specificity  │  1.000 │  0.769 │  0.677 │  0.624 │  0.563 │  0.512 │
-    # └──────────────┴────────┴────────┴────────┴────────┴────────┴────────┘
+    # Specificity penalty for multiple options (1/sqrt(multiplicity)):
+    # Multiplicity=1: 1.000 (no penalty)
+    # Multiplicity=2: 0.707 (29% penalty) - one level has 2 options
+    # Multiplicity=3: 0.577 (42% penalty) - one level has 3 options
+    # Multiplicity=4: 0.500 (50% penalty) - both have 2 options or one has 4
+    # Multiplicity=6: 0.408 (59% penalty) - one has 2, other has 3 options
+    # Multiplicity=9: 0.333 (67% penalty) - both have 3 options (high ambiguity)
     #   mult=1: both levels have single definite Jπ (most specific)
-    #   mult=2: one level has 2 options (e.g., "1,2" vs single)
-    #   mult=3: one level has 3 options (e.g., "1/2,3/2,5/2" vs single)
-    #   mult=4: both have 2 options or one has 4 (e.g., "1:4")
-    #   mult=6: one has 2, other has 3 options (moderate ambiguity)
-    #   mult=9: both have 3 options (e.g., "1,2,3" vs "2,3,4" - high ambiguity)
+    #   mult=2: one level has 2 options (29% penalty)
+    #   mult=3: one level has 3 options (42% penalty)
+    #   mult=4: both have 2 options or one has 4 (50% penalty)
+    #   mult=6: one has 2, other has 3 options (59% penalty - moderate ambiguity)
+    #   mult=9: both have 3 options (67% penalty - high ambiguity)
     #
     # Note: multiplicity>10 extremely rare in ENSDF (would require 4+ options on both sides)
+    #
+    # Alternative formulas (for future experimentation):
+    #   Option 1 (old): 1/(1+log10(mult)) - too gentle, mult=9→51% (only 49% penalty)
+    #   Option 2 (current): 1/sqrt(mult) - balanced, mult=9→33% (67% penalty)
+    #   Option 3 (aggressive): 1/mult - very steep, mult=9→11% (89% penalty)
+    #   Option 4 (tunable): 1/(1+α*(mult-1)) where α=0.5 - customizable steepness
     options_count_1 = len(spin_parity_list_1) if spin_parity_list_1 else 1
     options_count_2 = len(spin_parity_list_2) if spin_parity_list_2 else 1
     multiplicity = max(1, options_count_1 * options_count_2)
-    specificity = 1.0 / (1.0 + np.log10(multiplicity))
+    specificity = 1.0 / np.sqrt(multiplicity)
 
     # ===== DISABLED CERTAINTY FEATURES (easily re-enable if needed) =====
     # Rationale: Certainty is redundant - already encoded in similarity scores:
@@ -378,18 +394,38 @@ def extract_features(level_1, level_2):
     
     return np.array([energy_similarity, spin_similarity, parity_similarity, specificity])
 
-def get_training_data():
+def generate_synthetic_training_data():
     """
-    Generates synthetic training data encoding nuclear physics constraints.
-    Strategy - Create labeled examples covering key physics scenarios:
-      1. Perfect matches (high energy + good physics → high probability)
-      2. Physics vetoes (spin/parity violation → zero probability)
-      3. Energy mismatches (poor energy overlap → low probability)
-      4. Ambiguous cases (unknown physics → energy-dependent probability)
-      5. Weak physics matches (marginal compatibility → reduced probability)
-      6. Random background (fill feature space with rule-based labels)
-    Output - (training_features, training_labels) for XGBoost model
-    Feature Order: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
+    Generates synthetic training data encoding nuclear physics domain knowledge for XGBoost supervised learning.
+    
+    Training Strategy - Six physics-informed scenarios (580+ labeled examples):
+      1. Perfect matches (20 pts): High energy similarity (>0.8) + firm/tentative physics (1.0/0.9) → probability >0.9
+         - Teaches model that good energy overlap + compatible physics = strong match
+      
+      2. Physics vetoes (30 pts): Any energy + incompatible spin (0.0) or parity (0.0) → probability 0.0
+         - Enforces hard constraint: physics mismatch always rejects, regardless of energy
+      
+      3. Energy mismatches (5 pts): Perfect physics (1.0) + poor energy similarity (<0.2) → probability decays to 0.0
+         - Teaches model that physics alone insufficient without energy overlap
+      
+      4. Ambiguous physics (20 pts): Varying energy + unknown spin/parity (0.5 neutral) → energy-dependent probability (max 0.85)
+         - Handles cases where Jπ unavailable, model relies on energy similarity only
+      
+      5. Weak physics matches (15 pts): Good energy (>0.5) + marginal spin/parity compatibility (0.05-0.2) → reduced probability
+         - Teaches graduated response to near-mismatches (e.g., adjacent spins with one tentative)
+      
+      6. Random background (500 pts): Uniform sampling of four-dimensional feature space + rule-based labeling
+         - Fills feature space to prevent overfitting, applies consistent physics logic
+    
+    Output Format:
+      - training_features: numpy array shape (580+, 4) with columns [Energy_Sim, Spin_Sim, Parity_Sim, Specificity]
+      - training_labels: numpy array shape (580+,) with match probabilities in range [0.0, 0.99]
+    
+    Physics Constraints Encoded:
+      - Monotonicity: All features positively correlated with match probability (higher value → higher probability)
+      - Veto power: Spin or parity incompatibility (score 0.0) → probability 0.0 regardless of other features
+      - Energy primacy: Even with unknown physics, good energy overlap → moderate probability
+      - Specificity penalty: Ambiguous Jπ options (low specificity <1.0) → reduced confidence via feature 4
     """
     training_points = []
     

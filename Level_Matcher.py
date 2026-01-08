@@ -1,14 +1,38 @@
 import pandas as pd
 import numpy as np
 from xgboost import XGBRegressor
-from Feature_Engineer import extract_features, get_training_data, load_levels_from_json
+from Feature_Engineer import extract_features, generate_synthetic_training_data, load_levels_from_json
 
 """
-# FRIBND: High-level Strategy Explanation:
-1.  **Data Ingestion**: Loads standardized nuclear level data using `Feature_Engineer`.
-2.  **Model Training**: Trains XGBoost regressor using physics-informed monotonic constraints on 6 features.
-3.  **Pairwise Inference**: Calculates match probabilities for all cross-dataset level pairs using trained ML model.
-4.  **Graph Clustering**: Groups matching levels using rule-based graph algorithm (no ML, only logic-based merging).
+# High-level Structure and Workflow Explanation:
+-------------------------
+1.  **Data Ingestion** (`load_levels_from_json`):
+    - Loads standardized nuclear level data from JSON files using Feature_Engineer module.
+    - Input: Three datasets (A, B, C) with ENSDF-format level data.
+    - Output: Pandas DataFrame with standardized columns: energy_value, energy_uncertainty, spin_parity_list, spin_parity_string.
+
+2.  **Model Training** (XGBoost with Physics Constraints):
+    - Trains gradient boosting regressor to predict match probability from four-dimensional feature vector.
+    - Feature Vector: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
+    - Monotonic Constraints: All four features monotonically increasing (higher value → higher probability).
+    - Training Data: 580+ synthetic labeled pairs encoding nuclear physics domain knowledge.
+    - Model Hyperparameters: 100 trees, max_depth=3, learning_rate=0.05 (prevents overfitting).
+    - Physics Enforcement: Monotonicity ensures model respects physical constraints (e.g., better spin match → higher probability).
+
+3.  **Pairwise Inference** (ML-based Probability Prediction):
+    - Extracts feature vectors for all cross-dataset level pairs (skips same-dataset pairs).
+    - Predicts match probability using trained XGBoost model.
+    - Output: level_pairs_inference.txt with pairs exceeding pairwise_output_threshold (default 1%).
+    - Result: 99 level pairs ranked by match probability with detailed feature breakdowns.
+
+4.  **Graph Clustering** (Rule-based Greedy Merging):
+    - Groups matching levels using deterministic graph algorithm (NO ML, pure logic).
+    - Algorithm: Greedy cluster merging in descending probability order.
+    - Constraints:
+        * Dataset uniqueness: Each cluster contains at most one level per dataset.
+        * Mutual consistency: All cluster members must be pairwise compatible (probability ≥ clustering_merge_threshold).
+        * Overlap support: Poorly-resolved levels (large uncertainty) can belong to multiple clusters if compatible.
+    - Output: clustering_results.txt with final 9 clusters, each showing anchor level and member match probabilities.
 """
 
 # Configuration Parameters
@@ -27,18 +51,18 @@ dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int
 # ==========================================
 # FRIBND: 2. Model Training (Physics-Informed XGBoost)
 # ==========================================
-# Features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
-# Constraints (All Monotonic Increasing):
-# 1. Energy_Similarity (+1): Higher Score (1.0=Match) -> Higher Probability
-# 2. Spin_Similarity (+1): Higher Score (1.0=Match) -> Higher Probability
-# 3. Parity_Similarity (+1): Higher Score (1.0=Match) -> Higher Probability
-# 4. Spin_Certainty (+1): Higher Certainty (1.0=Firm) -> Higher Probability
-# 5. Parity_Certainty (+1): Higher Certainty (1.0=Firm) -> Higher Probability
-# 6. Specificity (+1): Higher Specificity (1.0=Single Option) -> Higher Probability
+# Feature Vector: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
+# All Features Monotonic Increasing (higher value → higher match probability):
+# 1. Energy_Similarity (+1): Gaussian kernel exp(-0.1×z²) where z=ΔE/σ_combined. Perfect overlap (z=0)→1.0, far apart (z>5)→~0.0
+# 2. Spin_Similarity (+1): Best-case compatibility across spin options. Firm match→1.0, tentative match→0.9, adjacent mismatch→0.05-0.2, incompatible→0.0
+# 3. Parity_Similarity (+1): Best-case compatibility across parity options. Firm match→1.0, tentative match→0.9, opposite parity→0.0-0.1
+# 4. Specificity (+1): Ambiguity penalty = 1/sqrt(multiplicity). Single Jπ→1.0, double options→0.71, triple options→0.58, high ambiguity→0.33
+#
+# Note: Certainty features removed (redundant - tentativeness already encoded in similarity scores via 1.0 vs 0.9 penalty)
 
 if __name__ == "__main__":
     # Get training data from physics parser
-    training_features, training_labels = get_training_data()
+    training_features, training_labels = generate_synthetic_training_data()
 
     # FRIBND: Train XGBoost regressor with monotonic constraints enforcing physics rules
     # FRIBND: All four features designed so higher value → better match probability
