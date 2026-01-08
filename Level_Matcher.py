@@ -11,9 +11,9 @@ from Feature_Engineer import extract_features, get_training_data, load_levels_fr
 4.  **Graph Clustering**: Groups matching levels using rule-based graph algorithm (no ML, only logic-based merging).
 """
 
-# FRIBND: Configuration Parameters
-pairwise_output_threshold = 0.01  # FRIBND: Minimum probability for outputting level pairs (1%)
-clustering_merge_threshold = 0.30  # FRIBND: Minimum probability for cluster merging (30%)
+# Configuration Parameters
+pairwise_output_threshold = 0.01  # Minimum probability for outputting level pairs (1%)
+clustering_merge_threshold = 0.30  # Minimum probability for cluster merging (30%)
 
 # ==========================================
 # FRIBND: 1. Test Data Ingestion (From JSON files)
@@ -37,17 +37,11 @@ dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int
 # 6. Specificity (+1): Higher Specificity (1.0=Single Option) -> Higher Probability
 
 if __name__ == "__main__":
-    # Get Training Data from Physics Parser
+    # Get training data from physics parser
     training_features, training_labels = get_training_data()
 
-    # Monotonic constraints strictly enforce physics rules in the model:
-    # All features are designed so that Higher Value == Better Match
-    # 1. Energy_Similarity (+1)
-    # 2. Spin_Similarity (+1)
-    # 3. Parity_Similarity (+1)
-    # 4. Spin_Certainty (+1)
-    # 5. Parity_Certainty (+1)
-    # 6. Specificity (+1)
+    # FRIBND: Train XGBoost regressor with monotonic constraints enforcing physics rules
+    # FRIBND: All six features designed so higher value → better match probability
     level_matcher_model = XGBRegressor(objective='binary:logistic',
                                        # FRIBND: Learning Objective Function: Training Loss + Regularization.
                                        # FRIBND: The loss function computes the difference between the true y value and the predicted y value.
@@ -66,7 +60,7 @@ if __name__ == "__main__":
                                        random_state=42)
                                        # FRIBND: Random number seed for reproducibility.
     
-    # Train the model on the generated training data
+    # Train model on synthetic training data
     level_matcher_model.fit(training_features, training_labels)
 
     # ==========================================
@@ -81,7 +75,7 @@ if __name__ == "__main__":
             _, level_1 = rows_list[i]
             _, level_2 = rows_list[j]
             
-            # Skip same-dataset pairs (only match across different datasets)
+            # FRIBND: Skip same-dataset pairs (only match across different datasets)
             if level_1['dataset_code'] == level_2['dataset_code']:
                 continue
 
@@ -91,7 +85,7 @@ if __name__ == "__main__":
             # FRIBND: Predict match probability using trained XGBoost model
             match_probability = level_matcher_model.predict([feature_vector])[0]
             
-            # All level pairs above output threshold are recorded
+            # Record level pairs above output threshold
             if match_probability > pairwise_output_threshold:
                 matching_level_pairs.append({
                     'ID1': level_1['level_id'],
@@ -102,10 +96,10 @@ if __name__ == "__main__":
                     'features': feature_vector
                 })
 
-    # Sort by probability (highest first)
+    # Sort by probability descending
     matching_level_pairs.sort(key=lambda x: x['probability'], reverse=True)
 
-    # Write all level pairs to file
+    # Write pairwise inference results to file
     threshold_percent = int(pairwise_output_threshold * 100)
     with open('level_pairs_inference.txt', 'w', encoding='utf-8') as output_file:
         output_file.write(f"=== PAIRWISE INFERENCE RESULTS (>{threshold_percent}%) ===\n\n")
@@ -133,7 +127,7 @@ if __name__ == "__main__":
     #   - Ambiguity Resolution: Levels with poor resolution (large uncertainty) can belong to multiple clusters when they are compatible with multiple well-resolved levels
     # FRIBND: This section uses NO ML, only rule-based graph algorithms for logical cluster merging
     
-    # Step 1: Initialize singleton clusters and lookup table
+    # FRIBND: Step 1 - Initialize singleton clusters and lookup table
     level_lookup = {row['level_id']: row for _, row in dataframe.iterrows()}
     initial_clusters = [{row['dataset_code']: row['level_id']} for _, row in dataframe.iterrows()]
     
@@ -145,7 +139,7 @@ if __name__ == "__main__":
         member_id = list(cluster.values())[0]
         id_to_clusters[member_id] = [cluster]
 
-    # Step 2: Extract strong candidate pairs for merging
+    # FRIBND: Step 2 - Extract strong candidate pairs for merging
     # FRIBND: Only level pairs exceeding clustering_merge_threshold qualify for cluster operations
     valid_pairs = set()
     for matching_level_pair in matching_level_pairs:
@@ -153,7 +147,7 @@ if __name__ == "__main__":
             valid_pairs.add((matching_level_pair['ID1'], matching_level_pair['ID2']))
             valid_pairs.add((matching_level_pair['ID2'], matching_level_pair['ID1']))
 
-    # Step 3: Greedy cluster merging
+    # FRIBND: Step 3 - Greedy cluster merging
     # FRIBND: Process candidates in descending probability order, attempting merges or multi-cluster assignment for ambiguous levels
     for matching_level_pair in matching_level_pairs:
         if matching_level_pair['probability'] < clustering_merge_threshold:
@@ -169,7 +163,7 @@ if __name__ == "__main__":
         for cluster_1 in cluster_list_1:
             for cluster_2 in cluster_list_2:
                 if cluster_1 is cluster_2:
-                    continue  # FRIBND: Already in same cluster
+                    continue  # Already in same cluster
                 
                 datasets_1 = set(cluster_1.keys())
                 datasets_2 = set(cluster_2.keys())
@@ -197,7 +191,7 @@ if __name__ == "__main__":
                                 if cluster_1 not in id_to_clusters[id_2]:
                                     id_to_clusters[id_2].append(cluster_1)
                     
-                    continue  # FRIBND: Move to next cluster pair
+                    continue  # Move to next cluster pair
 
                 # Scenario B: No dataset overlap (can potentially merge)
                 # FRIBND: Verify all-to-all compatibility before merging
@@ -221,7 +215,7 @@ if __name__ == "__main__":
                         if cluster_1 not in id_to_clusters[member_id]:
                             id_to_clusters[member_id].append(cluster_1)
 
-    # Step 4: Extract unique active clusters
+    # FRIBND: Step 4 - Extract unique active clusters (remove duplicates)
     unique_clusters = []
     seen = set()
     for cluster_list in id_to_clusters.values():
@@ -231,7 +225,7 @@ if __name__ == "__main__":
                 unique_clusters.append(cluster)
                 seen.add(cluster_id)
     
-    # Step 5: Sort clusters by average energy for consistent output
+    # FRIBND: Step 5 - Sort clusters by average energy for consistent output
     def calculate_cluster_average_energy(cluster):
         energies = [level_lookup[member_id]['energy_value'] for member_id in cluster.values()]
         return sum(energies) / len(energies)
