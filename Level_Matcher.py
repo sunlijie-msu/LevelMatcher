@@ -41,13 +41,13 @@ if __name__ == "__main__":
     training_features, training_labels = get_training_data()
 
     # FRIBND: Train XGBoost regressor with monotonic constraints enforcing physics rules
-    # FRIBND: All six features designed so higher value → better match probability
+    # FRIBND: All four features designed so higher value → better match probability
     level_matcher_model = XGBRegressor(objective='binary:logistic',
                                        # FRIBND: Learning Objective Function: Training Loss + Regularization.
                                        # FRIBND: The loss function computes the difference between the true y value and the predicted y value.
                                        # FRIBND: The regularization term discourages overly complex trees.
-                                       monotone_constraints='(1, 1, 1, 1, 1, 1)',
-                                       # FRIBND: Enforce increasing constraint on all six features.
+                                       monotone_constraints='(1, 1, 1, 1)',
+                                       # FRIBND: Enforce increasing constraint on all four features.
                                        # FRIBND: Physics prior: higher feature values always indicate better matches.
                                        # FRIBND: Monotonic constraints improve predictive performance when strong prior beliefs exist.
                                        n_estimators=100,
@@ -106,13 +106,12 @@ if __name__ == "__main__":
         output_file.write(f"Total Level Pairs Found: {len(matching_level_pairs)}\n\n")
         
         for matching_level_pair in matching_level_pairs:
-            energy_sim, spin_sim, parity_sim, spin_cert, parity_cert, specificity = matching_level_pair['features']
+            energy_sim, spin_sim, parity_sim, specificity = matching_level_pair['features']
             output_file.write(
                 f"{matching_level_pair['ID1']} <-> {matching_level_pair['ID2']} | "
                 f"Probability: {matching_level_pair['probability']:.1%}\n"
                 f"  Features: Energy_Sim={energy_sim:.2f}, Spin_Sim={spin_sim:.2f}, "
-                f"Parity_Sim={parity_sim:.2f}, Spin_Cert={spin_cert:.0f}, "
-                f"Parity_Cert={parity_cert:.0f}, Specificity={specificity:.2f}\n\n"
+                f"Parity_Sim={parity_sim:.2f}, Specificity={specificity:.2f}\n\n"
             )
     
     print(f"\n[INFO] Pairwise Inference Complete: {len(matching_level_pairs)} level pairs (>{threshold_percent}%) written to 'level_pairs_inference.txt'")

@@ -2,300 +2,300 @@
 
 Total Level Pairs Found: 99
 
-A_4000 <-> C_4003 | Probability: 74.5%
-  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=0.68
+A_4000 <-> C_4003 | Probability: 77.0%
+  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Specificity=0.68
 
-A_4005 <-> C_4003 | Probability: 74.5%
-  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=0.68
+A_4005 <-> C_4003 | Probability: 77.0%
+  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Specificity=0.68
 
-A_5000 <-> C_5003 | Probability: 74.5%
-  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.51
+A_5000 <-> C_5003 | Probability: 77.0%
+  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Specificity=0.51
 
-A_5005 <-> C_5003 | Probability: 74.5%
-  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.51
+A_5005 <-> C_5003 | Probability: 77.0%
+  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Specificity=0.51
 
-B_4000 <-> C_4003 | Probability: 74.5%
-  Features: Energy_Sim=1.00, Spin_Sim=1.00, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=0, Specificity=0.68
+B_4000 <-> C_4003 | Probability: 77.0%
+  Features: Energy_Sim=1.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.68
 
-B_5000 <-> C_5003 | Probability: 74.5%
-  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_5000 <-> C_5003 | Probability: 77.0%
+  Features: Energy_Sim=1.00, Spin_Sim=0.90, Parity_Sim=0.50, Specificity=0.68
 
-A_1000 <-> C_1010 | Probability: 66.6%
-  Features: Energy_Sim=0.99, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_1000 <-> C_1010 | Probability: 72.2%
+  Features: Energy_Sim=0.99, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_2000 <-> C_2010 | Probability: 66.6%
-  Features: Energy_Sim=0.99, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_2000 <-> C_2010 | Probability: 72.2%
+  Features: Energy_Sim=0.99, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3000 <-> C_3005 | Probability: 66.6%
-  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3000 <-> C_3005 | Probability: 72.2%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3005 <-> C_3005 | Probability: 66.6%
-  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3005 <-> C_3005 | Probability: 72.2%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-B_1005 <-> C_1010 | Probability: 66.6%
-  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+B_1005 <-> C_1010 | Probability: 72.2%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-B_2008 <-> C_2010 | Probability: 66.6%
-  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+B_2008 <-> C_2010 | Probability: 72.2%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-B_3000 <-> C_3005 | Probability: 66.6%
-  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+B_3000 <-> C_3005 | Probability: 72.2%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_1000 <-> B_1005 | Probability: 62.9%
-  Features: Energy_Sim=0.78, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_1000 <-> B_1005 | Probability: 56.5%
+  Features: Energy_Sim=0.78, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3005 <-> B_3000 | Probability: 54.4%
-  Features: Energy_Sim=0.61, Spin_Sim=1.00, Parity_Sim=1.00, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3005 <-> B_3000 | Probability: 55.1%
+  Features: Energy_Sim=0.61, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00
 
-A_4005 <-> B_4000 | Probability: 54.4%
-  Features: Energy_Sim=0.61, Spin_Sim=0.90, Parity_Sim=0.90, Spin_Cert=0, Parity_Cert=0, Specificity=1.00
+A_4005 <-> B_4000 | Probability: 55.1%
+  Features: Energy_Sim=0.61, Spin_Sim=0.90, Parity_Sim=0.90, Specificity=1.00
 
-A_5005 <-> B_5000 | Probability: 51.6%
-  Features: Energy_Sim=0.61, Spin_Sim=0.90, Parity_Sim=0.90, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+A_5005 <-> B_5000 | Probability: 55.1%
+  Features: Energy_Sim=0.61, Spin_Sim=0.90, Parity_Sim=0.90, Specificity=0.68
 
-A_2000 <-> B_2008 | Probability: 18.6%
-  Features: Energy_Sim=0.28, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_2000 <-> B_2008 | Probability: 16.8%
+  Features: Energy_Sim=0.28, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4000 <-> B_4000 | Probability: 15.5%
-  Features: Energy_Sim=1.00, Spin_Sim=0.20, Parity_Sim=0.10, Spin_Cert=0, Parity_Cert=0, Specificity=1.00
+A_4000 <-> B_4000 | Probability: 14.0%
+  Features: Energy_Sim=1.00, Spin_Sim=0.20, Parity_Sim=0.10, Specificity=1.00
 
-A_5000 <-> B_5000 | Probability: 13.0%
-  Features: Energy_Sim=1.00, Spin_Sim=0.20, Parity_Sim=0.10, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+A_5000 <-> B_5000 | Probability: 14.0%
+  Features: Energy_Sim=1.00, Spin_Sim=0.20, Parity_Sim=0.10, Specificity=0.68
 
-A_3000 <-> B_4000 | Probability: 5.1%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.90, Spin_Cert=1, Parity_Cert=0, Specificity=1.00
+A_3000 <-> B_4000 | Probability: 5.8%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.90, Specificity=1.00
 
-A_4000 <-> B_3000 | Probability: 5.1%
-  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=1.00, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4000 <-> B_3000 | Probability: 5.8%
+  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=1.00, Specificity=1.00
 
-A_5000 <-> B_4000 | Probability: 5.1%
-  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.90, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+A_5000 <-> B_4000 | Probability: 5.8%
+  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.90, Specificity=0.68
 
-A_3000 <-> C_4003 | Probability: 5.0%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+A_1000 <-> B_2008 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3000 <-> C_5003 | Probability: 5.0%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+A_1000 <-> B_3000 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3005 <-> C_4003 | Probability: 5.0%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+A_1000 <-> B_4000 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4005 <-> C_5003 | Probability: 5.0%
-  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=0.68
+A_1000 <-> B_5000 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_5000 <-> C_4003 | Probability: 5.0%
-  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.51
+A_1000 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_5005 <-> C_4003 | Probability: 5.0%
-  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.51
+A_1000 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-B_3000 <-> C_4003 | Probability: 5.0%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+A_1000 <-> C_4003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_4000 <-> C_5003 | Probability: 5.0%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=0, Specificity=0.68
+A_1000 <-> C_5003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-A_5000 <-> B_3000 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.10, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+A_2000 <-> B_1005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_1000 <-> B_2008 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_2000 <-> B_3000 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_1000 <-> B_3000 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_2000 <-> B_4000 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_1000 <-> B_4000 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=0, Specificity=1.00
+A_2000 <-> B_5000 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_1000 <-> B_5000 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=1.00
+A_2000 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_1000 <-> C_2010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_2000 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_1000 <-> C_3005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_2000 <-> C_4003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-A_2000 <-> B_1005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_2000 <-> C_5003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-A_2000 <-> B_3000 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3000 <-> B_1005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_2000 <-> B_4000 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=0, Specificity=1.00
+A_3000 <-> B_2008 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_2000 <-> B_5000 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=1.00
+A_3000 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_2000 <-> C_1010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3000 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_2000 <-> C_3005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3000 <-> C_4003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.68
 
-A_3000 <-> B_1005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3000 <-> C_5003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.68
 
-A_3000 <-> B_2008 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3005 <-> B_1005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3000 <-> C_1010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3005 <-> B_2008 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3000 <-> C_2010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3005 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3005 <-> B_1005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3005 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3005 <-> B_2008 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3005 <-> C_4003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.68
 
-A_3005 <-> C_1010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_4000 <-> B_1005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_3005 <-> C_2010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_4000 <-> B_2008 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4000 <-> B_1005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4000 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4000 <-> B_2008 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4000 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4000 <-> C_1010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4000 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4000 <-> C_2010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4005 <-> B_1005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4000 <-> C_3005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4005 <-> B_2008 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4005 <-> B_1005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4005 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4005 <-> B_2008 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4005 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4005 <-> C_1010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4005 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_4005 <-> C_2010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_4005 <-> C_5003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.50, Specificity=0.68
 
-A_4005 <-> C_3005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=1.00
+A_5000 <-> B_1005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_1005 <-> C_2010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_5000 <-> B_2008 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_1005 <-> C_3005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_5000 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_2008 <-> C_1010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_5000 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_2008 <-> C_3005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_5000 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_3000 <-> C_1010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_5000 <-> C_4003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.50, Specificity=0.51
 
-B_3000 <-> C_2010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_5005 <-> B_1005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_4000 <-> C_1010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=0, Specificity=1.00
+A_5005 <-> B_2008 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_4000 <-> C_2010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=0, Specificity=1.00
+A_5005 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_4000 <-> C_3005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=0, Specificity=1.00
+A_5005 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_5000 <-> C_1010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=1.00
+A_5005 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-B_5000 <-> C_2010 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=1.00
+A_5005 <-> C_4003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.50, Specificity=0.51
 
-B_5000 <-> C_3005 | Probability: 4.6%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=1.00
+B_1005 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_1000 <-> C_4003 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+B_1005 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_1000 <-> C_5003 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+B_1005 <-> C_4003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-A_2000 <-> C_4003 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+B_1005 <-> C_5003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-A_2000 <-> C_5003 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+B_2008 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_5000 <-> B_1005 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_2008 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_5000 <-> B_2008 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_2008 <-> C_4003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-A_5000 <-> C_1010 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_2008 <-> C_5003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.68
 
-A_5000 <-> C_2010 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_3000 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_5000 <-> C_3005 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_3000 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_5005 <-> B_1005 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_3000 <-> C_4003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.68
 
-A_5005 <-> B_2008 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_4000 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_5005 <-> C_1010 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_4000 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_5005 <-> C_2010 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_4000 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-A_5005 <-> C_3005 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+B_4000 <-> C_5003 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.68
 
-B_1005 <-> C_4003 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+B_5000 <-> C_1010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-B_1005 <-> C_5003 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+B_5000 <-> C_2010 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-B_2008 <-> C_4003 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+B_5000 <-> C_3005 | Probability: 5.7%
+  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00
 
-B_2008 <-> C_5003 | Probability: 4.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+A_4000 <-> C_5003 | Probability: 5.4%
+  Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.50, Specificity=0.68
 
-A_4000 <-> C_5003 | Probability: 4.3%
-  Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=1, Specificity=0.68
+B_5000 <-> C_4003 | Probability: 5.4%
+  Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.50, Specificity=0.68
 
-B_5000 <-> C_4003 | Probability: 4.3%
-  Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.50, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+A_3005 <-> C_5003 | Probability: 5.3%
+  Features: Energy_Sim=0.00, Spin_Sim=0.05, Parity_Sim=0.50, Specificity=0.68
 
-A_3005 <-> C_5003 | Probability: 4.0%
-  Features: Energy_Sim=0.00, Spin_Sim=0.05, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+B_3000 <-> C_5003 | Probability: 5.3%
+  Features: Energy_Sim=0.00, Spin_Sim=0.05, Parity_Sim=0.50, Specificity=0.68
 
-B_3000 <-> C_5003 | Probability: 4.0%
-  Features: Energy_Sim=0.00, Spin_Sim=0.05, Parity_Sim=0.50, Spin_Cert=1, Parity_Cert=1, Specificity=0.68
+A_5000 <-> B_3000 | Probability: 4.8%
+  Features: Energy_Sim=0.00, Spin_Sim=0.90, Parity_Sim=0.10, Specificity=0.68
 
-A_5005 <-> B_4000 | Probability: 3.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.10, Spin_Cert=0, Parity_Cert=0, Specificity=0.68
+A_5005 <-> B_4000 | Probability: 3.1%
+  Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.10, Specificity=0.68
 
-A_3005 <-> B_4000 | Probability: 3.3%
-  Features: Energy_Sim=0.00, Spin_Sim=0.05, Parity_Sim=0.10, Spin_Cert=1, Parity_Cert=0, Specificity=1.00
+A_3005 <-> B_4000 | Probability: 3.1%
+  Features: Energy_Sim=0.00, Spin_Sim=0.05, Parity_Sim=0.10, Specificity=1.00
 
-A_3000 <-> B_3000 | Probability: 1.9%
-  Features: Energy_Sim=1.00, Spin_Sim=0.05, Parity_Sim=0.00, Spin_Cert=1, Parity_Cert=1, Specificity=1.00
+A_3000 <-> B_3000 | Probability: 1.6%
+  Features: Energy_Sim=1.00, Spin_Sim=0.05, Parity_Sim=0.00, Specificity=1.00
 
