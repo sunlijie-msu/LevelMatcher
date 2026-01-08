@@ -4,7 +4,7 @@
 
 - **Simplicity First:** Avoid creating new functions or classes for simple logic. Keep the logic inline and use clear comments to explain complex lines.
 
-- **Update Documentation:** Include a high-level strategy explanation at the top of each script. Valid code changes must be immediately reflected in the "Explanation of Code Structure" header or relevant docstrings. Never leave comments outdated. Comments should be clear and easy to read, with numbered headers explaining each step, architecture, logic, and workflow.
+- **Update Documentation:** Include a high-level strategy explanation at the top of each script. Valid code changes must be immediately reflected in the "Explanation of Code Structure" header or relevant docstrings. Never leave comments outdated. Comments should use professional terminology consistently, with numbered headers explaining each step, architecture, logic, and workflow.
 
 - **Clean Codebase:** Regularly remove redundant, obsolete, or spaghetti scripts to prevent confusion. Maintain a focused file structure where only active, necessary files exist.
 

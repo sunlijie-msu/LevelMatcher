@@ -1,46 +1,214 @@
 # Level Matcher
 
-A physics-informed nuclear level matching tool employing XGBoost (eXtreme Gradient Boosting) regression with graph clustering techniques has been developed by the FRIB Nuclear Data Group.
-
-This tool facilitates matching energy levels across experimental datasets, generating "Adopted Levels" and a cross-reference list with corresponding probabilistic confidence scores.
-
+A physics-informed nuclear level matching tool developed by the FRIB Nuclear Data Group. Uses XGBoost (eXtreme Gradient Boosting) for supervised learning of match probabilities, combined with rule-based graph algorithms for cluster resolution.
 
 ## Key Features
 
-*   **Physics-Informed XGBoost:** Uses `XGBRegressor` to output continuous match probabilities based on energy agreement (Z-Score) and physical properties (Spin/Parity Veto).
-*   **Physics Veto:** Enforces strict selection rules. Mismatched Spin/Parity sets probability to 0.0 regardless of energy agreement.
-*   **Graph Clustering (Greedy Merge):** Resolves multiplets by merging high-probability pairs into clusters.
-    *   **Consistency:** Validates merges against all existing members to ensure consistency (Clique-like).
-    *   **Doublet Support:** Allows levels to belong to multiple clusters if they match both consistently.
-    *   **Constraint:** Clusters contain at most one level per dataset (Dataset Conflict Resolution).
-    *   **Anchor Selection:** The member with the lowest energy uncertainty ($ \Delta E $) defines the cluster's physical properties.
-*   **Synthetic Training:** "Physics-informed" training data embedded directly in the script, eliminating external dependencies.
-
-## Workflow
-1.  **Data Ingestion:** Ingests datasets (A, B, C) with Energy, Uncertainty, Spin, and Parity.
-2.  **Model Training:** Trains `XGBRegressor` to penalize high Z-scores and Spin/Parity mismatches.
-3.  **Pairwise Inference:** Calculates pairwise probabilities for all cross-dataset level pairs.
-4.  **Graph Clustering:**
-    *   Greedy merge of high-probability pairs.
-    *   Enforces **Dataset Uniqueness** (one level per dataset per cluster).
-    *   Enforces **ML Consistency** (all members must match each other).
-    *   Handles **Doublets** by allowing overlap when merges are blocked by dataset conflicts.
-5.  **Adopted Level Generation:** Generates "Adopted Levels" with weighted average energy and XREF lists.
-
-## Usage
-1.  Populate `test_dataset_A.json`, `test_dataset_B.json`, and `test_dataset_C.json` with experimental data.
-2.  Run: `python Level_Matcher_Engine.py`
-3.  View output: Adopted Energy, Cross-Reference (with probabilities), and Anchor Spin/Parity.
+*   **Physics-Informed XGBoost Regressor:** Trained on synthetic physics constraints to predict match probabilities (0.0 to 1.0) for nuclear level pairs based on six engineered features: Energy Similarity, Spin Similarity, Parity Similarity, Spin Certainty, Parity Certainty, and Specificity.
+*   **Monotonic Constraints:** All six features enforce monotonic increasing relationships (higher feature value → higher match probability), ensuring physics compliance.
+*   **Rule-Based Graph Clustering:** Deterministic algorithm merges high-confidence matches into clusters while enforcing:
+    *   **Dataset Uniqueness:** Maximum one level per dataset per cluster
+    *   **Mutual Consistency:** All cluster members must be mutually compatible (clique-like structure)
+    *   **Overlap Support:** Levels can belong to multiple clusters when dataset conflicts prevent direct merging
+*   **Anchor-Based Reporting:** The level with smallest energy uncertainty defines each cluster's reference physics properties.
 
 ## Architecture
-*   **`Level_Matcher_Engine.py`**: Main application logic. Handles model training, inference, graph clustering, and reporting.
-*   **`data_parser.py`**: Core physics engine. Contains physics constants (`Scoring_Config`), feature extraction logic, and data ingestion (ENSDF JSON).
-*   **Physics Logic**:
-    *   **Energy Similarity**: Gaussian kernel of Z-Score.
-    *   **Spin/Parity Similarity**: Weighted scoring system (Firm Match, Tentative Match, Conflict, Veto).
-    *   **Quality Metrics**: Certainty (Tentativeness) and Specificity (Multiplicity) inputs for the ML model.
 
-## Logic
-*   **Z-Score:** $ |E_1 - E_2| / \sqrt{\sigma_1^2 + \sigma_2^2} $
-*   **Consistency Check:** Spin/Parity strings are parsed and scored. Supports ranges (e.g., "1/2:7/2"), lists (e.g., "3/2, 5/2"), and tentative assignments (e.g., "(1/2, 3/2)+").
-*   **Constraints:** Monotonic increasing constraints (1, 1, ...) ensure probability increases as similarity scores increase.
+*   **`Level_Matcher.py`**: Main application. Orchestrates model training, pairwise inference, graph clustering, and console output.
+*   **`Feature_Engineer.py`**: Physics engine. Contains:
+    *   `Scoring_Config`: Physics scoring parameters for energy, spin, and parity comparisons
+    *   `load_levels_from_json()`: Data ingestion from ENSDF-format JSON files
+    *   `calculate_energy_similarity()`: Gaussian kernel scoring based on Z-score
+    *   `calculate_spin_similarity()`: Nuclear selection rule enforcement (0.0 veto for forbidden transitions)
+    *   `calculate_parity_similarity()`: Parity conservation checking
+    *   `extract_features()`: Constructs six-dimensional feature vectors for ML model
+    *   `get_training_data()`: Generates synthetic training set encoding physics constraints
+*   **`Dataset_Parser.py`**: Converts ENSDF evaluator log files to structured JSON format. Handles complex Jπ notation including ranges, lists, tentative assignments, and nested parentheses.
+*   **`Level_Scheme_Visualizer.py`**: Generates publication-quality level scheme diagrams with automatic collision resolution for text labels.
+
+## Configuration
+
+Edit these parameters in `Level_Matcher.py`:
+
+```python
+pairwise_output_threshold = 0.01   # Minimum probability for writing level pairs to file (1%)
+clustering_merge_threshold = 0.30  # Minimum probability for cluster merging (30%)
+```
+
+Adjust physics scoring in `Feature_Engineer.py` → `Scoring_Config` dictionary:
+
+```python
+Scoring_Config = {
+    'Energy': {
+        'Sigma_Scale': 0.1,              # Gaussian kernel width for energy similarity
+        'Default_Uncertainty': 10.0      # Default energy uncertainty in keV
+    },
+    'Spin': {
+        'Match_Firm': 1.0,               # Score for definite spin match
+        'Match_Tentative': 0.9,          # Score for tentative spin match
+        'Mismatch_Weak': 0.25,           # Score for weak spin conflict (ΔJ = 1, tentative)
+        'Mismatch_Strong': 0.0,          # Score for strong spin conflict (ΔJ = 1, firm)
+        'Veto': 0.0                      # Score for impossible transition (ΔJ > 1)
+    },
+    'Parity': {
+        'Match_Firm': 1.0,               # Score for definite parity match
+        'Match_Tentative': 0.9,          # Score for tentative parity match
+        'Mismatch_Tentative': 0.2,       # Score for tentative parity conflict
+        'Mismatch_Firm': 0.0             # Score for definite parity conflict
+    },
+    'General': {
+        'Neutral_Score': 0.5             # Score when data is missing/unknown
+    }
+}
+```
+
+## Workflow
+
+1.  **Data Ingestion:**
+    *   Reads `test_dataset_A.json`, `test_dataset_B.json`, `test_dataset_C.json`
+    *   Extracts: energy value, energy uncertainty, spin-parity list, spin-parity string
+    *   Generates unique level identifiers (e.g., `A_1000`)
+
+2.  **Model Training (Supervised Learning):**
+    *   Generates 600+ synthetic training samples encoding physics rules
+    *   Trains XGBoost regressor with `objective='binary:logistic'`
+    *   Enforces `monotone_constraints='(1, 1, 1, 1, 1, 1)'` on all six features
+    *   Hyperparameters: `n_estimators=100`, `max_depth=3`, `learning_rate=0.05`
+
+3.  **Pairwise Inference:**
+    *   Compares all cross-dataset level pairs (A vs B, A vs C, B vs C)
+    *   Extracts six-dimensional feature vector for each pair
+    *   Predicts match probability using trained model
+    *   Writes results to `level_pairs_inference.txt` (pairs above `PAIRWISE_OUTPUT_THRESHOLD`)
+
+4.  **Graph Clustering (Rule-Based Algorithm):**
+    *   Initializes each level as singleton cluster
+    *   Iterates through level pairs sorted by probability (highest first)
+    *   Attempts cluster merging only if:
+        *   Both levels' probabilities exceed `CLUSTERING_MERGE_THRESHOLD`
+        *   No dataset conflict exists between clusters
+        *   All existing cluster members are mutually compatible
+    *   Handles dataset conflicts via overlap (doublet assignment):
+        *   If merge blocked, attempts to add individual level to other cluster
+        *   Level can belong to multiple clusters simultaneously
+    *   Outputs final clustering results to console and file
+
+5.  **Anchor Selection & Reporting:**
+    *   Selects cluster member with smallest energy uncertainty as anchor
+    *   Reports anchor energy, Jπ assignment, and member list with match probabilities
+
+## Usage
+
+### Basic Workflow
+
+```bash
+# 1. Run the level matcher
+python Level_Matcher.py
+
+# 2. View pairwise inference results
+cat level_pairs_inference.txt
+
+# 3. View clustering results
+cat clustering_results.txt
+```
+
+### Data Preparation
+
+Option A - Use existing test datasets:
+```bash
+# Files already present: test_dataset_{A,B,C}.json
+python Level_Matcher.py
+```
+
+Option B - Convert evaluator log file:
+```bash
+# Create evaluatorInput.log with format:
+# # Dataset A:
+# E_level = 1000(3) keV; Jπ: unknown.
+# E_level = 2000(5) keV; Jπ: 2+.
+
+python Dataset_Parser.py evaluatorInput.log
+python Level_Matcher.py
+```
+
+### Generate Level Scheme Visualization
+
+```bash
+python Level_Scheme_Visualizer.py
+# Output: Level_Scheme_Visualization.png
+```
+
+## Physics Logic
+
+### Energy Similarity
+Gaussian kernel of Z-score:
+
+$$\text{Energy Similarity} = \exp\left(-\sigma_{\text{scale}} \cdot Z^2\right)$$
+
+where $Z = \frac{|E_1 - E_2|}{\sqrt{\sigma_1^2 + \sigma_2^2}}$
+
+### Spin Similarity
+Nuclear selection rules enforce:
+- **Match (J₁ = J₂):** Score = 1.0 (firm) or 0.9 (tentative)
+- **Adjacent (|J₁ - J₂| = 1):** Score = 0.0 (firm, vetoed) or 0.25 (tentative, weak)
+- **Forbidden (|J₁ - J₂| > 1):** Score = 0.0 (absolute veto)
+
+### Parity Similarity
+Conservation rules:
+- **Match (π₁ = π₂):** Score = 1.0 (firm) or 0.9 (tentative)
+- **Mismatch (π₁ ≠ π₂):** Score = 0.0 (firm, vetoed) or 0.2 (tentative, weak conflict)
+
+### Feature Vector Structure
+```python
+[Energy_Similarity,      # 0.0 to 1.0 (Gaussian kernel)
+ Spin_Similarity,        # 0.0 to 1.0 (physics-informed scoring)
+ Parity_Similarity,      # 0.0 to 1.0 (physics-informed scoring)
+ Spin_Certainty,         # 0.0 (tentative) or 1.0 (firm)
+ Parity_Certainty,       # 0.0 (tentative) or 1.0 (firm)
+ Specificity]            # 1.0 / (1.0 + log10(multiplicity))
+```
+
+All features are monotonic increasing: higher values → higher match probability.
+
+## Output Files
+
+*   **`level_pairs_inference.txt`**: All cross-dataset level pairs above `PAIRWISE_OUTPUT_THRESHOLD` with match probabilities and feature breakdowns
+*   **`clustering_results.txt`**: Final clustering results with anchor information and member probabilities
+*   **Console Output**: Real-time progress and summary statistics
+
+## Technology Stack
+
+*   **Machine Learning:** XGBoost 2.x (Gradient Boosting with monotonic constraints)
+*   **Data Processing:** NumPy, Pandas
+*   **Visualization:** Matplotlib (level schemes)
+*   **Rationale for XGBoost:**
+    *   Native handling of missing values (common in nuclear data)
+    *   Level-wise tree growth (stable for small datasets, N < 500)
+    *   Advanced regularization (L1/L2) prevents overfitting
+    *   Monotonic constraint support enforces physics rules
+    *   See `Technology_Hierarchy.md` for detailed justification
+
+## Jπ Notation Support
+
+`Dataset_Parser.py` handles complex spin-parity notation:
+
+| Notation | Meaning | Example Output |
+|----------|---------|----------------|
+| `2+` | Definite J=2, positive parity | `twoTimesSpin=4, isTentativeSpin=False, parity='+', isTentativeParity=False` |
+| `(2)+` | Tentative spin, definite parity | `twoTimesSpin=4, isTentativeSpin=True, parity='+', isTentativeParity=False` |
+| `2(+)` | Definite spin, tentative parity | `twoTimesSpin=4, isTentativeSpin=False, parity='+', isTentativeParity=True` |
+| `(2+)` | Both tentative | `twoTimesSpin=4, isTentativeSpin=True, parity='+', isTentativeParity=True` |
+| `1:3` | Range J=1,2,3 | Three separate entries with `twoTimesSpin={2,4,6}` |
+| `(1+,2+,3+)` | Multiple tentative options with shared parity | Three entries, all with `isTentativeSpin=True, parity='+', isTentativeParity=True` |
+| `3/2,5/2(+)` | List where only last has parity | First entry no parity, second entry has `parity='+', isTentativeParity=True` |
+
+## Dependencies
+
+```bash
+pip install xgboost numpy pandas matplotlib
+```
+
+Verify installation:
+```bash
+python Library_Verification.py
+```

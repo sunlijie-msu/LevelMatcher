@@ -4,15 +4,19 @@ from xgboost import XGBRegressor
 from Feature_Engineer import extract_features, get_training_data, load_levels_from_json
 
 """
-# Sun: Explanation of Code Structure:
+# FRIBND: High-level Strategy Explanation:
 1.  **Data Ingestion**: Loads standardized nuclear level data using `Feature_Engineer`.
-2.  **Model Training**: Trains an XGBoost model using physics-informed monotonic constraints.
-3.  **Inference**: Calculates match probabilities for all cross-dataset pairs.
-4.  **Clustering**: Groups matching levels into unique clusters with anchor-based probability reporting.
+2.  **Model Training**: Trains XGBoost regressor using physics-informed monotonic constraints on 6 features.
+3.  **Pairwise Inference**: Calculates match probabilities for all cross-dataset level pairs using trained ML model.
+4.  **Graph Clustering**: Groups matching levels using rule-based graph algorithm (no ML, only logic-based merging).
 """
 
+# FRIBND: Configuration Parameters
+pairwise_output_threshold = 0.01  # FRIBND: Minimum probability for outputting level pairs (1%)
+clustering_merge_threshold = 0.30  # FRIBND: Minimum probability for cluster merging (30%)
+
 # ==========================================
-# Sun: 1. Test Data Ingestion (From JSON files)
+# FRIBND: 1. Test Data Ingestion (From JSON files)
 # ==========================================
 levels = load_levels_from_json(['A', 'B', 'C'])
 
@@ -21,7 +25,7 @@ dataframe = pd.DataFrame(levels)
 dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int(row['energy_value'])}", axis=1)
 
 # ==========================================
-# Sun: 2. Model Training (Physics-Informed XGBoost)
+# FRIBND: 2. Model Training (Physics-Informed XGBoost)
 # ==========================================
 # Features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
 # Constraints (All Monotonic Increasing):
@@ -44,23 +48,32 @@ if __name__ == "__main__":
     # 4. Spin_Certainty (+1)
     # 5. Parity_Certainty (+1)
     # 6. Specificity (+1)
-    level_matcher_model = XGBRegressor(objective='binary:logistic', # Sun: Learning Objective Function: Training Loss + Regularization.
-                                       # Sun: The loss function computes the difference between the true y value and the predicted y value.
-                                       # Sun: The regularization term discourages overly complex trees.
-                                       monotone_constraints='(1, 1, 1, 1, 1, 1)', # Enforce an increasing constraint on all predictors. In some cases, where there is a very strong prior belief that the true relationship has some quality, constraints can be used to improve the predictive performance of the model.
-                                       n_estimators=100, # Number of gradient boosted trees
-                                       max_depth=3, # Maximum depth of a tree. Increasing this value will make the model more complex and more likely to overfit. 0 indicates no limit on depth. Beware that XGBoost aggressively consumes memory when training a deep tree.
+    level_matcher_model = XGBRegressor(objective='binary:logistic',
+                                       # FRIBND: Learning Objective Function: Training Loss + Regularization.
+                                       # FRIBND: The loss function computes the difference between the true y value and the predicted y value.
+                                       # FRIBND: The regularization term discourages overly complex trees.
+                                       monotone_constraints='(1, 1, 1, 1, 1, 1)',
+                                       # FRIBND: Enforce increasing constraint on all six features.
+                                       # FRIBND: Physics prior: higher feature values always indicate better matches.
+                                       # FRIBND: Monotonic constraints improve predictive performance when strong prior beliefs exist.
+                                       n_estimators=100,
+                                       # FRIBND: Number of gradient boosted trees (ensemble size).
+                                       max_depth=3,
+                                       # FRIBND: Maximum tree depth. Lower values prevent overfitting but may underfit.
+                                       # FRIBND: Value of 3 balances model complexity with generalization.
                                        learning_rate=0.05,
-                                       random_state=42) # Random number seed
+                                       # FRIBND: Step size shrinkage to prevent overfitting. Lower values require more trees.
+                                       random_state=42)
+                                       # FRIBND: Random number seed for reproducibility.
     
     # Train the model on the generated training data
     level_matcher_model.fit(training_features, training_labels)
 
     # ==========================================
-    # Sun: 3. Pairwise Inference
+    # FRIBND: 3. Pairwise Inference
     # ==========================================
-    # Extract match probabilities for all cross-dataset level pairs using the trained XGBoost model
-    candidates = []
+    # FRIBND: Extract match probabilities for all cross-dataset level pairs using the trained XGBoost model
+    matching_level_pairs = []
     rows_list = list(dataframe.iterrows())
     
     for i in range(len(rows_list)):
@@ -72,15 +85,15 @@ if __name__ == "__main__":
             if level_1['dataset_code'] == level_2['dataset_code']:
                 continue
 
-            # Extract physics-informed features for this level pair
+            # FRIBND: Extract physics-informed features for this level pair
             feature_vector = extract_features(level_1, level_2)
             
-            # Predict match probability using trained XGBoost model
+            # FRIBND: Predict match probability using trained XGBoost model
             match_probability = level_matcher_model.predict([feature_vector])[0]
             
-            # Store candidates with probability > 10%
-            if match_probability > 0.1:
-                candidates.append({
+            # All level pairs above output threshold are recorded
+            if match_probability > pairwise_output_threshold:
+                matching_level_pairs.append({
                     'ID1': level_1['level_id'],
                     'ID2': level_2['level_id'],
                     'dataset_1': level_1['dataset_code'],
@@ -90,98 +103,104 @@ if __name__ == "__main__":
                 })
 
     # Sort by probability (highest first)
-    candidates.sort(key=lambda x: x['probability'], reverse=True)
+    matching_level_pairs.sort(key=lambda x: x['probability'], reverse=True)
 
-    # Write matching candidates to file
-    with open('matching_candidates.txt', 'w', encoding='utf-8') as output_file:
-        output_file.write("=== MATCHING CANDIDATES (>10%) ===\n\n")
-        output_file.write(f"Total Candidates Found: {len(candidates)}\n\n")
+    # Write all level pairs to file
+    threshold_percent = int(pairwise_output_threshold * 100)
+    with open('level_pairs_inference.txt', 'w', encoding='utf-8') as output_file:
+        output_file.write(f"=== PAIRWISE INFERENCE RESULTS (>{threshold_percent}%) ===\n\n")
+        output_file.write(f"Total Level Pairs Found: {len(matching_level_pairs)}\n\n")
         
-        for candidate in candidates:
-            energy_sim, spin_sim, parity_sim, spin_cert, parity_cert, specificity = candidate['features']
+        for matching_level_pair in matching_level_pairs:
+            energy_sim, spin_sim, parity_sim, spin_cert, parity_cert, specificity = matching_level_pair['features']
             output_file.write(
-                f"{candidate['ID1']} <-> {candidate['ID2']} | "
-                f"Probability: {candidate['probability']:.1%}\n"
+                f"{matching_level_pair['ID1']} <-> {matching_level_pair['ID2']} | "
+                f"Probability: {matching_level_pair['probability']:.1%}\n"
                 f"  Features: Energy_Sim={energy_sim:.2f}, Spin_Sim={spin_sim:.2f}, "
                 f"Parity_Sim={parity_sim:.2f}, Spin_Cert={spin_cert:.0f}, "
                 f"Parity_Cert={parity_cert:.0f}, Specificity={specificity:.2f}\n\n"
             )
     
-    print(f"\n[INFO] Pairwise Inference Complete: {len(candidates)} matching candidates (>10%) written to 'matching_candidates.txt'")
+    print(f"\n[INFO] Pairwise Inference Complete: {len(matching_level_pairs)} level pairs (>{threshold_percent}%) written to 'level_pairs_inference.txt'")
 
     # ==========================================
-    # Sun: 4. Graph Clustering with Overlap Support
+    # FRIBND: 4. Graph Clustering with Overlap Support
     # ==========================================
-    # Sun: Core Strategy: Build clusters by merging compatible cross-dataset levels
-    # Sun: Key Feature: Doublet support allows one level to belong to multiple clusters when conflicts exist
+    # FRIBND: Algorithm: Greedy cluster merging based on match probability ranking
+    # FRIBND: Key Constraints:
+    #   - Dataset Uniqueness: Each cluster contains at most one level per dataset
+    #   - Mutual Consistency: All cluster members must be pairwise compatible
+    #   - Ambiguity Resolution: Levels with poor resolution (large uncertainty) can belong to multiple clusters when they are compatible with multiple well-resolved levels
+    # FRIBND: This section uses NO ML, only rule-based graph algorithms for logical cluster merging
     
-    # Step 1: Initialize data structures
+    # Step 1: Initialize singleton clusters and lookup table
     level_lookup = {row['level_id']: row for _, row in dataframe.iterrows()}
-    
-    # Sun: Each level starts as its own cluster (dictionary: dataset_code -> level_id)
     initial_clusters = [{row['dataset_code']: row['level_id']} for _, row in dataframe.iterrows()]
     
-    # Sun: Track which clusters each level belongs to (one level can be in multiple clusters)
+    # FRIBND: Track which clusters each level belongs to (one level can be in multiple clusters)
     id_to_clusters = {}
     for cluster in initial_clusters:
+        # FRIBND: Extract the single level_id from this single-member cluster
+        # FRIBND: cluster.values() returns dict_values(['A_1000']), list() converts to ['A_1000'], [0] gets 'A_1000'
         member_id = list(cluster.values())[0]
         id_to_clusters[member_id] = [cluster]
 
-    # Step 2: Build compatibility set (only strong matches with probability > 30%)
-    # Sun: We only merge clusters if all members are mutually compatible
+    # Step 2: Extract strong candidate pairs for merging
+    # FRIBND: Only level pairs exceeding clustering_merge_threshold qualify for cluster operations
     valid_pairs = set()
-    for candidate in candidates:
-        if candidate['probability'] >= 0.3:
-            valid_pairs.add((candidate['ID1'], candidate['ID2']))
-            valid_pairs.add((candidate['ID2'], candidate['ID1']))
+    for matching_level_pair in matching_level_pairs:
+        if matching_level_pair['probability'] >= clustering_merge_threshold:
+            valid_pairs.add((matching_level_pair['ID1'], matching_level_pair['ID2']))
+            valid_pairs.add((matching_level_pair['ID2'], matching_level_pair['ID1']))
 
-    # Step 3: Merge compatible clusters by iterating through strong candidates
-    for candidate in candidates:
-        if candidate['probability'] < 0.3:
-            break  # Sun: Skip weak matches
+    # Step 3: Greedy cluster merging
+    # FRIBND: Process candidates in descending probability order, attempting merges or multi-cluster assignment for ambiguous levels
+    for matching_level_pair in matching_level_pairs:
+        if matching_level_pair['probability'] < clustering_merge_threshold:
+            break  # FRIBND: Skip weak matches (list is sorted by probability)
         
-        id_1, id_2 = candidate['ID1'], candidate['ID2']
+        id_1, id_2 = matching_level_pair['ID1'], matching_level_pair['ID2']
         
-        # Sun: Snapshot current cluster memberships before modification
+        # FRIBND: Snapshot current cluster memberships before modification
         cluster_list_1 = list(id_to_clusters[id_1])
         cluster_list_2 = list(id_to_clusters[id_2])
 
-        # Sun: Try to merge each cluster pair that contains id_1 and id_2
+        # FRIBND: Try to merge each cluster pair that contains id_1 and id_2
         for cluster_1 in cluster_list_1:
             for cluster_2 in cluster_list_2:
                 if cluster_1 is cluster_2:
-                    continue  # Sun: Already in same cluster
+                    continue  # FRIBND: Already in same cluster
                 
                 datasets_1 = set(cluster_1.keys())
                 datasets_2 = set(cluster_2.keys())
                 
-                # Scenario A: Dataset conflict exists (both clusters have levels from same dataset)
+                # Scenario A: Dataset overlap (both clusters have levels from same dataset)
                 if not datasets_1.isdisjoint(datasets_2):
-                    # Sun: Example: cluster_1 has A_3000, cluster_2 has A_3005
-                    # Sun: Cannot merge these clusters, but try "doublet assignment"
+                    # FRIBND: Example: cluster_1 has A_3000, cluster_2 has A_3005 (both resolved), C_3002 (poorly resolved with large uncertainty) matches both
+                    # FRIBND: Cannot merge these clusters (violates dataset uniqueness), but try multi-cluster assignment for ambiguous levels
                     
-                    # Sun: Can we add id_1 to cluster_2?
-                    if candidate['dataset_1'] not in datasets_2:
-                        # Sun: Check if id_1 is compatible with ALL existing members of cluster_2
+                    # FRIBND: Can we add id_1 to cluster_2?
+                    if matching_level_pair['dataset_1'] not in datasets_2:
+                        # FRIBND: Check if id_1 is compatible with ALL existing members of cluster_2
                         if all((id_1, member_id) in valid_pairs for member_id in cluster_2.values()):
                             if id_1 not in cluster_2.values():
-                                cluster_2[candidate['dataset_1']] = id_1
+                                cluster_2[matching_level_pair['dataset_1']] = id_1
                                 if cluster_2 not in id_to_clusters[id_1]:
                                     id_to_clusters[id_1].append(cluster_2)
                     
-                    # Sun: Can we add id_2 to cluster_1?
-                    if candidate['dataset_2'] not in datasets_1:
-                        # Sun: Check if id_2 is compatible with ALL existing members of cluster_1
+                    # FRIBND: Can we add id_2 to cluster_1?
+                    if matching_level_pair['dataset_2'] not in datasets_1:
+                        # FRIBND: Check if id_2 is compatible with ALL existing members of cluster_1
                         if all((id_2, member_id) in valid_pairs for member_id in cluster_1.values()):
                             if id_2 not in cluster_1.values():
-                                cluster_1[candidate['dataset_2']] = id_2
+                                cluster_1[matching_level_pair['dataset_2']] = id_2
                                 if cluster_1 not in id_to_clusters[id_2]:
                                     id_to_clusters[id_2].append(cluster_1)
                     
-                    continue  # Sun: Move to next cluster pair
+                    continue  # FRIBND: Move to next cluster pair
 
-                # Scenario B: No dataset conflict (can potentially merge)
-                # Sun: Verify all-to-all compatibility before merging
+                # Scenario B: No dataset overlap (can potentially merge)
+                # FRIBND: Verify all-to-all compatibility before merging
                 consistent = True
                 for member_1 in cluster_1.values():
                     for member_2 in cluster_2.values():
@@ -192,10 +211,10 @@ if __name__ == "__main__":
                         break
                 
                 if consistent:
-                    # Sun: Perform merge: absorb cluster_2 into cluster_1
+                    # FRIBND: Perform merge: absorb cluster_2 into cluster_1
                     cluster_1.update(cluster_2)
                     
-                    # Sun: Update all members of cluster_2 to point to cluster_1
+                    # FRIBND: Update all members of cluster_2 to point to cluster_1
                     for member_id in cluster_2.values():
                         if cluster_2 in id_to_clusters[member_id]:
                             id_to_clusters[member_id].remove(cluster_2)
@@ -219,30 +238,58 @@ if __name__ == "__main__":
     
     unique_clusters.sort(key=calculate_cluster_average_energy)
 
+    # FRIBND: Write clustering results to both console and file
+    clustering_output_lines = []
+    clustering_output_lines.append("=== FINAL CLUSTERING RESULTS ===\n")
+    
     print("\n=== FINAL CLUSTERING RESULTS ===")
     for i, cluster in enumerate(unique_clusters):
-        # Anchor Selection (Level with smallest uncertainty)
+        # FRIBND: Select anchor as the level with smallest energy uncertainty (most precise measurement)
         anchor_id = min(cluster.values(), key=lambda x: level_lookup[x]['energy_uncertainty'] if pd.notna(level_lookup[x]['energy_uncertainty']) else 999)
         anchor_data = level_lookup[anchor_id]
         anchor_energy = anchor_data['energy_value']
+        anchor_uncertainty = anchor_data['energy_uncertainty'] if pd.notna(anchor_data['energy_uncertainty']) else 0
         anchor_jpi = anchor_data.get('spin_parity', '')
         if anchor_jpi == "unknown": anchor_jpi = "N/A"
         
-        print(f"\nCluster {i+1}:")
-        print(f"  Anchor: {anchor_id} | E={anchor_energy:.1f} keV | Jπ={anchor_jpi}")
-        print(f"  Members:")
+        cluster_header = f"\nCluster {i+1}:"
+        anchor_line = f"  Anchor: {anchor_id} | E={anchor_energy:.1f}±{anchor_uncertainty:.1f} keV | Jπ={anchor_jpi}"
+        members_header = "  Members:"
         
-        # Display each member with probability
+        print(cluster_header)
+        print(anchor_line)
+        print(members_header)
+        
+        clustering_output_lines.append(cluster_header + "\n")
+        clustering_output_lines.append(anchor_line + "\n")
+        clustering_output_lines.append(members_header + "\n")
+        
+        # FRIBND: Display each member with match probability relative to anchor
+        # FRIBND: Anchor member shows no probability (identity match). Other members show ML-predicted probability.
         for dataset_code in sorted(cluster.keys()):
             member_id = cluster[dataset_code]
             member_data = level_lookup[member_id]
             member_energy = member_data['energy_value']
+            member_uncertainty = member_data['energy_uncertainty'] if pd.notna(member_data['energy_uncertainty']) else 0
             member_jpi = member_data.get('spin_parity', '')
             if member_jpi == "unknown": member_jpi = "N/A"
             
             if member_id == anchor_id:
-                print(f"    [{dataset_code}] {member_id}: E={member_energy:.1f} keV, Jπ={member_jpi} (Anchor)")
+                member_line = f"    [{dataset_code}] {member_id}: E={member_energy:.1f}±{member_uncertainty:.1f} keV, Jπ={member_jpi} (Anchor)"
+                print(member_line)
+                clustering_output_lines.append(member_line + "\n")
             else:
                 input_vector = extract_features(member_data, anchor_data)
                 probability = level_matcher_model.predict([input_vector])[0]
-                print(f"    [{dataset_code}] {member_id}: E={member_energy:.1f} keV, Jπ={member_jpi} (Match Prob: {probability:.1%})")
+                member_line = f"    [{dataset_code}] {member_id}: E={member_energy:.1f}±{member_uncertainty:.1f} keV, Jπ={member_jpi} (Match Prob: {probability:.1%})"
+                print(member_line)
+                clustering_output_lines.append(member_line + "\n")
+    
+    # FRIBND: Write clustering results to file
+    clustering_threshold_percent = int(clustering_merge_threshold * 100)
+    with open('clustering_results.txt', 'w', encoding='utf-8') as output_file:
+        output_file.write(f"=== FINAL CLUSTERING RESULTS (Merge Threshold: >{clustering_threshold_percent}%) ===\n")
+        output_file.write(f"Total Clusters: {len(unique_clusters)}\n")
+        output_file.writelines(clustering_output_lines)
+    
+    print(f"\n[INFO] Clustering Complete: {len(unique_clusters)} clusters written to 'clustering_results.txt'")
