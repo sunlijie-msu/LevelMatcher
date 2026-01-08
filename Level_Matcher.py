@@ -243,7 +243,7 @@ if __name__ == "__main__":
         anchor_data = level_lookup[anchor_id]
         anchor_energy = anchor_data['energy_value']
         anchor_uncertainty = anchor_data['energy_uncertainty'] if pd.notna(anchor_data['energy_uncertainty']) else 0
-        anchor_jpi = anchor_data.get('spin_parity', '')
+        anchor_jpi = anchor_data.get('spin_parity_string', '')
         if anchor_jpi == "unknown": anchor_jpi = "N/A"
         
         cluster_header = f"\nCluster {i+1}:"
@@ -265,7 +265,7 @@ if __name__ == "__main__":
             member_data = level_lookup[member_id]
             member_energy = member_data['energy_value']
             member_uncertainty = member_data['energy_uncertainty'] if pd.notna(member_data['energy_uncertainty']) else 0
-            member_jpi = member_data.get('spin_parity', '')
+            member_jpi = member_data.get('spin_parity_string', '')
             if member_jpi == "unknown": member_jpi = "N/A"
             
             if member_id == anchor_id:

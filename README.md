@@ -48,15 +48,15 @@ Scoring_Config = {
     'Spin': {
         'Match_Firm': 1.0,               # Score for definite spin match
         'Match_Tentative': 0.9,          # Score for tentative spin match
-        'Mismatch_Weak': 0.25,           # Score for weak spin conflict (ΔJ = 1, tentative)
-        'Mismatch_Strong': 0.0,          # Score for strong spin conflict (ΔJ = 1, firm)
+        'Mismatch_Weak': 0.2,            # Score for weak spin mismatch (ΔJ = 1, any tentative)
+        'Mismatch_Strong': 0.0,          # Score for strong spin mismatch (ΔJ = 1, both firm)
         'Veto': 0.0                      # Score for impossible transition (ΔJ > 1)
     },
     'Parity': {
         'Match_Firm': 1.0,               # Score for definite parity match
         'Match_Tentative': 0.9,          # Score for tentative parity match
-        'Mismatch_Tentative': 0.2,       # Score for tentative parity conflict
-        'Mismatch_Firm': 0.0             # Score for definite parity conflict
+        'Mismatch_Tentative': 0.2,       # Score for tentative parity mismatch
+        'Mismatch_Firm': 0.0             # Score for definite parity mismatch
     },
     'General': {
         'Neutral_Score': 0.5             # Score when data is missing/unknown
@@ -81,13 +81,13 @@ Scoring_Config = {
     *   Compares all cross-dataset level pairs (A vs B, A vs C, B vs C)
     *   Extracts six-dimensional feature vector for each pair
     *   Predicts match probability using trained model
-    *   Writes results to `level_pairs_inference.txt` (pairs above `PAIRWISE_OUTPUT_THRESHOLD`)
+    *   Writes results to `level_pairs_inference.txt` (pairs above `pairwise_output_threshold`)
 
 4.  **Graph Clustering (Rule-Based Algorithm):**
     *   Initializes each level as singleton cluster
     *   Iterates through level pairs sorted by probability (highest first)
     *   Attempts cluster merging only if:
-        *   Both levels' probabilities exceed `CLUSTERING_MERGE_THRESHOLD`
+        *   Both levels' probabilities exceed `clustering_merge_threshold`
         *   No dataset overlap exists between clusters (enforces dataset uniqueness)
         *   All existing cluster members are mutually compatible
     *   Handles ambiguous matches via multi-cluster assignment (when dataset overlap prevents merging):
@@ -152,13 +152,13 @@ where $Z = \frac{|E_1 - E_2|}{\sqrt{\sigma_1^2 + \sigma_2^2}}$
 ### Spin Similarity
 Nuclear selection rules enforce:
 - **Match (J₁ = J₂):** Score = 1.0 (firm) or 0.9 (tentative)
-- **Adjacent (|J₁ - J₂| = 1):** Score = 0.0 (firm, vetoed) or 0.25 (tentative, weak)
+- **Adjacent (|J₁ - J₂| = 1):** Score = 0.0 (both firm, vetoed) or 0.2 (any tentative, weak)
 - **Forbidden (|J₁ - J₂| > 1):** Score = 0.0 (absolute veto)
 
 ### Parity Similarity
 Conservation rules:
 - **Match (π₁ = π₂):** Score = 1.0 (firm) or 0.9 (tentative)
-- **Mismatch (π₁ ≠ π₂):** Score = 0.0 (firm, vetoed) or 0.2 (tentative, weak conflict)
+- **Mismatch (π₁ ≠ π₂):** Score = 0.0 (both firm, vetoed) or 0.2 (any tentative, weak)
 
 ### Feature Vector Structure
 ```python
@@ -174,7 +174,7 @@ All features are monotonic increasing: higher values → higher match probabilit
 
 ## Output Files
 
-*   **`level_pairs_inference.txt`**: All cross-dataset level pairs above `PAIRWISE_OUTPUT_THRESHOLD` with match probabilities and feature breakdowns
+*   **`level_pairs_inference.txt`**: All cross-dataset level pairs above `pairwise_output_threshold` with match probabilities and feature breakdowns
 *   **`clustering_results.txt`**: Final clustering results with anchor information and member probabilities
 *   **Console Output**: Real-time progress and summary statistics
 

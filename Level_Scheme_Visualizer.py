@@ -77,7 +77,7 @@ def plot_level_schemes():
             if isinstance(level.get('spinParity'), dict):
                 spig = level.get('spinParity', {}).get('evaluatorInput', '')
             else:
-                spig = level.get('spin_parity', '')
+                spig = level.get('spin_parity_string', '')
             
             unc_str = f"({int(unc)})" if unc is not None else ""
             label_left = f"{int(energy_val)}{unc_str}"
