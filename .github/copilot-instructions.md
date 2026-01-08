@@ -19,7 +19,7 @@ Follow these protocols without exception:
 - Before starting any work, read `.github/copilot-instructions.md` thoroughly from start to end
 - Ensure you understand every rule and formatting requirement before taking any action
 - Self-monitor compliance continuously: before each action and after each action
-- Provide a compliance checklist with checkmarks documenting adherence to requirements
+- Provide users a Compliance Checklist with checkmarks documenting adherence to requirements
 - If you violate any rule, immediately identify the violation, fix the issue, and re-validate before proceeding
 
 ### VS Code Diff View Requirement
@@ -41,7 +41,7 @@ Follow these protocols without exception:
 
 - **Self-Explanatory Naming:** Ensure all function and variable names are self-explanatory. Use `calculate_` for math/logic processing. For example, use `calculate_spin_similarity` instead of `evaluate_spin_match`. Use explicit variable names like `energy_similarity` instead of `energy_score`.
 
-- **Preserve Comments:** Do not summarize, shorten, or delete existing user-written educational comments. For example, comments starting with `# FRIBND:` are crucial for understanding code purpose and logic.
+- **Preserve Comments:** Do not summarize, shorten, or delete existing user-written educational comments for understanding code purpose and logic.
 
 ## Communication and Execution Standards
 
