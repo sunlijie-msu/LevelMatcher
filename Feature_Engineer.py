@@ -7,21 +7,21 @@ Explanation of Code Structure:
 1.  **Data Loading** (`load_levels_from_json`):
     - Ingests nuclear level data from JSON files (ENSDF schema).
     - Standardizes attributes into flat dictionaries: `energy_value`, `energy_uncertainty`, `spin_parity_list`, `spin_parity_string`.
-    - FRIBND: The standardized key `spin_parity_string` stores the JSON `spinParity.evaluatorInput` text (the human-readable Jπ string).
+    - The standardized key `spin_parity_string` stores the JSON `spinParity.evaluatorInput` text (the 80-col style Jπ string).
 
 2.  **Physics Feature Extraction** (`calculate_*_similarity`):
     - Mathematical comparison of level attributes using `Scoring_Config` weights.
     - **Energy**: Gaussian similarity based on Z-score overlap (0.0 to 1.0).
-    - **Spin (J)**: Physics-informed scoring (1.0 for match, 0.0 for prohibition). Handles ranges and tentative assignments.
-    - **Parity (Pi)**: Strict parity checking (Match vs Mismatch).
+    - **Spin (J)**: Physics-informed scoring (1.0 for match, 0.0 for mismatch). Handles ranges and tentative assignments.
+    - **Parity (Pi)**: Physics-informed scoring (1.0 for match, 0.0 for mismatch). Handles tentative assignments.
 
 3.  **Feature Vector Construction** (`extract_features`):
     - Aggregates individual scores into a numerical vector for the ML model.
     - Vector Format: `[Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]`
     - Metrics:
         - *Similarity*: How well values match (Physics inputs).
-        - *Certainty*: Penalty for unsure/tentative data (1.0=Firm, 0.0=Tentative).
-        - *Specificity*: Penalty for ambiguous multiple options (1.0=Specific, <1.0=Ambiguous).
+        - *Certainty*: Penalty for tentative data (1.0=Firm, 0.0=Tentative).
+        - *Specificity*: Penalty for multiple options (1.0=Specific, <1.0=Ambiguous).
 
 4.  **Training Data Generation** (`get_training_data`):
     - Generates synthetic "Gold Standard" pairs to teach the XGBoost model core physics constraints.
@@ -45,24 +45,23 @@ Scoring_Config = {
         # - Higher value (e.g. 1.0) = stricter (score drops fast if energy differs).
         # - Lower value (e.g. 0.1) = looser (score stays high even with differences).
         'Sigma_Scale': 0.1,
-        
         # Default energy uncertainty (in keV) used when input data lacks uncertainty.
         'Default_Uncertainty': 10.0
     },
     'Spin': {
         # Similarity scores for Spin (J) comparisons (0.0 to 1.0)
-        'Match_Firm': 1.0,         # e.g.: 2+ vs 2+ (both firm)
-        'Match_Tentative': 0.9,    # e.g.: tentative 2+ vs firm 2+
-        'Mismatch_Weak': 0.2,      # e.g.: firm 2 vs tentative 3 (ΔJ=1, any tentative)
-        'Mismatch_Strong': 0.0,    # e.g.: 2 vs 3 (ΔJ=1, both firm)
-        'Veto': 0.0               # e.g.: 2 vs 4 (ΔJ>1)
+        'Match_Firm': 1.0,         # both firm, e.g., 2 vs 2
+        'Match_Strong': 0.9,    # any tentative, e.g., 2 vs (2)
+        'Mismatch_Weak': 0.2,      # any tentative, e.g., 2 vs (3) with ΔJ=1
+        'Mismatch_Strong': 0.05,    # both firm, e.g., 2 vs 3 with ΔJ=1
+        'Mismatch_Firm': 0.0               # any ΔJ ≥ 2
     },
     'Parity': {
         # Similarity scores for Parity (Pi) comparisons (0.0 to 1.0)
-        'Match_Firm': 1.0,         # e.g.: + vs + (both firm)
-        'Match_Tentative': 0.9,    # e.g.: tentative + vs firm +
-        'Mismatch_Tentative': 0.2, # e.g.: firm + vs tentative -
-        'Mismatch_Firm': 0.0       # e.g.: + vs - (both firm)
+        'Match_Firm': 1.0,         # both firm, e.g., + vs + or - vs -
+        'Match_Strong': 0.9,    # any tentative, e.g., + vs (+)
+        'Mismatch_Weak': 0.1, # any tentative, e.g., + vs (-)
+        'Mismatch_Firm': 0.0       # both firm, e.g., + vs -
     },
     'General': {
         # Score used when data is missing (e.g. unknown).
@@ -148,16 +147,13 @@ def calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2):
     FRIBND: Empirical Physics Logic - Two levels from different experiments are likely the same level if spins match:
             - ΔJ = 0 with both firm, e.g., 2 vs 2: Strongest match → score 1.0
             - ΔJ = 0 with any tentative, e.g., 2 vs (2): Good match with slightly reduced → score 0.9
-            - ΔJ = 1 with both firm, e.g., 2 vs 3: Strong mismatch → score 0.0
+            - ΔJ = 1 with both firm, e.g., 2 vs 3: Strong mismatch → score 0.05
             - ΔJ = 1 with any tentative, e.g., 2 vs (3): Weak mismatch → score 0.2
             - ΔJ ≥ 2: Strong mismatch regardless of tentativeness →  score 0.0
     """
     if not spin_parity_list_1 or not spin_parity_list_2:
         return Scoring_Config['General']['Neutral_Score']
 
-    # FRIBND: Extract spins as J (convert twoTimesSpin → J by dividing by 2)
-    # FRIBND: JSON stores 2J as integers (e.g., 3 → J=3/2). We transform to J here
-    # FRIBND: so downstream logic compares ΔJ = |J1 − J2| directly.
     spins_1 = [
         (state.get('twoTimesSpin') / 2.0, state.get('isTentativeSpin', False))
         for state in spin_parity_list_1 if state.get('twoTimesSpin') is not None
@@ -174,23 +170,32 @@ def calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2):
     
     for j1, spin1_is_tentative in spins_1:
         for j2, spin2_is_tentative in spins_2:
-            # FRIBND: Calculate spin difference and determine if both measurements are firm
+            # Calculate spin difference and determine firmness of both measurements
             spin_difference = abs(j1 - j2)
             both_firm = (not spin1_is_tentative) and (not spin2_is_tentative)
             
-            # FRIBND: Scoring logic (decision table)
-            # ΔJ = 0: Match           → 1.0 (both firm) or 0.9 (any tentative)
-            # ΔJ = 1: Adjacent        → 0.0 (both firm) or 0.2 (any tentative)
-            # ΔJ = 2: Large mismatch  → 0.0 (both firm) or 0.1 (any tentative)
-            # ΔJ > 2: Veto            → 0.0 always
+            # Scoring logic (decision table)
+            # ΔJ = 0: Match      → 1.0 (both firm) or 0.9 (any tentative)
+            # ΔJ = 1: Adjacent   → 0.05 (both firm) or 0.2 (any tentative)
+            # ΔJ ≥ 2: Veto       → 0.0 always
+            
             if spin_difference == 0.0:
-                pair_similarity = Scoring_Config['Spin']['Match_Firm'] if both_firm else Scoring_Config['Spin']['Match_Tentative']
+                # FRIBND: Identical spins → evidence for same level
+                if both_firm:
+                    pair_similarity = Scoring_Config['Spin']['Match_Firm']
+                else:
+                    pair_similarity = Scoring_Config['Spin']['Match_Strong']
+                    
             elif spin_difference == 1.0:
-                pair_similarity = Scoring_Config['Spin']['Veto'] if both_firm else Scoring_Config['Spin']['Mismatch_Weak']
-            elif spin_difference == 2.0:
-                pair_similarity = Scoring_Config['Spin']['Veto'] if both_firm else 0.1
+                # Adjacent spins (ΔJ=1) → evidence for different levels
+                if both_firm:
+                    pair_similarity = Scoring_Config['Spin']['Mismatch_Strong']
+                else:
+                    pair_similarity = Scoring_Config['Spin']['Mismatch_Weak']
+                    
             else:
-                pair_similarity = Scoring_Config['Spin']['Veto']
+                # Large spin difference (ΔJ≥2) → definitely different levels
+                pair_similarity = Scoring_Config['Spin']['Mismatch_Firm']
 
             if pair_similarity > max_similarity_score:
                 max_similarity_score = pair_similarity
@@ -204,7 +209,7 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
       - Same parity with both firm, e.g., + vs + or - vs -: Strongest match → score 1.0
       - Same parity with any tentative, e.g., + vs (+): Good match but reduced → score 0.9
       - Different parity with both firm, e.g., + vs -: Strong mismatch → score 0.0
-      - Different parity with any tentative, e.g., + vs (-): Weak mismatch → score 0.2
+      - Different parity with any tentative, e.g., + vs (-): Weak mismatch → score 0.1
     """
     if not spin_parity_list_1 or not spin_parity_list_2:
         return Scoring_Config['General']['Neutral_Score']
@@ -222,17 +227,26 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
     
     for parity_signal_1, is_tentative_1 in parities_1:
         for parity_signal_2, is_tentative_2 in parities_2:
-            # FRIBND: Determine match/mismatch and firmness
+            # FRIBND: Determine match/mismatch and firmness of both measurements
             parities_match = (parity_signal_1 == parity_signal_2)
             both_firm = (not is_tentative_1) and (not is_tentative_2)
             
             # FRIBND: Scoring logic (decision table)
             # Match:    → 1.0 (both firm) or 0.9 (any tentative)
-            # Mismatch: → 0.0 (both firm) or 0.2 (any tentative)
+            # Mismatch: → 0.0 (both firm) or 0.1 (any tentative)
+            
             if parities_match:
-                pair_similarity = Scoring_Config['Parity']['Match_Firm'] if both_firm else Scoring_Config['Parity']['Match_Tentative']
+                # FRIBND: Same parity → evidence for same level
+                if both_firm:
+                    pair_similarity = Scoring_Config['Parity']['Match_Firm']
+                else:
+                    pair_similarity = Scoring_Config['Parity']['Match_Strong']
             else:
-                pair_similarity = Scoring_Config['Parity']['Mismatch_Firm'] if both_firm else Scoring_Config['Parity']['Mismatch_Tentative']
+                # FRIBND: Different parity → evidence for different levels
+                if both_firm:
+                    pair_similarity = Scoring_Config['Parity']['Mismatch_Firm']
+                else:
+                    pair_similarity = Scoring_Config['Parity']['Mismatch_Weak']
             
             if pair_similarity > max_parity_similarity_score:
                 max_parity_similarity_score = pair_similarity
@@ -242,8 +256,8 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
 def extract_features(level_1, level_2):
     """
     Constructs six-dimensional feature vector from two level dictionaries.
-    FRIBND: Feature Design - All scores are monotonic increasing (higher value → better match)
-    FRIBND: Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
+    Feature Design - All scores are monotonic increasing (higher value → better match)
+    Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Spin_Certainty, Parity_Certainty, Specificity]
     """
 
     energy_similarity = calculate_energy_similarity(
@@ -321,18 +335,19 @@ def get_training_data():
         training_points.append(([e, 0.5, 0.5, 1.0, 1.0, 1.0], prob))
 
     # FRIBND: Case 5 - Weak physics match (marginal compatibility → reduced probability)
-    # FRIBND: Energy good, Spin/Parity weak (0.2) → Low-to-mid probability
+    # FRIBND: Energy good, Spin/Parity weak (0.2 or 0.1) → Low-to-mid probability
     for e in np.linspace(0.5, 1.0, 5):
         training_points.append(([e, 0.2, 1.0, 1.0, 1.0, 1.0], e * 0.4))
-        training_points.append(([e, 1.0, 0.2, 1.0, 1.0, 1.0], e * 0.4))
+        training_points.append(([e, 1.0, 0.1, 1.0, 1.0, 1.0], e * 0.3))
+        training_points.append(([e, 0.05, 1.0, 1.0, 1.0, 1.0], e * 0.2))
 
     # FRIBND: Case 6 - Random background (fill feature space with rule-based labels)
     # FRIBND: Generate 500 random points, apply physics rules to determine labels
     np.random.seed(42)
     for _ in range(500):
         e = np.random.uniform(0, 1)
-        s = np.random.choice([0.0, 0.2, 0.5, 0.9, 1.0])
-        p = np.random.choice([0.0, 0.2, 0.5, 0.9, 1.0])
+        s = np.random.choice([0.0, 0.05, 0.2, 0.5, 0.9, 1.0])
+        p = np.random.choice([0.0, 0.1, 0.2, 0.5, 0.9, 1.0])
         cert_s = np.random.choice([0.0, 1.0])
         cert_p = np.random.choice([0.0, 1.0])
         spec = np.random.uniform(0.5, 1.0)

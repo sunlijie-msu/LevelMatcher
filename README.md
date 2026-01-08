@@ -204,6 +204,16 @@ All features are monotonic increasing: higher values → higher match probabilit
 | `(1+,2+,3+)` | Multiple tentative options with shared parity | Three entries, all with `isTentativeSpin=True, parity='+', isTentativeParity=True` |
 | `3/2,5/2(+)` | List where only last has parity | First entry no parity, second entry has `parity='+', isTentativeParity=True` |
 
+## Future Work
+
+Planned features for future versions (requires JSON schema extensions):
+
+| Feature | Physics Value | Implementation Notes |
+|---------|---------------|----------------------|
+| **Gamma-Ray Branching Ratios** | Critical — Often the only way to distinguish close-lying states with identical Jπ | Compare decay intensity patterns using cosine similarity of branching ratio vectors |
+| **Half-Life / Lifetime** | High — Orders of magnitude difference is a definitive veto (isomer vs ground state) | Gaussian similarity on log-scale lifetimes |
+| **Band Assignment** | Medium — Useful for high-spin rotational states | Match levels belonging to the same rotational band structure |
+
 ## Dependencies
 
 ```bash
