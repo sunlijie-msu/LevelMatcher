@@ -1,6 +1,8 @@
 # Level Matcher
 
-A physics-informed nuclear level matching tool developed by the FRIB Nuclear Data Group. Uses XGBoost (eXtreme Gradient Boosting) for supervised learning of match probabilities, combined with rule-based graph algorithms for cluster resolution.
+A physics-informed nuclear level matching tool employing XGBoost (eXtreme Gradient Boosting) regression with graph clustering techniques has been developed by the FRIB Nuclear Data Group.
+
+This tool facilitates matching energy levels across experimental datasets, generating "Adopted Levels" and a cross-reference list with corresponding probabilistic confidence scores.
 
 ## Key Features
 
@@ -9,7 +11,7 @@ A physics-informed nuclear level matching tool developed by the FRIB Nuclear Dat
 *   **Rule-Based Graph Clustering:** Deterministic algorithm merges high-confidence matches into clusters while enforcing:
     *   **Dataset Uniqueness:** Maximum one level per dataset per cluster
     *   **Mutual Consistency:** All cluster members must be mutually compatible (clique-like structure)
-    *   **Overlap Support:** Levels can belong to multiple clusters when dataset conflicts prevent direct merging
+    *   **Ambiguity Resolution:** Levels with poor resolution (large measurement uncertainty) can belong to multiple clusters when compatible with multiple well-resolved levels
 *   **Anchor-Based Reporting:** The level with smallest energy uncertainty defines each cluster's reference physics properties.
 
 ## Architecture
@@ -86,11 +88,11 @@ Scoring_Config = {
     *   Iterates through level pairs sorted by probability (highest first)
     *   Attempts cluster merging only if:
         *   Both levels' probabilities exceed `CLUSTERING_MERGE_THRESHOLD`
-        *   No dataset conflict exists between clusters
+        *   No dataset overlap exists between clusters (enforces dataset uniqueness)
         *   All existing cluster members are mutually compatible
-    *   Handles dataset conflicts via overlap (doublet assignment):
-        *   If merge blocked, attempts to add individual level to other cluster
-        *   Level can belong to multiple clusters simultaneously
+    *   Handles ambiguous matches via multi-cluster assignment (when dataset overlap prevents merging):
+        *   If merge blocked by dataset uniqueness constraint, attempts to add individual level to other cluster
+        *   Level can belong to multiple clusters simultaneously when compatible with all members
     *   Outputs final clustering results to console and file
 
 5.  **Anchor Selection & Reporting:**
