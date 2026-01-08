@@ -34,9 +34,9 @@ import os
 # ==========================================
 # Configuration: Scoring Parameters
 # ==========================================
-# This section defines the weights used to calculate similarity between levels.
+# This section quantifies the similarity scoring for energy, spin, parity, and level property sensitivity/quality/specificity/certainty.
 # Range: 0.0 (No Match) to 1.0 (Perfect Match).
-# Modify these values to adjust the physics logic sensitivity.
+# Modify these values to adjust the empirical physics scale.
 
 Scoring_Config = {
     'Energy': {
@@ -121,16 +121,21 @@ def load_levels_from_json(dataset_codes):
 
 def calculate_energy_similarity(energy_1, energy_uncertainty_1, energy_2, energy_uncertainty_2):
     """
-    # FRIBND: Energy similarity (Gaussian kernel)
-    # Definitions:
-    #   ΔE = |E1 − E2|
-    #   σ_c = sqrt(σ1^2 + σ2^2)  (combined uncertainty)
-    #   z   = ΔE / σ_c
-    # Formula:
-    #   similarity = exp( - Sigma_Scale * z^2 )
-    #   where Sigma_Scale = Scoring_Config['Energy']['Sigma_Scale'] (default 0.1)
-    # Range and behavior (Sigma_Scale = 0.1): z=0 → 1.00; z=1 → ~0.90; z=2 → ~0.67; z=3 → ~0.41
-    # Rationale: measure energy separation in units of combined experimental uncertainty and map smoothly to (0, 1].
+    # Energy similarity: exp(-Sigma_Scale × z²)
+    # where z = ΔE/σ_c = energy difference in units of combined uncertainty
+    #
+    # Example: Level A (E=1000±5 keV) vs Level B (E=1010±3 keV)
+    #   ΔE=10 keV, σ_c=√(25+9)=5.83 keV, z=1.72 → similarity=exp(-0.1×1.72²)=0.744 (74.4%)
+    #
+    # Similarity table vs energy separation (z in σ units):
+    # ┌─────────────┬────────┬────────┬────────┬────────┬────────┐
+    # │ Sigma_Scale │   1σ   │   2σ   │   3σ   │   4σ   │   5σ   │
+    # ├─────────────┼────────┼────────┼────────┼────────┼────────┤
+    # │ 0.1 loose │  90.5% │  67.0% │  40.7% │  20.2% │   8.2% │ lenient: tolerates large separations
+    # │ 0.2 moderate│  81.9% │  44.9% │  16.5% │   4.1% │   0.7% │ standard: penalizes >2σ strongly
+    # │ 0.5 strict  │  60.7% │  13.5% │   1.1% │   0.0% │   0.0% │ aggressive: rejects >2σ
+    # │ 1.0 extreme │  36.8% │   1.8% │   0.0% │   0.0% │   0.0% │ ultra-strict: even 1σ penalized
+    # └─────────────┴────────┴────────┴────────┴────────┴────────┘
     """
     if energy_1 is None or energy_2 is None: return 0.0
     combined_uncertainty = np.sqrt(energy_uncertainty_1**2 + energy_uncertainty_2**2)
@@ -187,7 +192,7 @@ def calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2):
         return Scoring_Config['General']['Neutral_Score']
 
     # Optimistic matching: Compare all spin pairs and keep the best (maximum) similarity score
-    # If ANY combination matches well, assume levels are the same (resolves ambiguity)
+    # If ANY spin combination matches, accept two levels match compatibility
     max_similarity_score = 0.0
     
     for j1, spin1_is_tentative in spins_1:
@@ -276,7 +281,7 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
         return Scoring_Config['General']['Neutral_Score']
 
     # Optimistic matching: Compare all parity pairs and keep the best (maximum) similarity score
-    # If ANY combination matches well, assume levels are the same (resolves ambiguity)
+    # If ANY parity combination matches, accept two levels match compatibility
     max_parity_similarity_score = 0.0
     
     for p1, is_tentative_1 in parities_1:
@@ -326,7 +331,36 @@ def extract_features(level_1, level_2):
 
     spin_similarity = calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2)
     parity_similarity = calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2)
-    
+
+    # Feature 4: Specificity score (penalize ambiguous multiple options)
+    # Formula: specificity = 1/(1+log10(multiplicity))
+    #   where multiplicity = options_count_1 × options_count_2
+    #
+    # ENSDF spin option counts (typical real data):
+    #   Single:   "2+" → 1 option
+    #   Double:   "1/2+,3/2+" or "(1,2)+" → 2 options
+    #   Multiple: "1/2,3/2,5/2" → 3 options
+    #   Multiple:  "1/2:11/2" expand to "1/2,3/2,5/2,7/2,9/2,11/2" 6 options
+    #
+    # Specificity table for realistic ENSDF scenarios:
+    # ┌──────────────┬────────┬────────┬────────┬────────┬────────┬────────┐
+    # │ Multiplicity │    1   │    2   │    3   │    4   │    6   │    9   │
+    # ├──────────────┼────────┼────────┼────────┼────────┼────────┼────────┤
+    # │ Specificity  │  1.000 │  0.769 │  0.677 │  0.624 │  0.563 │  0.512 │
+    # └──────────────┴────────┴────────┴────────┴────────┴────────┴────────┘
+    #   mult=1: both levels have single definite Jπ (most specific)
+    #   mult=2: one level has 2 options (e.g., "1,2" vs single)
+    #   mult=3: one level has 3 options (e.g., "1/2,3/2,5/2" vs single)
+    #   mult=4: both have 2 options or one has 4 (e.g., "1:4")
+    #   mult=6: one has 2, other has 3 options (moderate ambiguity)
+    #   mult=9: both have 3 options (e.g., "1,2,3" vs "2,3,4" - high ambiguity)
+    #
+    # Note: multiplicity>10 extremely rare in ENSDF (would require 4+ options on both sides)
+    options_count_1 = len(spin_parity_list_1) if spin_parity_list_1 else 1
+    options_count_2 = len(spin_parity_list_2) if spin_parity_list_2 else 1
+    multiplicity = max(1, options_count_1 * options_count_2)
+    specificity = 1.0 / (1.0 + np.log10(multiplicity))
+
     # ===== DISABLED CERTAINTY FEATURES (easily re-enable if needed) =====
     # Rationale: Certainty is redundant - already encoded in similarity scores:
     #   - Match: both firm → 1.0, any tentative → 0.9 (certainty fully predictable)
@@ -341,41 +375,34 @@ def extract_features(level_1, level_2):
     # parity_is_tentative_2 = any(state['isTentativeParity'] for state in spin_parity_list_2 if 'isTentativeParity' in state)
     # parity_certainty = 0.0 if (parity_is_tentative_1 or parity_is_tentative_2) else 1.0
     # ===================================================================
-
-    # Feature 4: Specificity score (penalize ambiguous multiple options)
-    # Formula: 1/(1+log10(multiplicity)) → 1 option=1.0, 10 options=0.5, 100 options=0.33
-    options_count_1 = len(spin_parity_list_1) if spin_parity_list_1 else 1
-    options_count_2 = len(spin_parity_list_2) if spin_parity_list_2 else 1
-    multiplicity = max(1, options_count_1 * options_count_2)
-    specificity = 1.0 / (1.0 + np.log10(multiplicity))
     
     return np.array([energy_similarity, spin_similarity, parity_similarity, specificity])
 
 def get_training_data():
     """
     Generates synthetic training data encoding nuclear physics constraints.
-    FRIBND: Strategy - Create labeled examples covering key physics scenarios:
+    Strategy - Create labeled examples covering key physics scenarios:
       1. Perfect matches (high energy + good physics → high probability)
       2. Physics vetoes (spin/parity violation → zero probability)
       3. Energy mismatches (poor energy overlap → low probability)
       4. Ambiguous cases (unknown physics → energy-dependent probability)
       5. Weak physics matches (marginal compatibility → reduced probability)
       6. Random background (fill feature space with rule-based labels)
-    FRIBND: Output - (training_features, training_labels) for XGBoost model
-    FRIBND: Feature Order: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
+    Output - (training_features, training_labels) for XGBoost model
+    Feature Order: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
     """
     training_points = []
     
-    # FRIBND: Case 1 - Perfect match zone (high energy + good physics → high probability)
-    # FRIBND: Energy > 0.8, Spin/Parity = 1.0 or 0.9 → Probability > 0.9
+    # Case 1 - Perfect match zone (high energy + good physics → high probability)
+    # Energy > 0.8, Spin/Parity = 1.0 or 0.9 → Probability > 0.9
     for e in np.linspace(0.8, 1.0, 5):
         for s in [1.0, 0.9]: # Firm, Tentative
             for p in [1.0, 0.9]:
                 prob = 0.9 + (e-0.8)/2 * (s * p) 
                 training_points.append(([e, s, p, 1.0], min(prob, 0.99)))
 
-    # FRIBND: Case 2 - Physics veto zone (spin or parity incompatible → zero probability)
-    # FRIBND: Any energy, but Spin=0.0 or Parity=0.0 (strong incompatibility) → Probability=0.0
+    # Case 2 - Physics veto zone (spin or parity incompatible → zero probability)
+    # Any energy, but Spin=0.0 or Parity=0.0 (strong incompatibility) → Probability=0.0
     for e in np.linspace(0.0, 1.0, 10):
         # Spin Veto
         training_points.append(([e, 0.0, 1.0, 1.0], 0.0))
@@ -384,26 +411,26 @@ def get_training_data():
         # Both Veto
         training_points.append(([e, 0.0, 0.0, 1.0], 0.0))
 
-    # FRIBND: Case 3 - Energy mismatch zone (poor energy overlap → low probability)
-    # FRIBND: Perfect physics but Energy < 0.2 → Probability decays to zero
+    # Case 3 - Energy mismatch zone (poor energy overlap → low probability)
+    # Perfect physics but Energy < 0.2 → Probability decays to zero
     for e in np.linspace(0.0, 0.2, 5):
         training_points.append(([e, 1.0, 1.0, 1.0], e * 0.5))
 
-    # FRIBND: Case 4 - Ambiguous physics zone (unknown spin/parity → energy-dependent)
-    # FRIBND: Energy good, but Spin=Parity=0.5 (neutral/unknown) → Probability relies on energy
+    # Case 4 - Ambiguous physics zone (unknown spin/parity → energy-dependent)
+    # Energy good, but Spin=Parity=0.5 (neutral/unknown) → Probability relies on energy
     for e in np.linspace(0.0, 1.0, 20):
         prob = e * 0.85  # Maximum 0.85 when physics unknown
         training_points.append(([e, 0.5, 0.5, 1.0], prob))
 
-    # FRIBND: Case 5 - Weak physics match (marginal compatibility → reduced probability)
-    # FRIBND: Energy good, Spin/Parity weak (0.2 or 0.1) → Low-to-mid probability
+    # Case 5 - Weak physics match (marginal compatibility → reduced probability)
+    # Energy good, Spin/Parity weak (0.2 or 0.1) → Low-to-mid probability
     for e in np.linspace(0.5, 1.0, 5):
         training_points.append(([e, 0.2, 1.0, 1.0], e * 0.4))
         training_points.append(([e, 1.0, 0.1, 1.0], e * 0.3))
         training_points.append(([e, 0.05, 1.0, 1.0], e * 0.2))
 
-    # FRIBND: Case 6 - Random background (fill feature space with rule-based labels)
-    # FRIBND: Generate 500 random points, apply physics rules to determine labels
+    # Case 6 - Random background (fill feature space with rule-based labels)
+    # Generate 500 random points, apply physics rules to determine labels
     np.random.seed(42)
     for _ in range(500):
         e = np.random.uniform(0, 1)
@@ -411,22 +438,22 @@ def get_training_data():
         p = np.random.choice([0.0, 0.1, 0.2, 0.5, 0.9, 1.0])
         spec = np.random.uniform(0.5, 1.0)
         
-        # FRIBND: Apply rule-based labeling using physics constraints
+        # Apply rule-based labeling using physics constraints
         if s == 0.0 or p == 0.0:
-            # FRIBND: Physics veto → zero probability
+            # Physics veto → zero probability
             label = 0.0
         elif e < 0.1:
-            # FRIBND: Poor energy overlap → zero probability
+            # Poor energy overlap → zero probability
             label = 0.0
         else:
-            # FRIBND: Calculate base probability from energy and physics quality
+            # Calculate base probability from energy and physics quality
             phys_factor = (s + p) / 2.0
             
             if s == 0.5 and p == 0.5:
-                # FRIBND: Unknown physics → rely on energy only
+                # Unknown physics → rely on energy only
                 label = e * 0.8
             else:
-                # FRIBND: Active physics → modulate energy-based probability
+                # Active physics → modulate energy-based probability
                 label = e * phys_factor
                 
         training_points.append(([e, s, p, spec], label))
