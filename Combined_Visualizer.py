@@ -1,15 +1,16 @@
-"""
-Combined Level Scheme and Clustering Visualizer
+"""Combined Level Scheme and Clustering Visualizer
 
 This script generates two visualizations:
-1. Level_Scheme_Visualization.png: Input datasets showing all levels
-2. Clustering_Visualization.png: Output clustering results with color-coded clusters
+1. Level_Scheme_Visualization.png: Input datasets showing all levels.
+2. Clustering_Visualization.png: Output clustering results with cluster and probability labels.
 
-Workflow:
-- Shared collision resolution algorithm for text positioning
-- Vertical bar offset separation for close-by levels
-- Smart label positioning to avoid bar overlap
-- Intelligent connector routing to prevent line crossing through intermediate columns
+Explanation of Code Structure
+1) Parse clustering results into clusters and members.
+2) Build per-dataset level lists and apply collision resolution for energy/Jπ text labels.
+3) Compute a single global y-position per cluster (collision-resolved using cluster anchor energies).
+4) Draw level bars at true energies (no vertical bar offsets).
+5) Place cluster/probability labels at the cluster y-position for vertical alignment across datasets,
+   and draw a short connector if the label y differs from the bar energy.
 """
 
 import matplotlib.pyplot as plt
@@ -229,7 +230,7 @@ def parse_clustering_results(clustering_file_path):
                 continue
             
             # Match member line
-            member_match = re.match(r'^\[(\w+)\]\s+(\S+):\s+E=([\d.]+)±([\d.]+)\s+keV,\s+Jπ=([^(]+)\s+\((.+)\)$', line)
+            member_match = re.match(r'^\[(\w+)\]\s+(\S+):\s+E=([\d.]+)±([\d.]+)\s+keV,\s+Jπ=(.+?)\s+\((.+)\)$', line)
             if member_match and current_cluster is not None:
                 dataset = member_match.group(1)
                 level_id = member_match.group(2)
@@ -282,61 +283,85 @@ def plot_clustering_results():
     figure, axis = plt.subplots(figsize=(15, 10))
     
     # X-axis positions for each dataset column
-    x_positions = {dataset: index * 2.5 for index, dataset in enumerate(datasets)}
+    # Use wider spacing to create a dedicated gutter for cluster/probability labels.
+    horizontal_spacing = 4.0
+    x_positions = {dataset: index * horizontal_spacing for index, dataset in enumerate(datasets)}
     line_width = 0.8
     
     # Track maximum energy
     maximum_energy = 0
     
     # Collect ALL levels for each dataset column for global collision resolution
-    all_levels_by_dataset = {dataset: [] for dataset in datasets}
+    all_levels_by_dataset = {dataset: {} for dataset in datasets}  # Use dict to avoid duplicates
     for cluster in clusters:
         for member in cluster['members']:
-            all_levels_by_dataset[member['dataset']].append({
-                'cluster_number': cluster['cluster_number'],
-                'energy': member['energy'],
-                'level_id': member['level_id'],
-                'uncertainty': member['uncertainty'],
-                'jpi': member['jpi'],
-                'is_anchor': member['is_anchor'],
-                'match_probability': member['match_probability']
-            })
+            level_key = (member['dataset'], member['level_id'], member['energy'])
+            if level_key not in all_levels_by_dataset[member['dataset']]:
+                all_levels_by_dataset[member['dataset']][level_key] = {
+                    'unique_level_key': level_key,
+                    'cluster_numbers': [],  # Track all clusters this level belongs to
+                    'energy': member['energy'],
+                    'level_id': member['level_id'],
+                    'uncertainty': member['uncertainty'],
+                    'jpi': member['jpi'],
+                    'is_anchor': member['is_anchor'],
+                    'match_probability': member['match_probability']
+                }
+            # Add this cluster to the level's cluster list
+            all_levels_by_dataset[member['dataset']][level_key]['cluster_numbers'].append(cluster['cluster_number'])
             if member['energy'] > maximum_energy:
                 maximum_energy = member['energy']
     
     # Apply global collision resolution for each dataset column
     text_position_lookup = {}
     bar_offset_lookup = {}
+    levels_by_dataset_list = {}  # Store the sorted lists for reuse
+    
     for dataset in datasets:
-        levels_in_column = all_levels_by_dataset[dataset]
-        if not levels_in_column:
+        levels_dict = all_levels_by_dataset[dataset]
+        if not levels_dict:
             continue
         
-        # Sort by energy
+        # Convert dict to list and sort by energy ONCE
+        levels_in_column = list(levels_dict.values())
         levels_in_column.sort(key=lambda x: x['energy'])
+        levels_by_dataset_list[dataset] = levels_in_column  # Store for reuse
         
         # Extract energies and apply collision resolution
         energies = [level['energy'] for level in levels_in_column]
         text_y_positions = spread_text_positions(energies, min_distance=250)
         
-        # Calculate vertical offsets for level bars when too close
+        # No bar offsets - bars stay at their true energy positions
         bar_offsets = [0.0] * len(energies)
-        for index in range(len(energies) - 1):
-            if energies[index + 1] - energies[index] < 150:
-                bar_offsets[index] -= 30
-                bar_offsets[index + 1] += 30
         
         # Store adjusted positions and offsets
         for index, level in enumerate(levels_in_column):
-            key = (dataset, level['cluster_number'], level['level_id'])
-            text_position_lookup[key] = text_y_positions[index]
-            bar_offset_lookup[key] = bar_offsets[index]
+            unique_level_key = level['unique_level_key']
+            text_position_lookup[unique_level_key] = text_y_positions[index]
+            bar_offset_lookup[unique_level_key] = bar_offsets[index]
+
+    # === Calculate global cluster label y-positions (shared across datasets) ===
+    # Use cluster anchor energies as the canonical y values, then apply collision resolution ONCE.
+    cluster_anchor_energy_by_cluster_number = {}
+    for cluster in clusters:
+        if 'cluster_number' in cluster and 'anchor_energy' in cluster:
+            cluster_anchor_energy_by_cluster_number[cluster['cluster_number']] = float(cluster['anchor_energy'])
+
+    sorted_cluster_numbers = sorted(cluster_anchor_energy_by_cluster_number.keys())
+    sorted_cluster_anchor_energies = [cluster_anchor_energy_by_cluster_number[number] for number in sorted_cluster_numbers]
+    sorted_cluster_label_y_positions = spread_text_positions(sorted_cluster_anchor_energies, min_distance=250)
+
+    cluster_label_y_by_cluster_number = {
+        number: float(sorted_cluster_label_y_positions[index])
+        for index, number in enumerate(sorted_cluster_numbers)
+    }
     
     # Draw all levels with cluster and probability labels
     for dataset in datasets:
-        levels_in_column = all_levels_by_dataset[dataset]
-        if not levels_in_column:
+        if dataset not in levels_by_dataset_list:
             continue
+        
+        levels_in_column = levels_by_dataset_list[dataset]  # Reuse the SAME sorted list
         
         x_center = x_positions[dataset]
         x_start = x_center - line_width / 2
@@ -344,12 +369,11 @@ def plot_clustering_results():
         
         for level in levels_in_column:
             energy = level['energy']
-            cluster_number = level['cluster_number']
-            
+            unique_level_key = level['unique_level_key']
+
             # Look up pre-calculated text position and bar offset
-            lookup_key = (dataset, cluster_number, level['level_id'])
-            y_text = text_position_lookup[lookup_key]
-            bar_offset = bar_offset_lookup[lookup_key]
+            y_text = text_position_lookup[unique_level_key]
+            bar_offset = bar_offset_lookup[unique_level_key]
             
             # Draw level line with vertical offset (all black, no colors)
             bar_y_position = energy + bar_offset
@@ -384,60 +408,70 @@ def plot_clustering_results():
     
     # Add combined cluster and probability labels with smart positioning
     for dataset in datasets:
-        levels_in_column = all_levels_by_dataset[dataset]
-        if not levels_in_column:
+        if dataset not in levels_by_dataset_list:
             continue
         
+        levels_in_column = levels_by_dataset_list[dataset]  # Reuse the SAME sorted list
         x_center = x_positions[dataset]
         
-        # Sort by bar position (energy + offset)
-        levels_with_positions = []
-        for level in levels_in_column:
-            lookup_key = (dataset, level['cluster_number'], level['level_id'])
-            bar_offset = bar_offset_lookup[lookup_key]
-            bar_y_position = level['energy'] + bar_offset
-            levels_with_positions.append({
-                'level': level,
-                'bar_y': bar_y_position
-            })
-        levels_with_positions.sort(key=lambda x: x['bar_y'])
-        
-        # Assign above/below positioning based on spacing
-        for i, item in enumerate(levels_with_positions):
-            level = item['level']
-            bar_y = item['bar_y']
-            cluster_number = level['cluster_number']
+        # NO sorting needed - use the list as-is (already sorted by energy)
+        # Each level corresponds to its text_position_lookup entry by index
+        for index, level in enumerate(levels_in_column):
+            unique_level_key = level['unique_level_key']
+            text_y = text_position_lookup[unique_level_key]
             
-            # Construct combined label
+            # Construct combined label with ALL cluster numbers
+            cluster_numbers = level['cluster_numbers']
+            sorted_cluster_numbers_for_label = sorted(cluster_numbers)
+            primary_cluster = sorted_cluster_numbers_for_label[0]
+            
+            if len(cluster_numbers) > 1:
+                cluster_label = ','.join([f"C{c}" for c in sorted_cluster_numbers_for_label])
+            else:
+                cluster_label = f"C{primary_cluster}"
+            
+            # Add probability if not anchor
             if level['is_anchor']:
-                combined_label = f"C{cluster_number}"
+                combined_label = cluster_label
             elif level['match_probability'] is not None:
-                combined_label = f"C{cluster_number}, {level['match_probability']:.0%}"
+                combined_label = f"{cluster_label}, {level['match_probability']:.0%}"
             else:
-                combined_label = f"C{cluster_number}"
+                combined_label = cluster_label
             
-            # Determine position: alternate or use spacing
-            space_above = 1000  # Default large space
-            space_below = 1000
-            
-            if i > 0:
-                space_below = bar_y - levels_with_positions[i-1]['bar_y']
-            if i < len(levels_with_positions) - 1:
-                space_above = levels_with_positions[i+1]['bar_y'] - bar_y
-            
-            # Place above if more space above, below if more space below
-            if space_below >= space_above and space_below > 150:
-                # Below
-                axis.text(x_center, bar_y - 80, combined_label, 
-                         va='top', ha='center', fontsize=20, style='italic', color='black', family='Times New Roman')
+            # Place cluster label at FIXED global position (same y for all datasets)
+            # Use collision-resolved cluster anchor y positions so close clusters do not overlap.
+            label_y_values = []
+            for cluster_number in sorted_cluster_numbers_for_label:
+                if cluster_number in cluster_label_y_by_cluster_number:
+                    label_y_values.append(cluster_label_y_by_cluster_number[cluster_number])
+
+            if label_y_values:
+                label_y = sum(label_y_values) / float(len(label_y_values))
             else:
-                # Above
-                axis.text(x_center, bar_y + 80, combined_label, 
-                         va='bottom', ha='center', fontsize=20, style='italic', color='black', family='Times New Roman')
+                # Fallback: use the collision-resolved text position for this level
+                label_y = float(text_y)
+
+            # Place the label in a dedicated right-side gutter so it does not overlap
+            # energy/Jπ labels or connector arrows.
+            cluster_label_horizontal_offset = 2.2
+            label_x = x_center + line_width / 2 + cluster_label_horizontal_offset
+            axis.text(label_x, label_y, combined_label,
+                     va='center', ha='left', fontsize=20, style='italic', color='black', family='Times New Roman', zorder=5)
+
+            # Draw a connector only when the label y differs from the actual energy bar.
+            # Route it as an L-shape inside the gutter to avoid crossing Jπ text.
+            bar_y_position = float(level['energy'])
+            if abs(label_y - bar_y_position) > 50:
+                bar_end_x = x_center + line_width / 2
+                gutter_elbow_x = label_x - 0.25
+                axis.plot([bar_end_x, gutter_elbow_x], [bar_y_position, bar_y_position], color='gray', lw=2.0, zorder=1)
+                axis.plot([gutter_elbow_x, gutter_elbow_x], [bar_y_position, label_y], color='gray', lw=2.0, zorder=1)
+                axis.plot([gutter_elbow_x, label_x - 0.08], [label_y, label_y], color='gray', lw=2.0, zorder=1)
     
     # Styling
     x_limit_min = -1.5
-    x_limit_max = (len(datasets) - 1) * 2.5 + 1.5
+    last_dataset = datasets[-1]
+    x_limit_max = x_positions[last_dataset] + line_width / 2 + 3.0
     axis.set_xlim(x_limit_min, x_limit_max)
     axis.set_ylim(0, maximum_energy * 1.15)
     
