@@ -47,16 +47,20 @@ Scoring_Config = {
     },
     'Spin': {
         'Match_Firm': 1.0,               # Score for definite spin match
-        'Match_Tentative': 0.9,          # Score for tentative spin match
+        'Match_Strong': 0.8,             # Score for tentative spin match
         'Mismatch_Weak': 0.2,            # Score for weak spin mismatch (ΔJ = 1, any tentative)
-        'Mismatch_Strong': 0.0,          # Score for strong spin mismatch (ΔJ = 1, both firm)
-        'Veto': 0.0                      # Score for impossible transition (ΔJ > 1)
+        'Mismatch_Strong': 0.05,         # Score for strong spin mismatch (ΔJ = 1, both firm)
+        'Mismatch_Firm': 0.0             # Score for impossible transition (ΔJ ≥ 2)
     },
     'Parity': {
         'Match_Firm': 1.0,               # Score for definite parity match
-        'Match_Tentative': 0.9,          # Score for tentative parity match
-        'Mismatch_Tentative': 0.2,       # Score for tentative parity mismatch
+        'Match_Strong': 0.8,             # Score for tentative parity match
+        'Mismatch_Weak': 0.05,           # Score for tentative parity mismatch
         'Mismatch_Firm': 0.0             # Score for definite parity mismatch
+    },
+    'Specificity': {
+        'Formula': 'sqrt',               # Options: 'sqrt', 'linear', 'log', 'tunable'
+        'Alpha': 0.5                     # Only for 'tunable': penalty steepness parameter
     },
     'General': {
         'Neutral_Score': 0.5             # Score when data is missing/unknown
@@ -86,13 +90,16 @@ Scoring_Config = {
 4.  **Graph Clustering (Rule-Based Algorithm):**
     *   Initializes each level as singleton cluster
     *   Iterates through level pairs sorted by probability (highest first)
-    *   Attempts cluster merging only if:
+    *   Attempts cluster merging with four-tier fallback logic:
+        1. **Scenario A - No Dataset Overlap:** Verifies all-to-all compatibility, then merges clusters
+        2. **Scenario B - Dataset Overlap:** Attempts multi-cluster assignment for ambiguous levels
+        3. **Singleton Expansion:** Adds partner to existing singleton cluster when merge fails
+        4. **New Cluster Creation:** Creates independent two-member cluster as last resort
+    *   Merge constraints:
         *   Both levels' probabilities exceed `clustering_merge_threshold`
-        *   No dataset overlap exists between clusters (enforces dataset uniqueness)
-        *   All existing cluster members are mutually compatible
-    *   Handles ambiguous matches via multi-cluster assignment (when dataset overlap prevents merging):
-        *   If merge blocked by dataset uniqueness constraint, attempts to add individual level to other cluster
-        *   Level can belong to multiple clusters simultaneously when compatible with all members
+        *   No dataset overlap in merged cluster (enforces dataset uniqueness)
+        *   All members mutually compatible (clique constraint)
+    *   Ambiguity handling: Poorly-resolved levels can belong to multiple clusters when compatible with all members
     *   Outputs final clustering results to console and file
 
 5.  **Anchor Selection & Reporting:**

@@ -29,12 +29,17 @@ Engine for Nuclear Level Matching
 
 4.  **Graph Clustering** (Rule-based Greedy Merging):
     - Groups matching levels using deterministic graph algorithm (NO ML, pure logic).
-    - Algorithm: Greedy cluster merging in descending probability order.
+    - Algorithm: Greedy cluster merging in descending probability order with singleton expansion.
     - Constraints:
         * Dataset uniqueness: Each cluster contains at most one level per dataset.
         * Mutual consistency: All cluster members must be pairwise compatible (probability ≥ clustering_merge_threshold).
         * Overlap support: Poorly-resolved levels (large uncertainty) can belong to multiple clusters if compatible.
-    - Output: clustering_results.txt with final 9 clusters, each showing anchor level and member match probabilities.
+    - Merge Logic:
+        1. Try merging clusters with no dataset overlap (all-to-all compatibility check).
+        2. Try adding to overlapping clusters (multi-cluster assignment for ambiguous levels).
+        3. Expand singleton clusters when merge fails but pair is valid.
+        4. Create new two-member cluster only if no singleton exists.
+    - Output: clustering_results.txt with final clusters, each showing anchor level and member match probabilities.
 """
 
 # Configuration Parameters

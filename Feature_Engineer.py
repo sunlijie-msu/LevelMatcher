@@ -49,6 +49,7 @@ Scoring_Config = {
         # Controls how strictly energy values must match. 
         # - Higher value (e.g. 1.0) = stricter (score drops fast if energy differs).
         # - Lower value (e.g. 0.1) = looser (score stays high even with differences).
+         # Sigma_Scale=0.1 (loose):   1σ→90.5%, 2σ→67.0%, 3σ→40.7%, 4σ→20.2%, 5σ→8.2%
         'Sigma_Scale': 0.1,
         # Default energy uncertainty (in keV) used when input data lacks uncertainty.
         'Default_Uncertainty': 10.0
@@ -67,6 +68,14 @@ Scoring_Config = {
         'Match_Strong': 0.8,    # any tentative, e.g., + vs (+)
         'Mismatch_Weak': 0.05, # any tentative, e.g., + vs (-)
         'Mismatch_Firm': 0.0       # both firm, e.g., + vs -
+    },
+    'Specificity': {
+        # Ambiguity penalty for levels with multiple Jπ options
+        # Formula determines how harshly to penalize multiplicity (options_count_1 × options_count_2)
+        'Formula': 'sqrt',  # Options: 'sqrt', 'linear', 'log', 'tunable'
+        # Only used if Formula='tunable': specificity = 1/(1 + Alpha*(mult-1))
+        # Higher Alpha → steeper penalty. Example: Alpha=0.5 gives mult=9→18% (82% penalty)
+        'Alpha': 0.5
     },
     'General': {
         # Score used when data is missing (e.g. unknown).
@@ -339,8 +348,8 @@ def extract_features(level_1, level_2):
     parity_similarity = calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2)
 
     # Feature 4: Specificity score (penalize ambiguous multiple options)
-    # Formula: specificity = 1/sqrt(multiplicity)
-    #   where multiplicity = options_count_1 × options_count_2
+    # Configurable formula via Scoring_Config['Specificity']['Formula']
+    # All formulas: specificity = f(multiplicity) where multiplicity = options_count_1 × options_count_2
     #
     # Physical interpretation: Ambiguity penalty scales with combination space.
     # Square root naturally represents uncertainty growth in quantum measurements.
@@ -351,31 +360,36 @@ def extract_features(level_1, level_2):
     #   Multiple: "1/2,3/2,5/2" → 3 options
     #   Multiple:  "1/2:11/2" expand to "1/2,3/2,5/2,7/2,9/2,11/2" 6 options
     #
-    # Specificity penalty for multiple options (1/sqrt(multiplicity)):
-    # Multiplicity=1: 1.000 (no penalty)
-    # Multiplicity=2: 0.707 (29% penalty) - one level has 2 options
-    # Multiplicity=3: 0.577 (42% penalty) - one level has 3 options
-    # Multiplicity=4: 0.500 (50% penalty) - both have 2 options or one has 4
-    # Multiplicity=6: 0.408 (59% penalty) - one has 2, other has 3 options
-    # Multiplicity=9: 0.333 (67% penalty) - both have 3 options (high ambiguity)
-    #   mult=1: both levels have single definite Jπ (most specific)
-    #   mult=2: one level has 2 options (29% penalty)
-    #   mult=3: one level has 3 options (42% penalty)
-    #   mult=4: both have 2 options or one has 4 (50% penalty)
-    #   mult=6: one has 2, other has 3 options (59% penalty - moderate ambiguity)
-    #   mult=9: both have 3 options (67% penalty - high ambiguity)
+    # Formula Options (for multiplicity=9, both levels have 3 options):
+    #   'sqrt':    1/sqrt(mult) = 33% (67% penalty) - BALANCED, current default
+    #   'linear':  1/mult       = 11% (89% penalty) - AGGRESSIVE
+    #   'log':     1/(1+log10(mult)) = 51% (49% penalty) - GENTLE
+    #   'tunable': 1/(1+Alpha*(mult-1)) where Alpha from config - CUSTOMIZABLE
+    #              Example: Alpha=0.5 gives mult=9→18% (82% penalty)
     #
-    # Note: multiplicity>10 extremely rare in ENSDF (would require 4+ options on both sides)
-    #
-    # Alternative formulas (for future experimentation):
-    #   Option 1 (old): 1/(1+log10(mult)) - too gentle, mult=9→51% (only 49% penalty)
-    #   Option 2 (current): 1/sqrt(mult) - balanced, mult=9→33% (67% penalty)
-    #   Option 3 (aggressive): 1/mult - very steep, mult=9→11% (89% penalty)
-    #   Option 4 (tunable): 1/(1+α*(mult-1)) where α=0.5 - customizable steepness
+    # Specificity penalty comparison table:
+    # Multiplicity | sqrt   | linear | log    | tunable(α=0.5)
+    # -------------|--------|--------|--------|---------------
+    # 1            | 100%   | 100%   | 100%   | 100%
+    # 2            | 71%    | 50%    | 77%    | 67%
+    # 4            | 50%    | 25%    | 62%    | 40%
+    # 9            | 33%    | 11%    | 51%    | 20%
     options_count_1 = len(spin_parity_list_1) if spin_parity_list_1 else 1
     options_count_2 = len(spin_parity_list_2) if spin_parity_list_2 else 1
     multiplicity = max(1, options_count_1 * options_count_2)
-    specificity = 1.0 / np.sqrt(multiplicity)
+    
+    formula = Scoring_Config['Specificity']['Formula']
+    if formula == 'sqrt':
+        specificity = 1.0 / np.sqrt(multiplicity)
+    elif formula == 'linear':
+        specificity = 1.0 / multiplicity
+    elif formula == 'log':
+        specificity = 1.0 / (1.0 + np.log10(multiplicity))
+    elif formula == 'tunable':
+        alpha = Scoring_Config['Specificity']['Alpha']
+        specificity = 1.0 / (1.0 + alpha * (multiplicity - 1))
+    else:
+        raise ValueError(f"Unknown Specificity formula: {formula}. Valid options: 'sqrt', 'linear', 'log', 'tunable'")
 
     # ===== DISABLED CERTAINTY FEATURES (easily re-enable if needed) =====
     # Rationale: Certainty is redundant - already encoded in similarity scores:
