@@ -18,11 +18,21 @@
 ### Strategy B: Boosting
 *   **Logic:** **Sequential** execution. Each new tree corrects errors made by previous trees (boosting).
 *   **Mechanism:** Iterative correction; later trees focus on previous errors.
-*   **Key algorithms:**
-    *   **Adaptive boosting:** Adjusts sample weights to focus on hard examples.
-    *   **Gradient boosting:** Uses gradient descent to reduce residual errors.
 
-## Level 3: Software Implementations (The Packages)
+## Level 3: The Algorithms
+*Specific approaches to implementing the boosting strategy.*
+
+### Algorithm A: Adaptive Boosting (AdaBoost)
+*   **Mechanism:** **Weight Adjustment**. Identifies misclassified examples and increases their weight for the next iteration.
+*   **Structure:** Uses **Decision Stumps** (single-split trees).
+*   **Verdict:** **Risk of Overfitting**. Highly sensitive to noise. Nuclear data outliers (experimental errors) may distort the model as it forces corrections on noisy points.
+
+### Algorithm B: Gradient Boosting
+*   **Mechanism:** **Residual Fitting**. Calculates the current model's error (residual) and trains the next tree specifically to predict and subtract that error.
+*   **Structure:** Uses **Deep Trees** (typically depth 4–8).
+*   **Verdict:** **Superior**. Robustly reduces error without over-fixating on outliers, making it stable for experimental datasets.
+
+## Level 4: The Packages (Software Implementations)
 *Major libraries implementing the Gradient Boosting algorithm.*
 
 | Package | NaN Handling | Growth Strategy | Best Data Scale | Verdict for Nuclear Data |
@@ -33,10 +43,10 @@
 | **XGBoost** | **Native / safe** | **Level-wise** | **Any** (Performs well on small datasets) | **Best** (Stable, robust regularization). |
 | **CatBoost** | Native / safe | Oblivious trees | Categorical heavy | **Specialized** (Overkill for numerical energy data). |
 
-*   **Leaf-wise (LightGBM):** Grows deep branches quickly. Great for massive data, but overfits noise in small nuclear datasets.
+*   **Leaf-wise (LightGBM):** Light Gradient Boosting Machine. Grows deep branches quickly. Great for massive data, but overfits noise in small nuclear datasets.
 *   **Level-wise (XGBoost):** Grows balanced trees. More stable and conservative for small datasets with experimental uncertainties.
 
-## Level 4: Application to Nuclear Level Matching
+## Level 5: Application to Nuclear Level Matching
 
 ### Final recommendation
 

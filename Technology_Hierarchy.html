@@ -92,8 +92,7 @@ aside > *:last-child {
 }
 
 </style>
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex/dist/katex.min.css">
-<link href="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.css" rel="stylesheet" type="text/css">
+            
         <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
 <style>
@@ -214,7 +213,7 @@ aside > *:last-child {
         </head>
         <body class="vscode-body vscode-light">
             <h1 id="machine-learning-hierarchy--application-strategy-for-nuclear-level-matching">Machine Learning Hierarchy &amp; Application Strategy for Nuclear Level Matching</h1>
-<h2 id="level-1-the-fundamental-unit">Level 1: The Fundamental Unit</h2>
+<h2 id="level-1-the-fundamental-unit-of-tree-based-models">Level 1: The Fundamental Unit of Tree-Based Models</h2>
 <h3 id="decision-tree">Decision Tree</h3>
 <ul>
 <li><strong>Concept:</strong> A single flowchart structure representing sequential decisions.</li>
@@ -226,22 +225,30 @@ aside > *:last-child {
 <h3 id="strategy-a-bagging-bootstrap-aggregating">Strategy A: Bagging (Bootstrap Aggregating)</h3>
 <ul>
 <li><strong>Logic:</strong> <strong>Parallel</strong> execution.</li>
-<li><strong>Mechanism:</strong> Trains <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span></eq> trees independently on random data subsets. Final result is an average.</li>
-<li><strong>Key Algorithm:</strong> <strong>Random Forest</strong>.</li>
-<li><strong>Weakness for Physics:</strong> Averaging &quot;dilutes&quot; hard constraints. If a level matches in energy but fails a spin veto, averaging might still assign a high probability (e.g., 90% Match + 10% Veto <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≈</mo></mrow><annotation encoding="application/x-tex">\approx</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.48312em;vertical-align:0em;"></span><span class="mrel">≈</span></span></span></span></eq> 90% Match).</li>
+<li><strong>Mechanism:</strong> Trains N trees independently on random data subsets. The final result is an average.</li>
+<li><strong>Key algorithm:</strong> Random Forest.</li>
+<li><strong>Weakness for physics:</strong> Averaging dilutes hard constraints. For example, an energy match combined with a spin veto may still yield a high average probability.</li>
 </ul>
 <h3 id="strategy-b-boosting">Strategy B: Boosting</h3>
 <ul>
-<li><strong>Logic:</strong> <strong>Sequential</strong> execution.</li>
-<li><strong>Mechanism:</strong> Iterative correction. Tree <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span></eq> targets the errors of Tree <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">N-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span></span></span></span></eq>.</li>
-<li><strong>Key Algorithms:</strong>
+<li><strong>Logic:</strong> <strong>Sequential</strong> execution. Each new tree corrects errors made by previous trees (boosting).</li>
+<li><strong>Mechanism:</strong> Iterative correction; later trees focus on previous errors.</li>
+</ul>
+<h2 id="level-3-the-algorithms">Level 3: The Algorithms</h2>
+<p><em>Specific approaches to implementing the boosting strategy.</em></p>
+<h3 id="algorithm-a-adaptive-boosting-adaboost">Algorithm A: Adaptive Boosting (AdaBoost)</h3>
 <ul>
-<li><strong>Adaptive Boosting:</strong> Adjusts <strong>sample weights</strong> (focuses on hard-to-classify data points).</li>
-<li><strong>Gradient Boosting:</strong> Uses <strong>gradient descent</strong> to minimize error residuals (focuses on reducing loss).</li>
+<li><strong>Mechanism:</strong> <strong>Weight Adjustment</strong>. Identifies misclassified examples and increases their weight for the next iteration.</li>
+<li><strong>Structure:</strong> Uses <strong>Decision Stumps</strong> (single-split trees).</li>
+<li><strong>Verdict:</strong> <strong>Risk of Overfitting</strong>. Highly sensitive to noise. Nuclear data outliers (experimental errors) may distort the model as it forces corrections on noisy points.</li>
 </ul>
-</li>
+<h3 id="algorithm-b-gradient-boosting">Algorithm B: Gradient Boosting</h3>
+<ul>
+<li><strong>Mechanism:</strong> <strong>Residual Fitting</strong>. Calculates the current model's error (residual) and trains the next tree specifically to predict and subtract that error.</li>
+<li><strong>Structure:</strong> Uses <strong>Deep Trees</strong> (typically depth 4–8).</li>
+<li><strong>Verdict:</strong> <strong>Superior</strong>. Robustly reduces error without over-fixating on outliers, making it stable for experimental datasets.</li>
 </ul>
-<h2 id="level-3-software-implementations-the-packages">Level 3: Software Implementations (The Packages)</h2>
+<h2 id="level-4-the-packages-software-implementations">Level 4: The Packages (Software Implementations)</h2>
 <p><em>Major libraries implementing the Gradient Boosting algorithm.</em></p>
 <table>
 <thead>
@@ -258,45 +265,45 @@ aside > *:last-child {
 <td style="text-align:left"><strong>Scikit-learn <code>GradientBoosting</code></strong></td>
 <td style="text-align:left"><strong>Fails</strong> (Crashes)</td>
 <td style="text-align:left">Level-wise</td>
-<td style="text-align:left">Small/Medium</td>
+<td style="text-align:left">Small/medium</td>
 <td style="text-align:left"><strong>Reject</strong> (Requires imputation, creating bias).</td>
 </tr>
 <tr>
 <td style="text-align:left"><strong>LightGBM</strong></td>
-<td style="text-align:left">Native / Safe</td>
+<td style="text-align:left">Native / safe</td>
 <td style="text-align:left">Leaf-wise</td>
 <td style="text-align:left"><strong>Huge</strong> (&gt;100k)</td>
 <td style="text-align:left"><strong>Reject</strong> (Risk of overfitting small data).</td>
 </tr>
 <tr>
 <td style="text-align:left"><strong>Scikit-learn <code>HistGradientBoosting</code></strong></td>
-<td style="text-align:left">Native / Safe</td>
+<td style="text-align:left">Native / safe</td>
 <td style="text-align:left">Leaf-wise</td>
-<td style="text-align:left">Medium/Large</td>
+<td style="text-align:left">Medium/large</td>
 <td style="text-align:left"><strong>Acceptable</strong> (Good, but less tunable than XGBoost).</td>
 </tr>
 <tr>
 <td style="text-align:left"><strong>XGBoost</strong></td>
-<td style="text-align:left"><strong>Native / Safe</strong></td>
+<td style="text-align:left"><strong>Native / safe</strong></td>
 <td style="text-align:left"><strong>Level-wise</strong></td>
-<td style="text-align:left"><strong>Any</strong> (Excel for Small)</td>
+<td style="text-align:left"><strong>Any</strong> (Performs well on small datasets)</td>
 <td style="text-align:left"><strong>Best</strong> (Stable, robust regularization).</td>
 </tr>
 <tr>
 <td style="text-align:left"><strong>CatBoost</strong></td>
-<td style="text-align:left">Native / Safe</td>
-<td style="text-align:left">Oblivious Trees</td>
-<td style="text-align:left">Categorical-Heavy</td>
+<td style="text-align:left">Native / safe</td>
+<td style="text-align:left">Oblivious trees</td>
+<td style="text-align:left">Categorical heavy</td>
 <td style="text-align:left"><strong>Specialized</strong> (Overkill for numerical energy data).</td>
 </tr>
 </tbody>
 </table>
 <ul>
-<li><strong>Leaf-wise (LightGBM):</strong> Grows deep branches quickly. Great for massive data, but overfits noise in small nuclear datasets.</li>
+<li><strong>Leaf-wise (LightGBM):</strong> Light Gradient Boosting Machine. Grows deep branches quickly. Great for massive data, but overfits noise in small nuclear datasets.</li>
 <li><strong>Level-wise (XGBoost):</strong> Grows balanced trees. More stable and conservative for small datasets with experimental uncertainties.</li>
 </ul>
-<h2 id="level-4-application-to-nuclear-level-matching">Level 4: Application to Nuclear Level Matching</h2>
-<p><em>Final Recommendation</em></p>
+<h2 id="level-5-application-to-nuclear-level-matching">Level 5: Application to Nuclear Level Matching</h2>
+<h3 id="final-recommendation">Final recommendation</h3>
 <ul>
 <li><strong>Concept:</strong> Decision Trees.</li>
 <li><strong>Strategy:</strong> <strong>Boosting</strong>
@@ -305,17 +312,21 @@ aside > *:last-child {
 </ul>
 </li>
 <li><strong>Algorithm:</strong> Gradient Boosting.</li>
-<li><strong>Recommended Package:</strong> <strong>XGBoost</strong></li>
-<li><strong>Why it is the Best:</strong>
+<li><strong>Recommended package:</strong> <strong>XGBoost</strong>: optimized implementation of gradient boosting. It combines multiple weak models into a stronger model.</li>
+<li><strong>Why it is the best:</strong>
 <ol>
-<li><strong>Sparsity Awareness:</strong> Nuclear data is full of missing values (unknown <eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>J</mi><mi>π</mi></msup></mrow><annotation encoding="application/x-tex">J^\pi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.664392em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">π</span></span></span></span></span></span></span></span></span></span></span></eq>). XGBoost handles <code>NaN</code> natively by learning the optimal &quot;default direction&quot; for missing data, rather than requiring dangerous guesses (imputation).</li>
-<li><strong>Stability on Small Data:</strong> Unlike LightGBM, XGBoost's <strong>level-wise growth</strong> and advanced <strong>regularization</strong> (<eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mn>1</mn></mrow><annotation encoding="application/x-tex">L1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal">L</span><span class="mord">1</span></span></span></span></eq>/<eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mn>2</mn></mrow><annotation encoding="application/x-tex">L2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal">L</span><span class="mord">2</span></span></span></span></eq>) prevent the model from &quot;memorizing&quot; experimental noise in small datasets (<eq><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>&lt;</mo><mn>500</mn></mrow><annotation encoding="application/x-tex">N &lt; 500</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">500</span></span></span></span></eq>).</li>
-<li><strong>Physics Compliance:</strong> The Boosting strategy effectively enforces hard vetoes (e.g., Selection Rules) better than Bagging methods.</li>
+<li><strong>Sparsity awareness:</strong> Nuclear data contains many missing values (unknown <code>J^pi</code>). XGBoost handles NaN natively; imputation is not required.</li>
+<li><strong>Stability on small data:</strong> Level-wise growth and regularization (L1/L2) reduce overfitting on small datasets (N &lt; 500).</li>
+<li><strong>Physics compliance:</strong> Boosting enforces hard vetoes, such as selection rules, more effectively than bagging.</li>
 </ol>
 </li>
 </ul>
+<h3 id="xgboost-implementation">XGBoost implementation</h3>
+<p><strong>Feature engineering:</strong> Feature engineering is the process of transforming raw data into meaningful input features that make the machine learning model to detect patterns, relationships, and interactions.</p>
+<p><strong>Model capabilities:</strong> Well-engineered features can significantly boost model performance, leading to improved accuracy and predictive power. Feature engineering is one of the most critical steps in building high-performance tree-based models. XGBoost are capable of handling complex data relationships.</p>
+<p><strong>Handling missing values:</strong> Handling Missing Values: can be replaced with mean/median/mode using model-based imputation. XGBoost can inherently handle NaNs as missing.</p>
 
-            <script async src="https://cdn.jsdelivr.net/npm/katex-copytex@latest/dist/katex-copytex.min.js"></script>
+            
             
         </body>
         </html>
