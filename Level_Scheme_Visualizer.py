@@ -97,7 +97,15 @@ def plot_level_schemes():
         # 3. Calculate Text Positions (Collision Resolution)
         energies = [x['energy'] for x in levels_data]
         # 250 keV is sufficient for 12pt font vertical clearance without excessive displacement
-        text_y_positions = spread_text_positions(energies, min_dist=250) 
+        text_y_positions = spread_text_positions(energies, min_dist=250)
+        
+        # 3.5. Calculate vertical offsets for level bars when too close (within 150 keV)
+        bar_offsets = [0.0] * len(energies)
+        for i in range(len(energies) - 1):
+            if energies[i + 1] - energies[i] < 150:
+                # Push bars apart slightly for visual separation
+                bar_offsets[i] -= 30
+                bar_offsets[i + 1] += 30
         
         # 4. Plot
         x_center = x_positions[code]
@@ -107,49 +115,51 @@ def plot_level_schemes():
         for i, item in enumerate(levels_data):
             en = item['energy']
             y_text = text_y_positions[i]
+            bar_offset = bar_offsets[i]
             
-            # A. Draw Level Line (Always at true energy)
-            ax.hlines(y=en, xmin=x_start, xmax=x_end, colors='black', linewidth=1.5)
+            # A. Draw Level Line (Always at true energy with slight vertical offset for close-by levels)
+            bar_y_position = en + bar_offset
+            ax.hlines(y=bar_y_position, xmin=x_start, xmax=x_end, colors='black', linewidth=1.5)
             
             # B. Draw Text (Left - Energy)
             # Use annotate to draw connector if displaced significantly
-            is_displaced = abs(en - y_text) > 50
+            is_displaced = abs(bar_y_position - y_text) > 50
             
             if is_displaced:
                 # Energy Label with connector
                 ax.annotate(item['label_left'], 
-                            xy=(x_start, en), xycoords='data',
+                            xy=(x_start, bar_y_position), xycoords='data',
                             xytext=(x_start - 0.2, y_text), textcoords='data',
                             arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
-                            va='center', ha='right', fontsize=16)
+                            va='center', ha='right', fontsize=18)
                 
                 # Spin Label with connector (or just aligned with text Y)
                 if item['label_right']:
                     ax.annotate(item['label_right'], 
-                                xy=(x_end, en), xycoords='data',
+                                xy=(x_end, bar_y_position), xycoords='data',
                                 xytext=(x_end + 0.2, y_text), textcoords='data',
                                 arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
-                                va='center', ha='left', fontsize=16)
+                                va='center', ha='left', fontsize=18)
             else:
                 # Standard Text
-                ax.text(x_start - 0.1, y_text, item['label_left'], va='center', ha='right', fontsize=16)
+                ax.text(x_start - 0.1, y_text, item['label_left'], va='center', ha='right', fontsize=18)
                 if item['label_right']:
-                    ax.text(x_end + 0.1, y_text, item['label_right'], va='center', ha='left', fontsize=16)
+                    ax.text(x_end + 0.1, y_text, item['label_right'], va='center', ha='left', fontsize=18)
 
     # Styling
     ax.set_xlim(-1.5, 6.5) # Expanded limits for new X-positions
     ax.set_ylim(0, max_energy_plot * 1.15)
     ax.set_xticks([0, 2.5, 5.0])
-    ax.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C'], fontsize=16, fontweight='bold')
+    ax.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C'], fontsize=18, fontweight='bold')
     
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.spines['bottom'].set_visible(False)
     ax.spines['left'].set_linewidth(1.5)
     
-    ax.set_ylabel("Energy (keV)", fontsize=16)
+    ax.set_ylabel("Energy (keV)", fontsize=18)
     ax.tick_params(axis='x', length=0)
-    ax.tick_params(axis='y', labelsize=14)
+    ax.tick_params(axis='y', labelsize=16)
     
     plt.tight_layout()
     output_file = 'Level_Scheme_Visualization.png'

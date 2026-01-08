@@ -37,7 +37,7 @@ from Feature_Engineer import extract_features, generate_synthetic_training_data,
 
 # Configuration Parameters
 pairwise_output_threshold = 0.01  # Minimum probability for outputting level pairs (1%)
-clustering_merge_threshold = 0.30  # Minimum probability for cluster merging (30%)
+clustering_merge_threshold = 0.15  # Minimum probability for cluster merging (15%)
 
 # ==========================================
 # FRIBND: 1. Test Data Ingestion (From JSON files)

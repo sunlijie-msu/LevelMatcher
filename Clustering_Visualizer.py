@@ -176,6 +176,48 @@ def plot_clustering_results():
     # Track maximum energy for plot limits
     maximum_energy = 0
     
+    # CRITICAL: Collect ALL levels for each dataset column (across all clusters) for global collision resolution
+    # This prevents overlapping labels when different clusters have nearby energy levels
+    all_levels_by_dataset = {dataset: [] for dataset in datasets}
+    for cluster in clusters:
+        for member in cluster['members']:
+            all_levels_by_dataset[member['dataset']].append({
+                'cluster_number': cluster['cluster_number'],
+                'energy': member['energy'],
+                'level_id': member['level_id']
+            })
+            if member['energy'] > maximum_energy:
+                maximum_energy = member['energy']
+    
+    # Apply global collision resolution for each dataset column
+    text_position_lookup = {}  # Key: (dataset, cluster_number, level_id), Value: text_y_position
+    bar_offset_lookup = {}  # Key: (dataset, cluster_number, level_id), Value: vertical_offset for bar separation
+    for dataset in datasets:
+        levels_in_column = all_levels_by_dataset[dataset]
+        if not levels_in_column:
+            continue
+        
+        # Sort by energy
+        levels_in_column.sort(key=lambda x: x['energy'])
+        
+        # Extract energies and apply collision resolution
+        energies = [level['energy'] for level in levels_in_column]
+        text_y_positions = spread_text_positions(energies, min_distance=250)
+        
+        # Calculate vertical offsets for level bars when too close (within 150 keV)
+        bar_offsets = [0.0] * len(energies)
+        for index in range(len(energies) - 1):
+            if energies[index + 1] - energies[index] < 150:
+                # Push bars apart slightly for visual separation
+                bar_offsets[index] -= 30
+                bar_offsets[index + 1] += 30
+        
+        # Store adjusted positions and offsets in lookup tables
+        for index, level in enumerate(levels_in_column):
+            key = (dataset, level['cluster_number'], level['level_id'])
+            text_position_lookup[key] = text_y_positions[index]
+            bar_offset_lookup[key] = bar_offsets[index]
+    
     # Process each cluster
     for cluster in clusters:
         cluster_number = cluster['cluster_number']
@@ -185,8 +227,6 @@ def plot_clustering_results():
         members_by_dataset = {dataset: [] for dataset in datasets}
         for member in cluster['members']:
             members_by_dataset[member['dataset']].append(member)
-            if member['energy'] > maximum_energy:
-                maximum_energy = member['energy']
         
         # Draw levels and connecting lines for this cluster
         for dataset in datasets:
@@ -198,22 +238,20 @@ def plot_clustering_results():
             x_start = x_center - line_width / 2
             x_end = x_center + line_width / 2
             
-            # Sort members by energy within this dataset
-            dataset_members.sort(key=lambda m: m['energy'])
-            
-            # Calculate text positions with collision resolution
-            energies = [m['energy'] for m in dataset_members]
-            text_y_positions = spread_text_positions(energies, min_distance=250)
-            
-            # Draw each level
-            for index, member in enumerate(dataset_members):
+            # Draw each level (text positions already calculated globally)
+            for member in dataset_members:
                 energy = member['energy']
-                y_text = text_y_positions[index]
                 
-                # Draw level line at true energy
+                # Look up pre-calculated text position and bar offset from global collision resolution
+                lookup_key = (dataset, cluster_number, member['level_id'])
+                y_text = text_position_lookup[lookup_key]
+                bar_offset = bar_offset_lookup[lookup_key]
+                
+                # Draw level line at true energy with slight vertical offset for close-by levels
+                bar_y_position = energy + bar_offset
                 line_style = '-'
                 line_thickness = 3.0 if member['is_anchor'] else 1.5
-                axis.hlines(y=energy, xmin=x_start, xmax=x_end, 
+                axis.hlines(y=bar_y_position, xmin=x_start, xmax=x_end, 
                            colors=cluster_color, linewidth=line_thickness, linestyle=line_style)
                 
                 # Construct label text
@@ -221,41 +259,50 @@ def plot_clustering_results():
                 jpi_label = member['jpi'] if member['jpi'] != 'N/A' else ''
                 
                 # Check if text is displaced significantly
-                is_displaced = abs(energy - y_text) > 50
+                is_displaced = abs(bar_y_position - y_text) > 50
                 
                 if is_displaced:
                     # Draw connector line and text
                     axis.annotate(energy_label,
-                                xy=(x_start, energy), xycoords='data',
+                                xy=(x_start, bar_y_position), xycoords='data',
                                 xytext=(x_start - 0.2, y_text), textcoords='data',
-                                arrowprops=dict(arrowstyle="-", color='gray', lw=0.8),
-                                va='center', ha='right', fontsize=12)
+                                arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
+                                va='center', ha='right', fontsize=18)
                     if jpi_label:
                         axis.annotate(jpi_label,
-                                    xy=(x_end, energy), xycoords='data',
+                                    xy=(x_end, bar_y_position), xycoords='data',
                                     xytext=(x_end + 0.2, y_text), textcoords='data',
-                                    arrowprops=dict(arrowstyle="-", color='gray', lw=0.8),
-                                    va='center', ha='left', fontsize=12)
+                                    arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
+                                    va='center', ha='left', fontsize=18)
                 else:
                     # Standard text placement
-                    axis.text(x_start - 0.1, y_text, energy_label, va='center', ha='right', fontsize=12)
+                    axis.text(x_start - 0.1, y_text, energy_label, va='center', ha='right', fontsize=18)
                     if jpi_label:
-                        axis.text(x_end + 0.1, y_text, jpi_label, va='center', ha='left', fontsize=12)
+                        axis.text(x_end + 0.1, y_text, jpi_label, va='center', ha='left', fontsize=18)
                 
-                # Add match probability for non-anchor members
-                if not member['is_anchor'] and member['match_probability'] is not None:
-                    probability_text = f"{member['match_probability']:.0%}"
+                # Add clear labels for Anchor or Match Probability
+                if member['is_anchor']:
+                    # Label as Anchor
+                    axis.text(x_center, y_text, 'Anchor', va='center', ha='center',
+                            fontsize=12, color='red', weight='bold',
+                            bbox=dict(boxstyle='round,pad=0.4', facecolor='lightcyan', edgecolor='red', alpha=0.8))
+                elif member['match_probability'] is not None:
+                    # Label with probability
+                    probability_text = f"Prob: {member['match_probability']:.0%}"
                     axis.text(x_center, y_text, probability_text, va='center', ha='center',
-                            fontsize=9, color='black', weight='bold',
-                            bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='none', alpha=0.7))
+                            fontsize=12, color='black', weight='bold',
+                            bbox=dict(boxstyle='round,pad=0.4', facecolor='white', edgecolor='blue', alpha=0.8))
         
         # Draw connecting lines between cluster members across datasets
         if len(cluster['members']) > 1:
-            # Get y-positions for each member
+            # Get y-positions for each member (use bar position with offset, not original energy)
             member_positions = []
             for member in cluster['members']:
                 x_center = x_positions[member['dataset']]
-                member_positions.append((x_center, member['energy']))
+                lookup_key = (member['dataset'], cluster_number, member['level_id'])
+                bar_offset = bar_offset_lookup[lookup_key]
+                bar_y_position = member['energy'] + bar_offset
+                member_positions.append((x_center, bar_y_position))
             
             # Sort by x-position to draw connections left-to-right
             member_positions.sort(key=lambda p: p[0])
@@ -276,18 +323,18 @@ def plot_clustering_results():
     x_tick_positions = [x_positions[dataset] for dataset in datasets]
     x_tick_labels = [f'Dataset {dataset}' for dataset in datasets]
     axis.set_xticks(x_tick_positions)
-    axis.set_xticklabels(x_tick_labels, fontsize=14, fontweight='bold')
+    axis.set_xticklabels(x_tick_labels, fontsize=18, fontweight='bold')
     
     axis.spines['top'].set_visible(False)
     axis.spines['right'].set_visible(False)
     axis.spines['bottom'].set_visible(False)
     axis.spines['left'].set_linewidth(1.5)
     
-    axis.set_ylabel("Energy (keV)", fontsize=14)
+    axis.set_ylabel("Energy (keV)", fontsize=18)
     axis.tick_params(axis='x', length=0)
-    axis.tick_params(axis='y', labelsize=12)
+    axis.tick_params(axis='y', labelsize=16)
     
-    axis.set_title(f"Clustering Results: {len(clusters)} Clusters", fontsize=16, fontweight='bold', pad=20)
+    axis.set_title(f"Clustering Results: {len(clusters)} Clusters", fontsize=18, fontweight='bold', pad=20)
     
     plt.tight_layout()
     output_file = 'Clustering_Visualization.png'
