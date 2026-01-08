@@ -46,6 +46,7 @@ Cluster 7:
   Anchor: A_5000 | E=5000.0±1.0 keV | Jπ=(1+,2+,3+)
   Members:
     [A] A_5000: E=5000.0±1.0 keV, Jπ=(1+,2+,3+) (Anchor)
+    [C] C_5003: E=5003.0±30.0 keV, Jπ=2,3,4 (Match Prob: 43.2%)
 
 Cluster 8:
   Anchor: A_5005 | E=5005.0±1.0 keV | Jπ=(3-,4-,5-)

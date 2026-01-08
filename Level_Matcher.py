@@ -184,11 +184,15 @@ if __name__ == "__main__":
         cluster_list_1 = list(id_to_clusters[id_1])
         cluster_list_2 = list(id_to_clusters[id_2])
 
+        # FRIBND: Track if this pair successfully joined any existing cluster
+        pair_processed = False
+
         # FRIBND: Try to merge each cluster pair that contains id_1 and id_2
         for cluster_1 in cluster_list_1:
             for cluster_2 in cluster_list_2:
                 if cluster_1 is cluster_2:
-                    continue  # Already in same cluster
+                    pair_processed = True  # Already in same cluster
+                    continue
                 
                 datasets_1 = set(cluster_1.keys())
                 datasets_2 = set(cluster_2.keys())
@@ -206,6 +210,7 @@ if __name__ == "__main__":
                                 cluster_2[matching_level_pair['dataset_1']] = id_1
                                 if cluster_2 not in id_to_clusters[id_1]:
                                     id_to_clusters[id_1].append(cluster_2)
+                                pair_processed = True
                     
                     # FRIBND: Can we add id_2 to cluster_1?
                     if matching_level_pair['dataset_2'] not in datasets_1:
@@ -215,6 +220,7 @@ if __name__ == "__main__":
                                 cluster_1[matching_level_pair['dataset_2']] = id_2
                                 if cluster_1 not in id_to_clusters[id_2]:
                                     id_to_clusters[id_2].append(cluster_1)
+                                pair_processed = True
                     
                     continue  # Move to next cluster pair
 
@@ -239,6 +245,40 @@ if __name__ == "__main__":
                             id_to_clusters[member_id].remove(cluster_2)
                         if cluster_1 not in id_to_clusters[member_id]:
                             id_to_clusters[member_id].append(cluster_1)
+                    
+                    pair_processed = True
+        
+        # FRIBND: If this valid pair was not absorbed into any existing cluster, try adding to singleton clusters first
+        if not pair_processed:
+            # FRIBND: Check if id_1 is in a singleton cluster that we can expand
+            for cluster in id_to_clusters[id_1]:
+                if len(cluster) == 1 and matching_level_pair['dataset_2'] not in cluster:
+                    # FRIBND: Expand singleton cluster by adding id_2
+                    cluster[matching_level_pair['dataset_2']] = id_2
+                    if cluster not in id_to_clusters[id_2]:
+                        id_to_clusters[id_2].append(cluster)
+                    pair_processed = True
+                    break
+            
+            # FRIBND: If still not processed, check if id_2 is in a singleton cluster
+            if not pair_processed:
+                for cluster in id_to_clusters[id_2]:
+                    if len(cluster) == 1 and matching_level_pair['dataset_1'] not in cluster:
+                        # FRIBND: Expand singleton cluster by adding id_1
+                        cluster[matching_level_pair['dataset_1']] = id_1
+                        if cluster not in id_to_clusters[id_1]:
+                            id_to_clusters[id_1].append(cluster)
+                        pair_processed = True
+                        break
+            
+            # FRIBND: Only create new cluster if neither member has a singleton to expand
+            if not pair_processed:
+                new_cluster = {
+                    matching_level_pair['dataset_1']: id_1,
+                    matching_level_pair['dataset_2']: id_2
+                }
+                id_to_clusters[id_1].append(new_cluster)
+                id_to_clusters[id_2].append(new_cluster)
 
     # FRIBND: Step 4 - Extract unique active clusters (remove duplicates)
     unique_clusters = []
