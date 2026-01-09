@@ -26,7 +26,7 @@ This tool facilitates matching energy levels across experimental datasets, gener
     *   `extract_features()`: Constructs four-dimensional feature vectors for machine learning model
     *   `generate_synthetic_training_data()`: Generates 580+ synthetic training points encoding physics constraints across six scenarios
 *   **`Dataset_Parser.py`**: Converts ENSDF evaluator log files to structured JSON format. Handles complex Jπ notation including ranges, lists, tentative assignments, and nested parentheses.
-*   **`Level_Scheme_Visualizer.py`**: Generates publication-quality level scheme diagrams with automatic collision resolution for text labels.
+*   **`Combined_Visualizer.py`**: Generates publication-quality level scheme diagrams (`Input_Level_Scheme.png`) and clustering result maps (`Output_Cluster_Scheme.png`) with automatic collision resolution for labels.
 
 ## Configuration
 
@@ -85,7 +85,7 @@ Scoring_Config = {
     *   Compares all cross-dataset level pairs (A vs B, A vs C, B vs C)
     *   Extracts four-dimensional feature vector for each pair
     *   Predicts match probability using trained model
-    *   Writes results to `level_pairs_inference.txt` (pairs above `pairwise_output_threshold`)
+    *   Writes results to `Output_Level_Pairwise_Inference.txt` (pairs above `pairwise_output_threshold`)
 
 4.  **Graph Clustering (Rule-Based Algorithm):**
     *   Initializes each level as singleton cluster
@@ -115,10 +115,10 @@ Scoring_Config = {
 python Level_Matcher.py
 
 # 2. View pairwise inference results
-cat level_pairs_inference.txt
+cat Output_Level_Pairwise_Inference.txt
 
 # 3. View clustering results
-cat clustering_results.txt
+cat Output_Clustering_Results.txt
 ```
 
 ### Data Preparation
@@ -140,11 +140,13 @@ python Dataset_Parser.py evaluatorInput.log
 python Level_Matcher.py
 ```
 
-### Generate Level Scheme Visualization
+### Generate Visualizations
 
 ```bash
-python Level_Scheme_Visualizer.py
-# Output: Level_Scheme_Visualization.png
+python Combined_Visualizer.py
+# Outputs: 
+# 1. Input_Level_Scheme.png
+# 2. Output_Cluster_Scheme.png
 ```
 
 ## Physics Logic
@@ -197,8 +199,8 @@ All features are monotonic increasing: higher values → higher match probabilit
 
 ## Output Files
 
-*   **`level_pairs_inference.txt`**: All cross-dataset level pairs above `pairwise_output_threshold` with match probabilities and feature breakdowns
-*   **`clustering_results.txt`**: Final clustering results with anchor information and member probabilities
+*   **`Output_Level_Pairwise_Inference.txt`**: All cross-dataset level pairs above `pairwise_output_threshold` with match probabilities and feature breakdowns
+*   **`Output_Clustering_Results.txt`**: Final clustering results with anchor information and member probabilities
 *   **Console Output**: Real-time progress and summary statistics
 
 ## Technology Stack

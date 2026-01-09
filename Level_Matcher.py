@@ -24,7 +24,7 @@ Engine for Nuclear Level Matching
 3.  **Pairwise Inference** (ML-based Probability Prediction):
     - Extracts feature vectors for all cross-dataset level pairs (skips same-dataset pairs).
     - Predicts match probability using trained XGBoost model.
-    - Output: level_pairs_inference.txt with pairs exceeding pairwise_output_threshold (default 1%).
+    - Output: Output_Level_Pairwise_Inference.txt with pairs exceeding pairwise_output_threshold (default 1%).
     - Result: 99 level pairs ranked by match probability with detailed feature breakdowns.
 
 4.  **Graph Clustering** (Rule-based Greedy Merging):
@@ -39,7 +39,7 @@ Engine for Nuclear Level Matching
         2. Try adding to overlapping clusters (multi-cluster assignment for ambiguous levels).
         3. Expand singleton clusters when merge fails but pair is valid.
         4. Create new two-member cluster only if no singleton exists.
-    - Output: clustering_results.txt with final clusters, each showing anchor level and member match probabilities.
+    - Output: Output_Clustering_Results.txt with final clusters, each showing anchor level and member match probabilities.
 """
 
 # Configuration Parameters
@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
     # Write pairwise inference results to file
     threshold_percent = int(pairwise_output_threshold * 100)
-    with open('level_pairs_inference.txt', 'w', encoding='utf-8') as output_file:
+    with open('Output_Level_Pairwise_Inference.txt', 'w', encoding='utf-8') as output_file:
         output_file.write(f"=== PAIRWISE INFERENCE RESULTS (>{threshold_percent}%) ===\n\n")
         output_file.write(f"Total Level Pairs Found: {len(matching_level_pairs)}\n\n")
         
@@ -145,7 +145,7 @@ if __name__ == "__main__":
                 f"Parity_Sim={parity_sim:.2f}, Specificity={specificity:.2f}\n\n"
             )
     
-    print(f"\n[INFO] Pairwise Inference Complete: {len(matching_level_pairs)} level pairs (>{threshold_percent}%) written to 'level_pairs_inference.txt'")
+    print(f"\n[INFO] Pairwise Inference Complete: {len(matching_level_pairs)} level pairs (>{threshold_percent}%) written to 'Output_Level_Pairwise_Inference.txt'")
 
     # ==========================================
     # FRIBND: 4. Graph Clustering with Overlap Support
@@ -351,9 +351,9 @@ if __name__ == "__main__":
     
     # FRIBND: Write clustering results to file
     clustering_threshold_percent = int(clustering_merge_threshold * 100)
-    with open('clustering_results.txt', 'w', encoding='utf-8') as output_file:
+    with open('Output_Clustering_Results.txt', 'w', encoding='utf-8') as output_file:
         output_file.write(f"=== FINAL CLUSTERING RESULTS (Merge Threshold: >{clustering_threshold_percent}%) ===\n")
         output_file.write(f"Total Clusters: {len(unique_clusters)}\n")
         output_file.writelines(clustering_output_lines)
     
-    print(f"\n[INFO] Clustering Complete: {len(unique_clusters)} clusters written to 'clustering_results.txt'")
+    print(f"\n[INFO] Clustering Complete: {len(unique_clusters)} clusters written to 'Output_Clustering_Results.txt'")

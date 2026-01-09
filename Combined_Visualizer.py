@@ -1,8 +1,8 @@
 """Combined Level Scheme and Clustering Visualizer
 
 This script generates two visualizations:
-1. Level_Scheme_Visualization.png: Input datasets showing all levels.
-2. Clustering_Visualization.png: Output clustering results with cluster and probability labels.
+1. Input_Level_Scheme.png: Input datasets showing all levels.
+2. Output_Cluster_Scheme.png: Output clustering results with cluster and probability labels.
 
 Explanation of Code Structure
 1) Parse clustering results into clusters and members.
@@ -199,7 +199,7 @@ def plot_level_schemes():
     axis.set_title("Input Level Schemes", fontsize=20, fontweight='bold', pad=20, family='Times New Roman')
     
     plt.tight_layout()
-    output_file = 'Level_Scheme_Visualization.png'
+    output_file = 'Input_Level_Scheme.png'
     plt.savefig(output_file, dpi=300)
     print(f"[INFO] Level scheme visualization saved to {output_file}")
     plt.close()
@@ -209,7 +209,7 @@ def plot_level_schemes():
 # ============================================================================
 
 def parse_clustering_results(clustering_file_path):
-    """Parse clustering_results.txt to extract cluster information."""
+    """Parse Output_Clustering_Results.txt to extract cluster information."""
     clusters = []
     current_cluster = None
     
@@ -275,13 +275,13 @@ def plot_clustering_results():
     """
     Generates a textual table-like visualization of clustering results.
     Aligned horizontally by cluster, sorted vertically by energy.
-    Reads directly from clustering_results.txt.
+    Reads directly from Output_Clustering_Results.txt.
     """
-    clustering_file_path = 'clustering_results.txt'
+    clustering_file_path = 'Output_Clustering_Results.txt'
     clusters = parse_clustering_results(clustering_file_path)
     
     if not clusters:
-        print("[WARNING] No clusters found in clustering_results.txt")
+        print("[WARNING] No clusters found in Output_Clustering_Results.txt")
         return
     
     # Sort clusters by anchor energy (Low Energy at Bottom)
@@ -368,7 +368,7 @@ def plot_clustering_results():
     axis.set_title("Clustering Results (Aligned by Cluster)", fontsize=20, fontweight='bold', pad=20, family='Times New Roman')
     
     plt.tight_layout()
-    output_file = 'Clustering_Visualization.png'
+    output_file = 'Output_Cluster_Scheme.png'
     plt.savefig(output_file, dpi=300)
     print(f"[INFO] Clustering visualization saved to {output_file}")
     plt.close()
