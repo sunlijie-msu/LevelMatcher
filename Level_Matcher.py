@@ -6,40 +6,28 @@ from Feature_Engineer import extract_features, generate_synthetic_training_data,
 """
 Engine for Nuclear Level Matching
 ======================================
+
 # High-level Structure and Workflow Explanation:
 -------------------------
-1.  **Data Ingestion** (`load_levels_from_json`):
-    - Loads standardized nuclear level data from JSON files using Feature_Engineer module.
-    - Input: Three datasets (A, B, C) with ENSDF-format level data.
-    - Output: Pandas DataFrame with standardized columns: energy_value, energy_uncertainty, spin_parity_list, spin_parity_string.
 
-2.  **Model Training** (XGBoost with Physics Constraints):
-    - Trains gradient boosting regressor to predict match probability from four-dimensional feature vector.
-    - Feature Vector: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
-    - Monotonic Constraints: All four features monotonically increasing (higher value → higher probability).
-    - Training Data: 580+ synthetic labeled pairs encoding nuclear physics domain knowledge.
-    - Model Hyperparameters: 100 trees, max_depth=3, learning_rate=0.05 (prevents overfitting).
-    - Physics Enforcement: Monotonicity ensures model respects physical constraints (e.g., better spin match → higher probability).
+1. **Data Loading & Standardization** (`load_levels_from_json`):
+   - Parse ENSDF JSON (datasets A, B, C) into flat records: energy_value, energy_uncertainty, spin_parity_list, spin_parity_string, dataset_code, level_id.
 
-3.  **Pairwise Inference** (ML-based Probability Prediction):
-    - Extracts feature vectors for all cross-dataset level pairs (skips same-dataset pairs).
-    - Predicts match probability using trained XGBoost model.
-    - Output: Output_Level_Pairwise_Inference.txt with pairs exceeding pairwise_output_threshold (default 1%).
-    - Result: 99 level pairs ranked by match probability with detailed feature breakdowns.
+2. **Physics-Informed Feature Space** (from Feature_Engineer):
+   - compute [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity] using Scoring_Config parameters (monotonic increasing signals).
 
-4.  **Graph Clustering** (Rule-based Greedy Merging):
-    - Groups matching levels using deterministic graph algorithm (NO ML, pure logic).
-    - Algorithm: Greedy cluster merging in descending probability order with singleton expansion.
-    - Constraints:
-        * Dataset uniqueness: Each cluster contains at most one level per dataset.
-        * Mutual consistency: All cluster members must be pairwise compatible (probability ≥ clustering_merge_threshold).
-        * Overlap support: Poorly-resolved levels (large uncertainty) can belong to multiple clusters if compatible.
-    - Merge Logic:
-        1. Try merging clusters with no dataset overlap (all-to-all compatibility check).
-        2. Try adding to overlapping clusters (multi-cluster assignment for ambiguous levels).
-        3. Expand singleton clusters when merge fails but pair is valid.
-        4. Create new two-member cluster only if no singleton exists.
-    - Output: Output_Clustering_Results.txt with final clusters, each showing anchor level and member match probabilities.
+3. **Model Training** (XGBoost with monotone constraints):
+   - Train binary logistic regressor on synthetic physics-labeled pairs from Feature_Engineer.
+   - Monotone constraints: all four features constrained positive to preserve physics priors.
+   - Key params (see code): n_estimators=1000, max_depth=10, learning_rate=0.05, random_state=42.
+
+4. **Pairwise Inference** (cross-dataset only):
+   - Enumerate all level pairs across datasets, extract features, predict match probability.
+   - Keep pairs above pairwise_output_threshold (default 0.01) and write Output_Level_Pairwise_Inference.txt.
+
+5. **Graph Clustering (rule-based, no ML)**:
+   - Greedy merge clusters in probability order with dataset-uniqueness and all-to-all compatibility checks (threshold clustering_merge_threshold=0.15).
+   - Support multi-cluster membership for ambiguous levels; output clusters to Output_Clustering_Results.txt with anchor and member probabilities.
 """
 
 # Configuration Parameters
