@@ -86,7 +86,7 @@ if __name__ == "__main__":
                                        max_depth=10,
                                        # Maximum tree depth. Lower values prevent overfitting but may underfit, while larger values allow the model to capture more complex relationships but may lead to overfitting.
                                        # Value of 3 balances model complexity with generalization.
-                                       learning_rate=0.5,
+                                       learning_rate=0.05,
                                        # Step size; determines the contribution of each tree to the final outcome by scaling the weights of the features.
                                        # Impact on model performance:
                                        # Lower values slow down learning but can improve generalization
