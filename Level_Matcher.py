@@ -83,11 +83,17 @@ if __name__ == "__main__":
                                        # Monotonic constraints improve predictive performance when strong prior beliefs exist.
                                        n_estimators=1000,
                                        # Number of gradient boosted trees or boosting rounds. Typical ranges for n_estimators are between 50 and 1000, with higher values generally leading to better performance but longer training times.
-                                       max_depth=3,
+                                       max_depth=10,
                                        # Maximum tree depth. Lower values prevent overfitting but may underfit, while larger values allow the model to capture more complex relationships but may lead to overfitting.
                                        # Value of 3 balances model complexity with generalization.
-                                       learning_rate=0.05,
-                                       # Step size shrinkage to prevent overfitting. Lower values require more trees.
+                                       learning_rate=0.5,
+                                       # Step size; determines the contribution of each tree to the final outcome by scaling the weights of the features.
+                                       # Impact on model performance:
+                                       # Lower values slow down learning but can improve generalization
+                                       # Higher values speed up learning but may lead to suboptimal results
+                                       # Interaction with the number of boosting rounds:
+                                       # Lower learning rates typically require more boosting rounds
+                                       # Higher learning rates may converge faster but require careful tuning of other parameters
                                        random_state=42)
                                        # Random number seed for reproducibility.
     
