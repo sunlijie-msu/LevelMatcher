@@ -4,32 +4,22 @@ Feature Engineering For Nuclear Level Matching
 
 # High-level Structure and Workflow Explanation:
 -------------------------
-1.  **Data Loading** (`load_levels_from_json`):
-    - Ingests nuclear level data from JSON files (ENSDF schema).
-    - Standardizes attributes into flat dictionaries: `energy_value`, `energy_uncertainty`, `spin_parity_list`, `spin_parity_string`.
-    - The standardized key `spin_parity_string` stores the JSON `spinParity.evaluatorInput` text (the 80-col style Jπ string).
 
-2.  **Physics Feature Extraction** (`calculate_*_similarity`):
-    - Mathematical comparison of level attributes using `Scoring_Config` weights.
-    - **Energy**: Gaussian similarity exp(-Sigma_Scale×z²) where z=ΔE/σ_combined. Range: 0.0 (far apart) to 1.0 (identical).
-    - **Spin (J)**: Physics-informed scoring with optimistic matching strategy. Range: 0.0 (incompatible) to 1.0 (firm match). Tentative assignments penalized to 0.9.
-    - **Parity (π)**: Physics-informed scoring with optimistic matching strategy. Range: 0.0 (opposite parity) to 1.0 (firm match). Tentative assignments penalized to 0.9.
+1. **Data Standardization** (`load_levels_from_json`):
+   - Parses ENSDF JSON schema, standardizes to: dataset_code, level_id, energy_value, energy_uncertainty, spin_parity_list, spin_parity_string.
 
-3.  **Feature Vector Construction** (`extract_features`):
-    - Aggregates individual scores into a four-dimensional vector for the ML model.
-    - Vector Format: `[Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]`
-    - All features monotonic increasing (higher value → stronger evidence for match):
-        - *Energy_Similarity*: Gaussian kernel measuring energy overlap accounting for measurement uncertainties.
-        - *Spin_Similarity*: Best-case compatibility score across all spin options (optimistic strategy).
-        - *Parity_Similarity*: Best-case compatibility score across all parity options (optimistic strategy).
-        - *Specificity*: Ambiguity penalty = 1/sqrt(multiplicity). Penalizes levels with multiple Jπ options.
-    - Note: Tentativeness encoded within similarity scores (firm match=1.0, tentative match=0.9).
-    - Note: Certainty features removed as redundant (predictable from similarity scores for matches).
+2. **Similarity Scoring** (`calculate_*_similarity`):
+   - Energy: Gaussian exp(-Sigma_Scale×z²) via Scoring_Config['Energy'].
+   - Spin/Parity: Optimistic maximum across option pairs, scores from Scoring_Config['Spin']/['Parity']. Neutral fallback: Scoring_Config['General']['Neutral_Score'].
 
-4.  **Training Data Generation** (`generate_synthetic_training_data`):
-    - Generates 580+ synthetic labeled pairs encoding nuclear physics domain knowledge.
-    - Covers six physics scenarios: perfect matches, physics vetoes, energy mismatches, ambiguous physics, weak matches, random background.
-    - Output feeds XGBoost model to learn match probability prediction from four-dimensional feature space.
+3. **4D Feature Vector** (`extract_features`):
+   - Four monotonic-increasing features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity].
+   - Specificity = 1/f(multiplicity) where formula (sqrt/linear/log/tunable) from Scoring_Config['Specificity'].
+
+4. **Training Data** (`generate_synthetic_training_data`):
+   - Creates labeled training pairs using grid-based feature space coverage + random sampling (500 points) + perfect-match boost (50 points).
+   - Labels: Hard-veto mismatches→0.0; probability = Energy × sqrt(Spin_factor × Parity_factor) × Specificity.
+
 """
 
 import re
@@ -330,10 +320,56 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
 
 def extract_features(level_1, level_2):
     """
-    Constructs four-dimensional feature vector from two level dictionaries.
-    Feature Design - All scores are monotonic increasing (higher value → better match)
-    Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
-    Note: Tentativeness is encoded within similarity scores (1.0=firm match, 0.9=tentative match)
+    Constructs four-dimensional feature vector for ML-based match probability prediction.
+    
+    Feature Vector Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
+    
+    Design Principle:
+    - All features are monotonic increasing: higher value strictly indicates better match likelihood.
+    - All feature scores are drawn from Scoring_Config for full configurability and physics tuning.
+    
+    Feature Definitions (all scores sourced from Scoring_Config):
+    
+    1. Energy_Similarity (0-1):
+       - Gaussian kernel: exp(-Sigma_Scale × z²) where z = ΔE/σ_combined
+       - Sigma_Scale from Scoring_Config['Energy']['Sigma_Scale'] controls energy strictness (default 0.1 = lenient)
+       - Default_Uncertainty from Scoring_Config['Energy']['Default_Uncertainty'] applied when data missing
+       - Incorporates measurement uncertainties from both levels
+       - Monotonic: Energy overlap increases → similarity increases
+       - Independent of spin/parity information
+    
+    2. Spin_Similarity (0-1):
+       - Optimistic matching: maximum compatibility across all spin pair combinations
+       - All scoring thresholds come from Scoring_Config['Spin']:
+         * ΔJ=0, both firm: Scoring_Config['Spin']['Match_Firm'] (typically 1.0)
+         * ΔJ=0, any tentative: Scoring_Config['Spin']['Match_Strong'] (typically 0.8)
+         * ΔJ=1, both firm: Scoring_Config['Spin']['Mismatch_Strong'] (typically 0.05)
+         * ΔJ=1, any tentative: Scoring_Config['Spin']['Mismatch_Weak'] (typically 0.2)
+         * ΔJ≥2: Scoring_Config['Spin']['Mismatch_Firm'] (typically 0.0)
+       - Guard: Uses Scoring_Config['General']['Neutral_Score'] (typically 0.5) when spin data missing
+       - Rationale: If any spin option matches, levels likely identical (optimistic strategy)
+    
+    3. Parity_Similarity (0-1):
+       - Optimistic matching: maximum compatibility across all parity pair combinations
+       - All scoring thresholds come from Scoring_Config['Parity']:
+         * Same parity, both firm: Scoring_Config['Parity']['Match_Firm'] (typically 1.0)
+         * Same parity, any tentative: Scoring_Config['Parity']['Match_Strong'] (typically 0.8)
+         * Opposite parity, both firm: Scoring_Config['Parity']['Mismatch_Firm'] (typically 0.0)
+         * Opposite parity, any tentative: Scoring_Config['Parity']['Mismatch_Weak'] (typically 0.05)
+       - Guard: Uses Scoring_Config['General']['Neutral_Score'] (typically 0.5) when parity data missing
+       - Rationale: If any parity option matches, levels likely identical (optimistic strategy)
+    
+    4. Specificity (0-1):
+       - Ambiguity penalty: 1/f(multiplicity) where multiplicity = options_count_1 × options_count_2
+       - Formula selection from Scoring_Config['Specificity']['Formula']:
+         * 'sqrt' (default): specificity = 1/sqrt(multiplicity) - balanced penalty
+         * 'linear': specificity = 1/multiplicity - aggressive penalty
+         * 'log': specificity = 1/(1+log10(multiplicity)) - gentle penalty
+         * 'tunable': specificity = 1/(1+Alpha×(multiplicity-1)) where Alpha from Scoring_Config['Specificity']['Alpha']
+       - Single well-resolved level (1 option): 1.0 (no penalty)
+       - Ambiguous levels (3×3=9 options): 0.33 using sqrt (67% penalty)
+       - Rationale: Measurement ambiguity reduces confidence in match assessment
+    
     """
 
     energy_similarity = calculate_energy_similarity(

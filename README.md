@@ -26,7 +26,7 @@ This tool facilitates matching energy levels across experimental datasets, gener
     *   `extract_features()`: Constructs four-dimensional feature vectors for machine learning model
     *   `generate_synthetic_training_data()`: Generates 580+ synthetic training points encoding physics constraints across six scenarios
 *   **`Dataset_Parser.py`**: Converts ENSDF evaluator log files to structured JSON format. Handles complex Jπ notation including ranges, lists, tentative assignments, and nested parentheses.
-*   **`Combined_Visualizer.py`**: Generates publication-quality level scheme diagrams (`Input_Level_Scheme.png`) and clustering result maps (`Output_Cluster_Scheme.png`) with automatic collision resolution for labels.
+*   **`Combined_Visualizer.py`**: Visualizes input level schemes (`Input_Level_Scheme.png`) and clustering results (`Output_Cluster_Scheme.png`).
 
 ## Configuration
 
