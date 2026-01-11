@@ -1,6 +1,6 @@
 # Machine Learning Hierarchy and Implementation Strategy for Nuclear Level Matching
 
-## Level 1: The Fundamental Unit
+## Level 1: The Foundation
 ### Decision Tree
 
 - **Concept:** A non-parametric supervised machine learning method that predicts target values by learning simple decision rules inferred from data features (Classification and Regression Tree, or CART).
@@ -24,7 +24,7 @@ Goal: Reduce variance (Bagging) or bias (Boosting) by combining multiple weak le
 - **Mechanism:** Iterative improvement. Tree m is trained to minimize errors (loss) of ensemble F_(m-1).
 - **Strength for Physics:** Mimics a "Veto" system. If Tree 1 predicts a match, Tree 2 can detect a specific violation (e.g., Parity Mismatch) and output a large negative correction, effectively suppressing match probability.
 
-## Level 3: The Algorithms
+## Level 3: The Algorithm
 
 Mathematical frameworks for implementing Boosting.
 
@@ -40,7 +40,7 @@ Mathematical frameworks for implementing Boosting.
 - **Reference:** Friedman (2001).
 - **Verdict:** Superior. Optimizing differentiable loss functions (e.g., Log-Loss) makes it more robust to outliers than the exponential loss used in AdaBoost.
 
-## Level 4: The Packages (Software Libraries)
+## Level 4: The Package (Software Libraries)
 
 Major libraries implementing Gradient Boosting.
 
@@ -74,7 +74,7 @@ Major libraries implementing Gradient Boosting.
   - **Statistical Logic (Monotonicity):** Explicitly enforce Monotonic Constraints on the Z-score feature (|Delta E|/sigma). This mathematically guarantees that as statistical deviation increases, match probability must decrease, forcing the model to respect experimental uncertainties.
   - **Hard Vetoes (Boosting Strategy):** As a sequential learner, XGBoost handles binary exclusions (like Spin Parity vetoes) effectively. If an early tree predicts a match based on energy, a subsequent tree can detect the veto condition and apply a strong negative correction, driving the final probability to zero.
 
-## Level 5: The Implementations
+## Level 5: The Implementation
 
 ### Feature Engineering
 
@@ -82,6 +82,8 @@ Feature engineering is the process of transforming raw data into meaningful inpu
 
 Well-engineered features can significantly boost model performance, leading to improved accuracy and predictive power. XGBoost is capable of handling complex data relationships.
 
+Feature_Engineer.py
+
 ### Model Configuration
 
-Feature_Engineer.py and Level_Matcher.py
+Level_Matcher.py
