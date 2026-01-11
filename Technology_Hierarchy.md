@@ -7,9 +7,9 @@
 - **Characteristics:** Low bias, high variance. Deep trees are unstable (sensitive to small data changes) and prone to overfitting (memorizing noise).
 - **Role:** The "Weak Learner" (Base Estimator) in ensemble methods.
 
-## Level 2: The Strategy (Ensemble Learning)
+## Level 2: The Strategy
 
-Goal: Reduce variance (Bagging) or bias (Boosting) by combining multiple weak learners.
+Ensemble Learning: Reduce variance (Bagging) or bias (Boosting) by combining multiple weak learners.
 
 ### Strategy A: Bagging (Bootstrap Aggregating)
 
