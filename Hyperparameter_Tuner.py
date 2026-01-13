@@ -25,6 +25,11 @@ from Feature_Engineer import extract_features, generate_synthetic_training_data,
 # ==========================================
 # Define candidate configurations to test
 # Baseline is current: n_estimators=1000, max_depth=10, learning_rate=0.05
+# Hyperparameter meanings (concise):
+# - n_estimators: number of boosting trees; higher can fit harder patterns but increases time
+# - max_depth: maximum tree depth; higher depth captures complex interactions but can overfit
+# - learning_rate: shrinkage per tree; lower rate needs more trees but can improve stability
+# - reg_lambda: L2 regularization weight on leaf scores; higher values discourage overfitting
 
 parameter_configurations = [
     {
@@ -116,7 +121,7 @@ def train_and_validate_model(config):
 def run_inference_and_clustering(model, config_name):
     """
     Run full pairwise inference and clustering pipeline with trained model.
-    Returns clustering results for expert validation.
+    Returns clustering results and matching pairs for expert validation.
     """
     print(f"\n  Running inference and clustering for: {config_name}")
     
@@ -274,13 +279,15 @@ def run_inference_and_clustering(model, config_name):
         'average_cluster_size': average_cluster_size,
         'high_confidence_pairs': len(valid_pairs)//2,
         'clusters': unique_clusters,
-        'level_lookup': level_lookup
+        'level_lookup': level_lookup,
+        'matching_pairs': matching_level_pairs
     }
 
 
-def save_clustering_results(config_name, clustering_results):
+def save_clustering_results(config_name, clustering_results, model):
     """
     Save detailed clustering results to file for expert review.
+    Includes match probabilities relative to anchor (like Level_Matcher.py).
     """
     filename = f"Output_Hyperparameter_Test_{config_name.replace(' ', '_')}.txt"
     
@@ -291,7 +298,19 @@ def save_clustering_results(config_name, clustering_results):
         
         for i, cluster in enumerate(clustering_results['clusters']):
             if len(cluster) >= 2:  # Only output multi-member clusters
-                output_file.write(f"\nCluster {i+1} (Size: {len(cluster)}):\n")
+                # Select anchor as the level with smallest energy uncertainty (most precise measurement)
+                anchor_id = min(cluster.values(), 
+                               key=lambda x: clustering_results['level_lookup'][x].get('energy_uncertainty', 999))
+                anchor_data = clustering_results['level_lookup'][anchor_id]
+                anchor_energy = anchor_data['energy_value']
+                anchor_uncertainty = anchor_data.get('energy_uncertainty', 0)
+                anchor_jpi = anchor_data.get('spin_parity_string', 'N/A')
+                if anchor_jpi == "unknown": anchor_jpi = "N/A"
+                
+                output_file.write(f"\nCluster {i+1}:\n")
+                output_file.write(f"  Anchor: {anchor_id} | E={anchor_energy:.1f}±{anchor_uncertainty:.1f} keV | Jπ={anchor_jpi}\n")
+                output_file.write(f"  Members:\n")
+                
                 for dataset_code in sorted(cluster.keys()):
                     member_id = cluster[dataset_code]
                     member_data = clustering_results['level_lookup'][member_id]
@@ -300,9 +319,37 @@ def save_clustering_results(config_name, clustering_results):
                     jpi = member_data.get('spin_parity_string', 'N/A')
                     if jpi == "unknown": jpi = "N/A"
                     
-                    output_file.write(f"  [{dataset_code}] {member_id}: E={energy:.1f}±{uncertainty:.1f} keV, Jπ={jpi}\n")
+                    if member_id == anchor_id:
+                        output_file.write(f"    [{dataset_code}] {member_id}: E={energy:.1f}±{uncertainty:.1f} keV, Jπ={jpi} (Anchor)\n")
+                    else:
+                        # Calculate match probability relative to anchor
+                        input_vector = extract_features(member_data, anchor_data)
+                        probability = model.predict([input_vector])[0]
+                        output_file.write(f"    [{dataset_code}] {member_id}: E={energy:.1f}±{uncertainty:.1f} keV, Jπ={jpi} (Match Prob: {probability:.1%})\n")
     
     print(f"    Saved detailed results to: {filename}")
+
+
+def save_pairwise_results(config_name, matching_level_pairs):
+    """
+    Save pairwise inference results with match probabilities to file for expert review.
+    """
+    filename = f"Output_Hyperparameter_Pairwise_{config_name.replace(' ', '_')}.txt"
+    
+    with open(filename, 'w', encoding='utf-8') as output_file:
+        output_file.write(f"=== PAIRWISE INFERENCE RESULTS: {config_name} ===\n")
+        output_file.write(f"Total Level Pairs: {len(matching_level_pairs)}\n\n")
+        
+        for matching_level_pair in matching_level_pairs:
+            energy_sim, spin_sim, parity_sim, specificity = matching_level_pair['features']
+            output_file.write(
+                f"{matching_level_pair['ID1']} <-> {matching_level_pair['ID2']} | "
+                f"Probability: {matching_level_pair['probability']:.1%}\n"
+                f"  Features: Energy_Sim={energy_sim:.2f}, Spin_Sim={spin_sim:.2f}, "
+                f"Parity_Sim={parity_sim:.2f}, Specificity={specificity:.2f}\n\n"
+            )
+    
+    print(f"    Saved pairwise results to: {filename}")
 
 
 # ==========================================
@@ -327,8 +374,11 @@ if __name__ == "__main__":
         # Run inference and clustering on real datasets
         clustering_results = run_inference_and_clustering(model, config['name'])
         
-        # Save detailed clustering for expert review
-        save_clustering_results(config['name'], clustering_results)
+        # Save detailed clustering for expert review (with probabilities)
+        save_clustering_results(config['name'], clustering_results, model)
+        
+        # Save pairwise inference results with match probabilities
+        save_pairwise_results(config['name'], clustering_results['matching_pairs'])
         
         # Store summary results
         results_summary.append({
