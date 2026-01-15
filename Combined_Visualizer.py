@@ -29,6 +29,24 @@ clustering_x_spacing = 0.45             # Horizontal distance between dataset co
 clustering_x_margin = 0.3               # Extra blank space padding on left/right of the outer columns
 
 # ============================================================================
+# FONT CONFIGURATION
+# ============================================================================
+FONT_CONFIG = {
+    # Level Scheme Visualizer
+    'level_labels': 20,       # Energy and Spin labels next to bars
+    'gamma_labels': 16,        # Branching ratio labels on arrows
+    'axis_labels': 20,        # X and Y axis labels (Dataset Names, "Energy (keV)")
+    'tick_labels': 16,        # Axis tick values
+    'title': 20,              # Main figure title
+
+    # Clustering Visualizer
+    'cluster_text': 12,       # Text inside cluster boxes
+    'cluster_axis_labels': 16,# X and Y axis labels
+    'cluster_tick_labels': 14,# Axis tick values
+    'cluster_title': 20,      # Main figure title
+}
+
+# ============================================================================
 # SHARED UTILITY FUNCTIONS
 # ============================================================================
 
@@ -166,7 +184,7 @@ def plot_level_schemes():
                             xy=(x_start, bar_y_position), xycoords='data',
                             xytext=(x_start - 0.2, y_text), textcoords='data',
                             arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
-                            va='center', ha='right', fontsize=20, family='Times New Roman')
+                            va='center', ha='right', fontsize=FONT_CONFIG['level_labels'], family='Times New Roman')
                 
                 # Spin/Parity label with connector
                 if item['label_right']:
@@ -174,12 +192,12 @@ def plot_level_schemes():
                                 xy=(x_end, bar_y_position), xycoords='data',
                                 xytext=(x_end + 0.2, y_text), textcoords='data',
                                 arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
-                                va='center', ha='left', fontsize=20, family='Times New Roman')
+                                va='center', ha='left', fontsize=FONT_CONFIG['level_labels'], family='Times New Roman')
             else:
                 # Standard text placement
-                axis.text(x_start - 0.1, y_text, item['label_left'], va='center', ha='right', fontsize=20, family='Times New Roman')
+                axis.text(x_start - 0.1, y_text, item['label_left'], va='center', ha='right', fontsize=FONT_CONFIG['level_labels'], family='Times New Roman')
                 if item['label_right']:
-                    axis.text(x_end + 0.1, y_text, item['label_right'], va='center', ha='left', fontsize=20, family='Times New Roman')
+                    axis.text(x_end + 0.1, y_text, item['label_right'], va='center', ha='left', fontsize=FONT_CONFIG['level_labels'], family='Times New Roman')
         
         # Draw gamma transitions
         if gammas_table:
@@ -248,7 +266,7 @@ def plot_level_schemes():
                 label_text = f"{int(gamma_intensity)}"
                 
                 axis.text(arrow_x, mid_energy, label_text, 
-                         va='center', ha='center', fontsize=9, 
+                         va='center', ha='center', fontsize=FONT_CONFIG['gamma_labels'], 
                          family='Times New Roman',
                          bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none', alpha=1.0))
 
@@ -257,20 +275,20 @@ def plot_level_schemes():
     axis.set_ylim(0, maximum_energy * 1.15)
     axis.set_xticks([0, 3.0, 6.0])
     axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C'], 
-                         fontsize=20, fontweight='bold', family='Times New Roman')
+                         fontsize=FONT_CONFIG['axis_labels'], fontweight='bold', family='Times New Roman')
     
     axis.spines['top'].set_visible(False)
     axis.spines['right'].set_visible(False)
     axis.spines['bottom'].set_visible(False)
     axis.spines['left'].set_linewidth(1.5)
     
-    axis.set_ylabel("Energy (keV)", fontsize=20, family='Times New Roman')
+    axis.set_ylabel("Energy (keV)", fontsize=FONT_CONFIG['axis_labels'], family='Times New Roman')
     axis.tick_params(axis='x', length=0)
-    axis.tick_params(axis='y', labelsize=16)
+    axis.tick_params(axis='y', labelsize=FONT_CONFIG['tick_labels'])
     for label in axis.get_yticklabels():
         label.set_family('Times New Roman')
     
-    axis.set_title("Input Level Schemes", fontsize=20, fontweight='bold', pad=20, family='Times New Roman')
+    axis.set_title("Input Level Schemes", fontsize=FONT_CONFIG['title'], fontweight='bold', pad=20, family='Times New Roman')
     
     plt.tight_layout()
     output_file = 'Input_Level_Scheme.png'
@@ -412,7 +430,7 @@ def plot_clustering_results():
             
             axis.text(x_pos, y_pos, text_block, 
                      ha='center', va='center', 
-                     fontsize=12, family='Times New Roman',
+                     fontsize=FONT_CONFIG['cluster_text'], family='Times New Roman',
                      bbox=dict(boxstyle=f"round,pad={clustering_box_pad}", fc="white", ec="gray", alpha=0.9))
 
     # Determine Y-Axis Limits
@@ -424,10 +442,10 @@ def plot_clustering_results():
     # X-Axis Labels
     axis.set_xticks([index * clustering_x_spacing for index in range(len(datasets))])
     axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C', 'Dataset D', 'Dataset E', 'Dataset F'], 
-                         fontsize=16, fontweight='bold', family='Times New Roman')
+                         fontsize=FONT_CONFIG['cluster_axis_labels'], fontweight='bold', family='Times New Roman')
     
     # Y-Axis Label
-    axis.set_ylabel("Energy / Cluster Index (Spread)", fontsize=16, family='Times New Roman')
+    axis.set_ylabel("Energy / Cluster Index (Spread)", fontsize=FONT_CONFIG['cluster_axis_labels'], family='Times New Roman')
     
     # Styling: Remove spines for clean table look
     axis.spines['top'].set_visible(False)
@@ -435,11 +453,11 @@ def plot_clustering_results():
     axis.spines['bottom'].set_visible(False)
     axis.spines['left'].set_visible(False)
     
-    axis.tick_params(left=True, bottom=False, labelsize=14)
+    axis.tick_params(left=True, bottom=False, labelsize=FONT_CONFIG['cluster_tick_labels'])
     for label in axis.get_yticklabels():
         label.set_family('Times New Roman')
     
-    axis.set_title("Clustering Results (Aligned by Cluster)", fontsize=20, fontweight='bold', pad=20, family='Times New Roman')
+    axis.set_title("Clustering Results (Aligned by Cluster)", fontsize=FONT_CONFIG['cluster_title'], fontweight='bold', pad=20, family='Times New Roman')
     
     plt.tight_layout()
     output_file = 'Output_Cluster_Scheme.png'
