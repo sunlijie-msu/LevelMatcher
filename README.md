@@ -6,8 +6,8 @@ This tool facilitates matching energy levels across experimental datasets, gener
 
 ## Key Features
 
-*   **Physics-Informed XGBoost Regressor:** Trained on synthetic physics constraints to predict match probabilities (0.0 to 1.0) for nuclear level pairs based on four engineered features: Energy Similarity, Spin Similarity, Parity Similarity, and Specificity.
-*   **Monotonic Constraints:** All four features enforce monotonic increasing relationships (higher feature value → higher match probability), ensuring physics compliance.
+*   **Physics-Informed XGBoost Regressor:** Trained on synthetic physics constraints to predict match probabilities (0.0 to 1.0) for nuclear level pairs based on five engineered features: Energy Similarity, Spin Similarity, Parity Similarity, Specificity, and Gamma Decay Pattern Similarity.
+*   **Monotonic Constraints:** All five features enforce monotonic increasing relationships (higher feature value → higher match probability), ensuring physics compliance.
 *   **Rule-Based Graph Clustering:** Deterministic algorithm merges high-confidence matches into clusters while enforcing:
     *   **Dataset Uniqueness:** Maximum one level per dataset per cluster
     *   **Mutual Consistency:** All cluster members must be mutually compatible (clique-like structure)
@@ -23,7 +23,8 @@ This tool facilitates matching energy levels across experimental datasets, gener
     *   `calculate_energy_similarity()`: Gaussian kernel scoring based on Z-score
     *   `calculate_spin_similarity()`: Nuclear selection rule enforcement (0.0 veto for forbidden transitions)
     *   `calculate_parity_similarity()`: Parity conservation checking
-    *   `extract_features()`: Constructs four-dimensional feature vectors for machine learning model
+    *   `calculate_gamma_decay_pattern_similarity()`: Cosine similarity of Gaussian-broadened gamma spectra
+    *   `extract_features()`: Constructs five-dimensional feature vectors for machine learning model
     *   `generate_synthetic_training_data()`: Generates 580+ synthetic training points encoding physics constraints across six scenarios
 *   **`Dataset_Parser.py`**: Converts ENSDF evaluator log files to structured JSON format. Handles complex Jπ notation including ranges, lists, tentative assignments, and nested parentheses.
 *   **`Combined_Visualizer.py`**: Visualizes input level schemes (`Input_Level_Scheme.png`) and clustering results (`Output_Cluster_Scheme.png`).
@@ -78,12 +79,12 @@ Scoring_Config = {
 2.  **Model Training (Supervised Learning):**
     *   Generates 580+ synthetic training samples encoding physics rules across six scenarios (perfect matches, physics vetoes, energy mismatches, ambiguous physics, weak matches, random background)
     *   Trains XGBoost regressor with `objective='binary:logistic'`
-    *   Enforces `monotone_constraints='(1, 1, 1, 1)'` on all four features
+    *   Enforces `monotone_constraints='(1, 1, 1, 1, 1)'` on all five features
     *   Hyperparameters: `n_estimators=100`, `max_depth=3`, `learning_rate=0.05`
 
 3.  **Pairwise Inference:**
     *   Compares all cross-dataset level pairs (A vs B, A vs C, B vs C)
-    *   Extracts four-dimensional feature vector for each pair
+    *   Extracts five-dimensional feature vector for each pair
     *   Predicts match probability using trained model
     *   Writes results to `Output_Level_Pairwise_Inference.txt` (pairs above `pairwise_output_threshold`)
 
@@ -235,7 +236,6 @@ Planned features for future versions (requires JSON schema extensions):
 
 | Feature | Physics Value | Implementation Notes |
 |---------|---------------|----------------------|
-| **Gamma-Ray Branching Ratios** | Critical — Often the only way to distinguish close-lying states with identical Jπ | Compare decay intensity patterns using cosine similarity of branching ratio vectors |
 | **Half-Life / Lifetime** | High — Orders of magnitude difference is a definitive veto (isomer vs ground state) | Gaussian similarity on log-scale lifetimes |
 | **Band Assignment** | Medium — Useful for high-spin rotational states | Match levels belonging to the same rotational band structure |
 

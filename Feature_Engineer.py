@@ -11,14 +11,15 @@ Feature Engineering For Nuclear Level Matching
 2. **Similarity Scoring** (`calculate_*_similarity`):
    - Energy: Gaussian exp(-Sigma_Scale×z²) via Scoring_Config['Energy'].
    - Spin/Parity: Optimistic maximum across option pairs, scores from Scoring_Config['Spin']/['Parity']. Neutral fallback: Scoring_Config['General']['Neutral_Score'].
+   - Gamma Decay Pattern: Cosine similarity of Gaussian-broadened gamma spectra.
 
-3. **4D Feature Vector** (`extract_features`):
-   - Four monotonic-increasing features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity].
+3. **5D Feature Vector** (`extract_features`):
+   - Five monotonic-increasing features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Pattern_Similarity].
    - Specificity = 1/f(multiplicity) where formula (sqrt/linear/log/tunable) from Scoring_Config['Specificity'].
 
 4. **Training Data** (`generate_synthetic_training_data`):
    - Creates labeled training pairs using grid-based feature space coverage + random sampling (500 points) + perfect-match boost (50 points).
-   - Labels: Hard-veto mismatches→0.0; probability = Energy × sqrt(Spin_factor × Parity_factor) × Specificity.
+   - Labels: Hard-veto mismatches→0.0; probability = Energy × sqrt(Physics_Confidence) × Specificity.
 
 """
 
@@ -334,94 +335,90 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
     return max_parity_similarity_score
 
 
-def calculate_gamma_decay_similarity(gamma_decays_1, gamma_decays_2):
+def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
     """
     Calculates gamma decay pattern similarity (0 to 1) for matching levels across experimental datasets.
     
     Physics Rationale:
-    - Gamma decay patterns are unique "fingerprints" for nuclear levels
-    - If two levels decay to the same final states with similar branching ratios, they are likely identical
-    - Example: Level at 5400 keV decaying via 1400 keV (70%) and 4400 keV (30%) gammas
+    - Gamma decay patterns are unique "fingerprints" for nuclear levels.
+    - Uses Cosine Similarity of Gaussian-broadened spectra to compare decay patterns.
+    - Handles energy shifts, missing peaks, and intensity differences naturally.
     
     Implementation Strategy:
-    - Compare gamma energy lists with measurement tolerance (±5 keV default)
-    - Weight by branching ratios when available, equal weights when missing
-    - Use weighted overlap coefficient: (sum of matched weights) / (total possible weight)
+    - Represent each level's gamma decay as a continuous spectral function:
+      S(E) = Sum( Intensity_i * Gaussian(E - E_gamma_i, sigma) )
+    - Compute Similarity = Integral(S1 * S2) / Sqrt(Integral(S1^2) * Integral(S2^2))
+      (Cosine Similarity of the spectral functions)
+    - Analytical solution for integral of product of Gaussians is used for efficiency.
     
     Input Format:
     gamma_decays = [
-        {'energy': 1400.0, 'branching_ratio': 0.7},  # Branching ratio optional
-        {'energy': 4400.0, 'branching_ratio': 0.3}   # If missing, treat as equal weight
+        {'energy': 1400.0, 'branching_ratio': 70.0},
+        {'energy': 4400.0, 'branching_ratio': 30.0}
     ]
     
-    Scoring Logic:
-    - Guard: Return neutral score (0.5) if either level lacks gamma data
-    - Perfect match (all gammas overlap within tolerance): 1.0
-    - Partial overlap: proportional to weighted overlap
-    - No overlap: 0.0
-    
-    Tolerance Handling:
-    - Gamma energy tolerance from Scoring_Config['Energy']['Default_Uncertainty'] (typically 10 keV)
-    - Two gammas match if |E_gamma1 - E_gamma2| < tolerance
+    Parameters:
+    - sigma: Energy resolution from Scoring_Config['Energy']['Default_Uncertainty'] (e.g. 10 keV)
     """
     # Guard: If either level has no gamma decay data, return neutral score
     if not gamma_decays_1 or not gamma_decays_2:
         return Scoring_Config['General']['Neutral_Score']
     
-    # Extract gamma energies and branching ratios (default to 1.0 if missing)
-    gammas_1 = [(g.get('energy'), g.get('branching_ratio', 1.0)) for g in gamma_decays_1 if g.get('energy') is not None]
-    gammas_2 = [(g.get('energy'), g.get('branching_ratio', 1.0)) for g in gamma_decays_2 if g.get('energy') is not None]
+    # Extract gamma energies and intensities (default to 1.0 if missing or zero)
+    # Filter out invalid entries
+    def extract_gammas(raw_decays):
+        cleaned = []
+        for g in raw_decays:
+            e = g.get('energy')
+            i = g.get('branching_ratio', 0.0)
+            if e is not None and i > 0:
+                cleaned.append((float(e), float(i)))
+        return cleaned
+
+    gammas_1 = extract_gammas(gamma_decays_1)
+    gammas_2 = extract_gammas(gamma_decays_2)
     
     # Guard: After filtering, check if any valid gammas remain
     if not gammas_1 or not gammas_2:
         return Scoring_Config['General']['Neutral_Score']
     
-    # Normalize branching ratios (handle cases where sum != 1.0)
-    total_ratio_1 = sum(ratio for _, ratio in gammas_1)
-    total_ratio_2 = sum(ratio for _, ratio in gammas_2)
-    gammas_1_normalized = [(energy, ratio/total_ratio_1) for energy, ratio in gammas_1]
-    gammas_2_normalized = [(energy, ratio/total_ratio_2) for energy, ratio in gammas_2]
+    sigma = Scoring_Config['Energy']['Default_Uncertainty']
+    # Precompute squared constants for Gaussian integral (product of two Gaussians)
+    # The term is exp( -(dA - dB)^2 / (2 * (sigma^2 + sigma^2)) ) -> 4*sigma^2
+    sigma_sq_4 = 4 * sigma**2
+    # Limit for correlation calculation optimization (~5 sigma)
+    cutoff_sq = 25 * sigma**2
     
-    # Gamma energy matching tolerance (use same as default energy uncertainty)
-    gamma_tolerance = Scoring_Config['Energy']['Default_Uncertainty']
+    # Helper to calculate dot product of two spectra
+    # Integral(S_A * S_B) propto Sum_i Sum_j A_i B_j * Exp( -(E_Ai - E_Bj)^2 / 4sigma^2 )
+    def spectrum_dot_product(g_list_a, g_list_b):
+        dot_sum = 0.0
+        for ea, ia in g_list_a:
+            for eb, ib in g_list_b:
+                energy_diff_sq = (ea - eb)**2
+                # Optimization: Ignore negligible terms
+                if energy_diff_sq > cutoff_sq: 
+                    continue
+                weight = np.exp(-energy_diff_sq / sigma_sq_4)
+                dot_sum += ia * ib * weight
+        return dot_sum
+
+    dot_11 = spectrum_dot_product(gammas_1, gammas_1)
+    dot_22 = spectrum_dot_product(gammas_2, gammas_2)
+    dot_12 = spectrum_dot_product(gammas_1, gammas_2)
     
-    # Calculate weighted overlap using greedy matching
-    # For each gamma in set 1, find best match in set 2 (if within tolerance)
-    matched_weight = 0.0
-    used_indices_2 = set()
-    
-    for energy_1, ratio_1 in gammas_1_normalized:
-        best_match_index = None
-        best_match_distance = gamma_tolerance
+    if dot_11 == 0 or dot_22 == 0:
+        return 0.0
         
-        # Find closest matching gamma in set 2
-        for i, (energy_2, ratio_2) in enumerate(gammas_2_normalized):
-            if i in used_indices_2:
-                continue
-            distance = abs(energy_1 - energy_2)
-            if distance < best_match_distance:
-                best_match_distance = distance
-                best_match_index = i
-        
-        # If match found, accumulate weighted overlap
-        if best_match_index is not None:
-            energy_2, ratio_2 = gammas_2_normalized[best_match_index]
-            # Weight by minimum of the two branching ratios (conservative)
-            matched_weight += min(ratio_1, ratio_2)
-            used_indices_2.add(best_match_index)
-    
-    # Overlap coefficient: matched weight / total possible weight
-    # Total possible weight is 1.0 (since we normalized both sets to sum to 1.0)
-    similarity = matched_weight
-    
-    return similarity
+    similarity = dot_12 / np.sqrt(dot_11 * dot_22)
+    return float(similarity)
 
 
 def extract_features(level_1, level_2):
     """
     Constructs five-dimensional feature vector for ML-based match probability prediction.
     
-    Feature Vector Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Similarity]
+    Feature Vector Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Pattern_Similarity]
     
     Design Principle:
     - All features are monotonic increasing: higher value strictly indicates better match likelihood.
@@ -469,10 +466,12 @@ def extract_features(level_1, level_2):
        - Ambiguous levels (3×3=9 options): 0.33 using sqrt (67% penalty)
        - Rationale: Measurement ambiguity reduces confidence in match assessment
     
-    5. Gamma_Decay_Similarity (0-1):
-       - Weighted overlap of gamma energy patterns (decay "fingerprint")
-       - Tolerance from Scoring_Config['Energy']['Default_Uncertainty'] (typically 10 keV)
-       - Weight by branching ratios when available, equal weights when missing
+    5. Gamma_Decay_Pattern_Similarity (0-1):
+       - Cosine Similarity of Gaussian-broadened gamma spectra.
+       - Concept: Represents decay pattern as a continuous function S(E) = Sum(I_i * G(E-E_i)).
+       - Metric: Integral(S1*S2) / Sqrt(Integral(S1^2)*Integral(S2^2)).
+       - Sigma from Scoring_Config['Energy']['Default_Uncertainty'].
+       - Robustly handles energy shifts (via Gaussian overlap) and intensity mismatches (via vector angle).
        - Guard: Uses Scoring_Config['General']['Neutral_Score'] (typically 0.5) when gamma data missing
        - Rationale: Levels with similar decay patterns likely identical
        - Example: Both levels decay via 1400 keV (70%) and 4400 keV (30%) → similarity ≈ 1.0
@@ -552,9 +551,9 @@ def extract_features(level_1, level_2):
     # Feature 5: Gamma decay pattern similarity
     gamma_decays_1 = level_1.get('gamma_decays', [])
     gamma_decays_2 = level_2.get('gamma_decays', [])
-    gamma_decay_similarity = calculate_gamma_decay_similarity(gamma_decays_1, gamma_decays_2)
+    gamma_decay_pattern_similarity = calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2)
     
-    return np.array([energy_similarity, spin_similarity, parity_similarity, specificity, gamma_decay_similarity])
+    return np.array([energy_similarity, spin_similarity, parity_similarity, specificity, gamma_decay_pattern_similarity])
 
 def generate_synthetic_training_data():
     """
