@@ -20,6 +20,7 @@ Engine for Nuclear Level Matching
 3. **Model Training** (XGBoost with monotone constraints):
    - Train binary logistic regressor on synthetic physics-labeled pairs from Feature_Engineer.
    - Monotone constraints: all five features constrained positive to preserve physics priors.
+   - Feature Correlation: Model learns that perfect spin+parity can "rescue" mediocre energy similarity.
    - Key params (see code): n_estimators=1000, max_depth=10, learning_rate=0.05, random_state=42.
 
 4. **Pairwise Inference** (cross-dataset only):

@@ -2,77 +2,83 @@
 
 Total Level Pairs Found: 127
 
-A_0 <-> B_0 | Probability: 93.6%
+A_0 <-> B_0 | Probability: 93.9%
   Features: Energy_Sim=1.00, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_0 <-> C_0 | Probability: 93.6%
+A_0 <-> C_0 | Probability: 93.9%
   Features: Energy_Sim=1.00, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-B_0 <-> C_0 | Probability: 93.6%
+B_0 <-> C_0 | Probability: 93.9%
   Features: Energy_Sim=1.00, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_2005 <-> C_2000 | Probability: 77.2%
-  Features: Energy_Sim=0.91, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.94
-
-A_3005 <-> C_3005 | Probability: 74.4%
-  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
-
-A_600 <-> C_601 | Probability: 74.3%
-  Features: Energy_Sim=0.99, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
-
-A_3000 <-> C_3005 | Probability: 74.3%
-  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
-
-B_3000 <-> C_3005 | Probability: 74.3%
-  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
-
-B_603 <-> C_601 | Probability: 73.1%
-  Features: Energy_Sim=0.98, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
-
-A_600 <-> B_603 | Probability: 68.4%
-  Features: Energy_Sim=0.91, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
-
-A_3005 <-> B_3000 | Probability: 56.5%
+A_3005 <-> B_3000 | Probability: 81.6%
   Features: Energy_Sim=0.61, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_4005 <-> B_4000 | Probability: 43.7%
+A_2005 <-> C_2000 | Probability: 77.1%
+  Features: Energy_Sim=0.91, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.94
+
+A_3005 <-> C_3005 | Probability: 75.0%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
+
+A_600 <-> C_601 | Probability: 74.8%
+  Features: Energy_Sim=0.99, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
+
+A_3000 <-> C_3005 | Probability: 74.8%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
+
+B_3000 <-> C_3005 | Probability: 74.8%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
+
+B_603 <-> C_601 | Probability: 73.6%
+  Features: Energy_Sim=0.98, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
+
+A_600 <-> B_603 | Probability: 68.5%
+  Features: Energy_Sim=0.91, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
+
+A_4005 <-> B_4000 | Probability: 47.1%
   Features: Energy_Sim=0.61, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_4000 <-> C_4003 | Probability: 40.0%
+A_4000 <-> C_4003 | Probability: 39.0%
   Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-A_4005 <-> C_4003 | Probability: 40.0%
+A_4005 <-> C_4003 | Probability: 39.0%
   Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-B_4000 <-> C_4003 | Probability: 40.0%
+B_4000 <-> C_4003 | Probability: 39.0%
   Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-B_5000 <-> C_5003 | Probability: 40.0%
+B_5000 <-> C_5003 | Probability: 39.0%
   Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-A_5000 <-> C_5003 | Probability: 28.9%
+A_5000 <-> C_5003 | Probability: 29.1%
   Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.33, Gamma_Pattern_Sim=0.50
 
-A_5005 <-> C_5003 | Probability: 28.9%
+A_5005 <-> C_5003 | Probability: 29.1%
   Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.33, Gamma_Pattern_Sim=0.50
 
-A_5005 <-> B_5000 | Probability: 25.0%
+A_5005 <-> B_5000 | Probability: 25.1%
   Features: Energy_Sim=0.61, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-A_2000 <-> B_2008 | Probability: 16.9%
+A_2000 <-> B_2008 | Probability: 18.5%
   Features: Energy_Sim=0.28, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.94
 
-A_4000 <-> B_4000 | Probability: 8.3%
+A_4000 <-> B_4000 | Probability: 8.5%
   Features: Energy_Sim=1.00, Spin_Sim=0.20, Parity_Sim=0.05, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
 A_5000 <-> B_5000 | Probability: 6.0%
   Features: Energy_Sim=1.00, Spin_Sim=0.20, Parity_Sim=0.05, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-A_3000 <-> B_4000 | Probability: 0.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=1.00, Gamma_Pattern_Sim=0.50
+A_3000 <-> C_4003 | Probability: 0.5%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-A_4000 <-> B_3000 | Probability: 0.5%
-  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=1.00, Gamma_Pattern_Sim=0.50
+A_3000 <-> C_5003 | Probability: 0.5%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
+
+A_3005 <-> C_4003 | Probability: 0.5%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
+
+B_3000 <-> C_4003 | Probability: 0.5%
+  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
 A_0 <-> B_603 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
@@ -167,6 +173,9 @@ A_3000 <-> B_603 | Probability: 0.5%
 A_3000 <-> B_2008 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
+A_3000 <-> B_4000 | Probability: 0.5%
+  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=1.00, Gamma_Pattern_Sim=0.50
+
 A_3000 <-> C_601 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
@@ -190,6 +199,9 @@ A_4000 <-> B_603 | Probability: 0.5%
 
 A_4000 <-> B_2008 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
+
+A_4000 <-> B_3000 | Probability: 0.5%
+  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
 A_4000 <-> C_601 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
@@ -266,27 +278,6 @@ B_5000 <-> C_2000 | Probability: 0.5%
 B_5000 <-> C_3005 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_3000 <-> C_4003 | Probability: 0.4%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
-
-A_3000 <-> C_5003 | Probability: 0.4%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
-
-A_3005 <-> C_4003 | Probability: 0.4%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
-
-B_3000 <-> C_4003 | Probability: 0.4%
-  Features: Energy_Sim=0.00, Spin_Sim=1.00, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
-
-A_4005 <-> C_5003 | Probability: 0.4%
-  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
-
-A_5000 <-> B_4000 | Probability: 0.4%
-  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=0.58, Gamma_Pattern_Sim=0.50
-
-B_4000 <-> C_5003 | Probability: 0.4%
-  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
-
 A_600 <-> C_4003 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
@@ -305,11 +296,17 @@ A_2005 <-> C_4003 | Probability: 0.4%
 A_2005 <-> C_5003 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
+A_4005 <-> C_5003 | Probability: 0.4%
+  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
+
 A_5000 <-> B_603 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
 A_5000 <-> B_2008 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
+
+A_5000 <-> B_4000 | Probability: 0.4%
+  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
 A_5000 <-> C_601 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
@@ -347,10 +344,13 @@ B_2008 <-> C_4003 | Probability: 0.4%
 B_2008 <-> C_5003 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-A_5000 <-> C_4003 | Probability: 0.3%
+B_4000 <-> C_5003 | Probability: 0.4%
+  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
+
+A_5000 <-> C_4003 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.33, Gamma_Pattern_Sim=0.50
 
-A_5005 <-> C_4003 | Probability: 0.3%
+A_5005 <-> C_4003 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.33, Gamma_Pattern_Sim=0.50
 
 A_4000 <-> C_5003 | Probability: 0.3%
@@ -365,6 +365,9 @@ A_5000 <-> C_0 | Probability: 0.3%
 B_5000 <-> C_4003 | Probability: 0.3%
   Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
+A_5000 <-> B_3000 | Probability: 0.2%
+  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.05, Specificity=0.58, Gamma_Pattern_Sim=0.50
+
 A_3005 <-> B_4000 | Probability: 0.2%
   Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.05, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
@@ -376,9 +379,6 @@ A_4000 <-> C_0 | Probability: 0.2%
 
 A_4005 <-> B_3000 | Probability: 0.2%
   Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.05, Specificity=1.00, Gamma_Pattern_Sim=0.50
-
-A_5000 <-> B_3000 | Probability: 0.2%
-  Features: Energy_Sim=0.00, Spin_Sim=0.80, Parity_Sim=0.05, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
 A_5005 <-> B_4000 | Probability: 0.1%
   Features: Energy_Sim=0.00, Spin_Sim=0.20, Parity_Sim=0.05, Specificity=0.58, Gamma_Pattern_Sim=0.50

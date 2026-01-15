@@ -20,6 +20,9 @@ Feature Engineering For Nuclear Level Matching
 4. **Training Data** (`generate_synthetic_training_data`):
    - Creates labeled training pairs using grid-based feature space coverage + random sampling (500 points) + perfect-match boost (50 points).
    - Labels: Hard-veto mismatches→0.0; probability = Energy × sqrt(Physics_Confidence) × Specificity.
+   - **Feature Correlation**: Perfect spin+parity (both ≥0.95) triggers "Physics Rescue" where
+     effective_energy = energy^Rescue_Exponent. This teaches XGBoost that identical quantum numbers
+     can compensate for calibration-induced energy disagreement.
 
 """
 
@@ -67,6 +70,19 @@ Scoring_Config = {
         # Only used if Formula='tunable': specificity = 1/(1 + Alpha*(mult-1))
         # Higher Alpha → steeper penalty. Example: Alpha=0.5 gives mult=9→18% (82% penalty)
         'Alpha': 0.5
+    },
+    'Feature_Correlation': {
+        # Controls how perfect spin/parity matching can "rescue" mediocre energy similarity.
+        # Physics rationale: If two levels have identical quantum numbers (Jπ) and are isolated
+        # (no nearby levels with same Jπ), energy disagreement may be due to measurement error
+        # or calibration issues rather than genuine mismatch.
+        #
+        # When Enabled: If spin_sim >= Threshold AND parity_sim >= Threshold,
+        # the effective energy similarity is boosted: effective_e = e^Rescue_Exponent
+        # Example: Rescue_Exponent=0.5 (sqrt) transforms e=0.4→0.63, e=0.6→0.77
+        'Enabled': True,
+        'Threshold': 0.95,        # Minimum spin/parity similarity to trigger rescue (firm matches only)
+        'Rescue_Exponent': 0.5    # Exponent for energy boost: e → e^exponent (0.5 = sqrt, 0.7 = gentler)
     },
     'General': {
         # Score used when data is missing (e.g. unknown).
@@ -562,11 +578,20 @@ def generate_synthetic_training_data():
     Strategy:
     - Uses a grid-based approach to cover all physics scenarios defined in Scoring_Config.
     - Applies a unified physics logic function (calculate_label) rather than hardcoded edge cases.
+    - Implements FEATURE CORRELATION: Perfect spin/parity can "rescue" mediocre energy similarity.
     - Ensures the model learns:
         1. Vetoes: Mismatches (Score ~0.0) -> Label 0.0.
         2. Neutrality: Unknown physics (Score 0.5) -> High dependence on Energy.
         3. Match Quality: Higher scores -> Higher probability.
         4. Gamma Decay: Additional confirmation when decay patterns match.
+        5. Feature Correlation: Perfect physics (Spin+Parity) relaxes energy strictness.
+    
+    Feature Correlation Physics Rationale:
+    - If two levels have IDENTICAL quantum numbers (firm Jπ match) but disagreeing energies,
+      the energy mismatch may be due to calibration error, not genuine mismatch.
+    - This is especially true for isolated levels (no nearby states with same Jπ).
+    - XGBoost learns this interaction: when Spin_Sim=1.0 AND Parity_Sim=1.0, the model
+      assigns higher probability even with moderate Energy_Sim (e.g., 0.4-0.7).
     """
     training_points = []
     
@@ -575,34 +600,52 @@ def generate_synthetic_training_data():
     parity_scores = list(Scoring_Config['Parity'].values()) + [Scoring_Config['General']['Neutral_Score']]
     gamma_scores = [0.0, 0.3, Scoring_Config['General']['Neutral_Score'], 0.7, 1.0]  # Range: no match to perfect match
     
-    # 2. Define Physics Logic for Labeling (Empirically tuned)
-    def calculate_label(e, s, p, spec, gamma):
+    # 2. Feature Correlation Configuration
+    correlation_enabled = Scoring_Config['Feature_Correlation']['Enabled']
+    correlation_threshold = Scoring_Config['Feature_Correlation']['Threshold']
+    rescue_exponent = Scoring_Config['Feature_Correlation']['Rescue_Exponent']
+    
+    # 3. Define Physics Logic for Labeling (with Feature Correlation)
+    def calculate_label(energy_similarity, spin_similarity, parity_similarity, specificity, gamma_similarity):
         # HARD VETO: If physics explicitly mismatches (score <= near-zero), reject.
         # Allow small tolerance if config uses 0.05 for mismatched.
-        if s <= Scoring_Config['Spin'].get('Mismatch_Strong', 0.05) or \
-           p <= Scoring_Config['Parity'].get('Mismatch_Weak', 0.1) / 2: # Logic: Parity mismatch is usually binary (0 or 1).
-             return 0.0
+        if spin_similarity <= Scoring_Config['Spin'].get('Mismatch_Strong', 0.05) or \
+           parity_similarity <= Scoring_Config['Parity'].get('Mismatch_Weak', 0.1) / 2:
+            return 0.0
 
         # ADJUSTMENT FOR NEUTRAL/TENTATIVE:
         # Map raw scores to "Confidence Factors" to prevent multiplicative decay from killing good matches.
-        # If Score is Neutral (0.5), treat it as "No Info" -> Factor ~0.9 (slight penalty vs perfect).
-        def value_map(val):
-            if val == Scoring_Config['General']['Neutral_Score']: return 0.85
-            return val
+        # If Score is Neutral (0.5), treat it as "No Info" -> Factor ~0.85 (slight penalty vs perfect).
+        def value_map(value):
+            if value == Scoring_Config['General']['Neutral_Score']:
+                return 0.85
+            return value
 
-        s_factor = value_map(s)
-        p_factor = value_map(p)
-        gamma_factor = value_map(gamma)
+        spin_factor = value_map(spin_similarity)
+        parity_factor = value_map(parity_similarity)
+        gamma_factor = value_map(gamma_similarity)
+
+        # FEATURE CORRELATION: Physics Rescue
+        # If spin AND parity are both essentially perfect (firm matches),
+        # relax the dependency on energy similarity by boosting it.
+        # Physics rationale: Perfect quantum number agreement suggests the same level
+        # even if energy calibration differs slightly between experiments.
+        effective_energy = energy_similarity
+        if correlation_enabled:
+            if spin_similarity >= correlation_threshold and parity_similarity >= correlation_threshold:
+                # Apply rescue: e → e^exponent (e.g., sqrt transforms 0.4→0.63, 0.6→0.77)
+                # This reduces the penalty for mediocre energy when physics is perfect.
+                effective_energy = energy_similarity ** rescue_exponent
 
         # PROBABILITY FORMULA:
-        # Base confidence from Energy * Physics Quality * Gamma Pattern Match
+        # Base confidence from Energy * Physics Quality * Specificity
         # Use geometric mean of physics factors to balance them.
-        physics_confidence = np.sqrt(s_factor * p_factor * gamma_factor)
+        physics_confidence = np.sqrt(spin_factor * parity_factor * gamma_factor)
         
-        prob = e * physics_confidence * spec
-        return min(max(prob, 0.0), 0.99)
+        probability = effective_energy * physics_confidence * specificity
+        return min(max(probability, 0.0), 0.99)
 
-    # 3. Systematic Grid Generation (Cover the feature space)
+    # 4. Systematic Grid Generation (Cover the feature space)
     # Energy grid: dense near 0 (mismatch) and 1 (match)
     energy_grid = np.concatenate([
         np.linspace(0.0, 0.3, 10),  # Low energy (mismatch zone)
@@ -610,37 +653,67 @@ def generate_synthetic_training_data():
         np.linspace(0.8, 1.0, 20)   # High energy (match zone)
     ])
 
-    for e in energy_grid:
-        for s in set(spin_scores):
-            for p in set(parity_scores):
+    for energy in energy_grid:
+        for spin in set(spin_scores):
+            for parity in set(parity_scores):
                 # Specificity mostly 1.0, but add some noise/variation
-                for spec in [1.0, 0.7, 0.5]:
+                for specificity in [1.0, 0.7, 0.5]:
                     for gamma in gamma_scores:
-                        label = calculate_label(e, s, p, spec, gamma)
-                        training_points.append(([e, s, p, spec, gamma], label))
+                        label = calculate_label(energy, spin, parity, specificity, gamma)
+                        training_points.append(([energy, spin, parity, specificity, gamma], label))
 
-    # 4. Random Sampling (Fill gaps and prevent overfitting)
+    # 5. FEATURE CORRELATION TEACHING SET (Critical for learning the interaction)
+    # Explicitly oversample the region where energy is mediocre but physics is perfect.
+    # This teaches XGBoost to split on Spin/Parity first, then apply different energy slopes.
+    perfect_spin = Scoring_Config['Spin']['Match_Firm']
+    perfect_parity = Scoring_Config['Parity']['Match_Firm']
+    imperfect_spin = Scoring_Config['Spin']['Match_Strong']  # e.g., 0.8 (tentative match)
+    imperfect_parity = Scoring_Config['Parity']['Match_Strong']  # e.g., 0.8 (tentative match)
+    
+    # Mediocre energy range where correlation effect is most visible
+    mediocre_energy_values = [0.3, 0.4, 0.5, 0.6, 0.7]
+    
+    for energy in mediocre_energy_values:
+        # Case A: Perfect Physics → Label should be BOOSTED (rescued)
+        # Model learns: [mediocre energy, perfect spin, perfect parity] → high probability
+        label_boosted = calculate_label(energy, perfect_spin, perfect_parity, 1.0, 0.5)
+        training_points.append(([energy, perfect_spin, perfect_parity, 1.0, 0.5], label_boosted))
+        
+        # Case B: Imperfect Physics → Label should be STANDARD (no rescue)
+        # Model learns: [mediocre energy, imperfect physics] → standard (lower) probability
+        # This CONTRAST forces the tree to split on Spin/Parity condition
+        label_standard = calculate_label(energy, imperfect_spin, imperfect_parity, 1.0, 0.5)
+        training_points.append(([energy, imperfect_spin, imperfect_parity, 1.0, 0.5], label_standard))
+        
+        # Case C: Mixed Physics (one perfect, one imperfect) → No rescue
+        # Ensures rescue only triggers when BOTH spin AND parity are perfect
+        label_mixed_1 = calculate_label(energy, perfect_spin, imperfect_parity, 1.0, 0.5)
+        training_points.append(([energy, perfect_spin, imperfect_parity, 1.0, 0.5], label_mixed_1))
+        label_mixed_2 = calculate_label(energy, imperfect_spin, perfect_parity, 1.0, 0.5)
+        training_points.append(([energy, imperfect_spin, perfect_parity, 1.0, 0.5], label_mixed_2))
+
+    # 6. Random Sampling (Fill gaps and prevent overfitting)
     np.random.seed(42)
     for _ in range(500):
-        e = np.random.uniform(0, 1)
-        s = np.random.choice(list(set(spin_scores)))
-        p = np.random.choice(list(set(parity_scores)))
+        energy = np.random.uniform(0, 1)
+        spin = np.random.choice(list(set(spin_scores)))
+        parity = np.random.choice(list(set(parity_scores)))
         # Generate specificity roughly following 1/sqrt(N) distribution
-        spec = np.random.choice([1.0, 0.707, 0.577, 0.5, 0.4])
+        specificity = np.random.choice([1.0, 0.707, 0.577, 0.5, 0.4])
         gamma = np.random.choice(gamma_scores)
         
-        label = calculate_label(e, s, p, spec, gamma)
-        training_points.append(([e, s, p, spec, gamma], label))
+        label = calculate_label(energy, spin, parity, specificity, gamma)
+        training_points.append(([energy, spin, parity, specificity, gamma], label))
 
-    # 5. Additional Boost for "Perfect" cases to ensure 1.0-like behavior
+    # 7. Additional Boost for "Perfect" cases to ensure 1.0-like behavior
     # Forces model to be very confident when everything is perfect
     for _ in range(50):
-        e = np.random.uniform(0.95, 1.0)
-        s = Scoring_Config['Spin']['Match_Firm']
-        p = Scoring_Config['Parity']['Match_Firm']
-        spec = 1.0
-        gamma = np.random.choice([Scoring_Config['General']['Neutral_Score'], 0.9, 1.0])  # Perfect or neutral gamma
-        training_points.append(([e, s, p, spec, gamma], 0.99))
+        energy = np.random.uniform(0.95, 1.0)
+        spin = Scoring_Config['Spin']['Match_Firm']
+        parity = Scoring_Config['Parity']['Match_Firm']
+        specificity = 1.0
+        gamma = np.random.choice([Scoring_Config['General']['Neutral_Score'], 0.9, 1.0])
+        training_points.append(([energy, spin, parity, specificity, gamma], 0.99))
 
     training_features = np.array([record[0] for record in training_points])
     training_labels = np.array([record[1] for record in training_points])

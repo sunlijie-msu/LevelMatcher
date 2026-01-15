@@ -34,8 +34,8 @@ This tool facilitates matching energy levels across experimental datasets, gener
 Edit these parameters in `Level_Matcher.py`:
 
 ```python
-pairwise_output_threshold = 0.01   # Minimum probability for writing level pairs to file (1%)
-clustering_merge_threshold = 0.30  # Minimum probability for cluster merging (30%)
+pairwise_output_threshold = 0.001  # Minimum probability for writing level pairs to file (0.1%)
+clustering_merge_threshold = 0.15  # Minimum probability for cluster merging (15%)
 ```
 
 Adjust physics scoring in `Feature_Engineer.py` → `Scoring_Config` dictionary:
@@ -63,6 +63,11 @@ Scoring_Config = {
         'Formula': 'sqrt',               # Options: 'sqrt', 'linear', 'log', 'tunable'
         'Alpha': 0.5                     # Only for 'tunable': penalty steepness parameter
     },
+    'Feature_Correlation': {
+        'Enabled': True,                 # Enable physics rescue for perfect spin+parity
+        'Threshold': 0.95,               # Minimum similarity to trigger rescue
+        'Rescue_Exponent': 0.5           # Energy boost: e → e^0.5 (sqrt transformation)
+    },
     'General': {
         'Neutral_Score': 0.5             # Score when data is missing/unknown
     }
@@ -78,9 +83,10 @@ Scoring_Config = {
 
 2.  **Model Training (Supervised Learning):**
     *   Generates 580+ synthetic training samples encoding physics rules across six scenarios (perfect matches, physics vetoes, energy mismatches, ambiguous physics, weak matches, random background)
+    *   Implements **Feature Correlation**: Perfect spin+parity (≥0.95) triggers "Physics Rescue" where energy similarity is boosted via sqrt transformation
     *   Trains XGBoost regressor with `objective='binary:logistic'`
     *   Enforces `monotone_constraints='(1, 1, 1, 1, 1)'` on all five features
-    *   Hyperparameters: `n_estimators=100`, `max_depth=3`, `learning_rate=0.05`
+    *   Hyperparameters: `n_estimators=1000`, `max_depth=10`, `learning_rate=0.05`
 
 3.  **Pairwise Inference:**
     *   Compares all cross-dataset level pairs (A vs B, A vs C, B vs C)
