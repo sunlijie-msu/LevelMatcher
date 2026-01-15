@@ -24,7 +24,7 @@ Engine for Nuclear Level Matching
 
 4. **Pairwise Inference** (cross-dataset only):
    - Enumerate all level pairs across datasets, extract features, predict match probability.
-   - Keep pairs above pairwise_output_threshold (default 0.01) and write Output_Level_Pairwise_Inference.txt.
+   - Keep pairs above pairwise_output_threshold (default 0.1%) and write Output_Level_Pairwise_Inference.txt.
 
 5. **Graph Clustering (rule-based, no ML)**:
    - Greedy merge clusters in probability order with dataset-uniqueness and all-to-all compatibility checks (threshold clustering_merge_threshold=0.15).
@@ -32,7 +32,7 @@ Engine for Nuclear Level Matching
 """
 
 # Configuration Parameters
-pairwise_output_threshold = 0.01  # Minimum probability for outputting level pairs (1%)
+pairwise_output_threshold = 0.001  # Minimum probability for outputting level pairs (0.1%)
 clustering_merge_threshold = 0.15  # Minimum probability for cluster merging (15%)
 
 # ==========================================
