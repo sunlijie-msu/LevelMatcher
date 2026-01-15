@@ -6,11 +6,24 @@ Strategy:
 1. Split synthetic training data for validation (holdout method)
 2. Train multiple model configurations
 3. Validate with MSE on held-out synthetic data
-4. Run full pipeline (pairwise + clustering) for each config on real datasets
-5. Compare clustering results against expert knowledge
-6. Select best configuration based on validation metrics + expert review
+4. Run full pipeline (pairwise + clustering) for each config on expanded test datasets (A-F)
+5. Calculate discrimination metrics: probability spread, confidence separation
+6. Compare clustering results against expert knowledge
+7. Select best configuration balancing accuracy (MSE) and discrimination (separation)
 
-Note: Real datasets (A, B, C) are NEVER used for training, only inference validation
+Expanded Test Cases (A-F):
+- Datasets A, B, C: Original simple cases with clear matches
+- Dataset D: Marginal energy overlaps, tentative spin assignments
+- Dataset E: Spin/parity conflicts, high uncertainties
+- Dataset F: Ambiguous cases mixing tentative and definite assignments
+
+Discrimination Metrics:
+- MSE: Prediction accuracy on synthetic validation data
+- Probability Spread: Standard deviation of all match probabilities (higher = better differentiation)
+- Confidence Separation: Mean(high prob) - Mean(low prob) (higher = clearer decision boundaries)
+- High/Medium/Low Counts: Distribution of matches by probability ranges
+
+Note: Real datasets (A-F) are NEVER used for training, only inference validation
 """
 
 import pandas as pd
@@ -125,8 +138,8 @@ def run_inference_and_clustering(model, config_name):
     """
     print(f"\n  Running inference and clustering for: {config_name}")
     
-    # Load real test datasets
-    levels = load_levels_from_json(['A', 'B', 'C'])
+    # Load real test datasets - expanded to include challenging edge cases (D, E, F)
+    levels = load_levels_from_json(['A', 'B', 'C', 'D', 'E', 'F'])
     dataframe = pd.DataFrame(levels)
     dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int(row['energy_value'])}", axis=1)
     
@@ -273,6 +286,15 @@ def run_inference_and_clustering(model, config_name):
     print(f"    Average Cluster Size: {average_cluster_size:.2f}")
     print(f"    Total High-confidence Pairs (>= {clustering_merge_threshold}): {len(valid_pairs)//2}")
     
+    # Calculate additional discriminating metrics to differentiate hyperparameters
+    probability_list = [pair['probability'] for pair in matching_level_pairs]
+    high_prob_pairs = [p for p in probability_list if p >= 0.7]  # Strong matches
+    medium_prob_pairs = [p for p in probability_list if 0.3 <= p < 0.7]  # Ambiguous
+    low_prob_pairs = [p for p in probability_list if 0.15 <= p < 0.3]  # Weak matches
+    
+    probability_spread = np.std(probability_list) if probability_list else 0
+    confidence_separation = np.mean(high_prob_pairs) - np.mean(low_prob_pairs) if high_prob_pairs and low_prob_pairs else 0
+    
     return {
         'total_clusters': len(unique_clusters),
         'multi_member_clusters': len(multi_member_clusters),
@@ -280,7 +302,12 @@ def run_inference_and_clustering(model, config_name):
         'high_confidence_pairs': len(valid_pairs)//2,
         'clusters': unique_clusters,
         'level_lookup': level_lookup,
-        'matching_pairs': matching_level_pairs
+        'matching_pairs': matching_level_pairs,
+        'probability_spread': probability_spread,
+        'confidence_separation': confidence_separation,
+        'high_prob_count': len(high_prob_pairs),
+        'medium_prob_count': len(medium_prob_pairs),
+        'low_prob_count': len(low_prob_pairs)
     }
 
 
@@ -380,36 +407,62 @@ if __name__ == "__main__":
         # Save pairwise inference results with match probabilities
         save_pairwise_results(config['name'], clustering_results['matching_pairs'])
         
-        # Store summary results
+        # Store summary results with expanded metrics
         results_summary.append({
             'name': config['name'],
             'mse': mse,
             'total_clusters': clustering_results['total_clusters'],
             'multi_member_clusters': clustering_results['multi_member_clusters'],
             'average_cluster_size': clustering_results['average_cluster_size'],
-            'high_confidence_pairs': clustering_results['high_confidence_pairs']
+            'high_confidence_pairs': clustering_results['high_confidence_pairs'],
+            'probability_spread': clustering_results['probability_spread'],
+            'confidence_separation': clustering_results['confidence_separation'],
+            'high_prob_count': clustering_results['high_prob_count'],
+            'medium_prob_count': clustering_results['medium_prob_count'],
+            'low_prob_count': clustering_results['low_prob_count']
         })
     
-    # Print comparison table
-    print("\n" + "="*60)
-    print("SUMMARY: HYPERPARAMETER COMPARISON")
-    print("="*60)
-    print(f"\n{'Configuration':<40} {'MSE':<10} {'Clusters':<10} {'Multi':<10} {'AvgSize':<10}")
-    print("-" * 80)
+    # Print expanded comparison table
+    print("\n" + "="*100)
+    print("SUMMARY: HYPERPARAMETER COMPARISON (EXPANDED TEST CASES)")
+    print("="*100)
+    print(f"\n{'Configuration':<40} {'MSE':<8} {'Clusters':<10} {'Multi':<8} {'AvgSize':<10}")
+    print("-" * 100)
     
     for result in results_summary:
-        print(f"{result['name']:<40} {result['mse']:<10.4f} "
-              f"{result['total_clusters']:<10} {result['multi_member_clusters']:<10} {result['average_cluster_size']:<10.2f}")
+        print(f"{result['name']:<40} {result['mse']:<8.4f} "
+              f"{result['total_clusters']:<10} {result['multi_member_clusters']:<8} {result['average_cluster_size']:<10.2f}")
     
-    # Identify best by validation metric
+    print("\n" + "-" * 100)
+    print(f"\n{'Configuration':<40} {'High(>70%)':<12} {'Med(30-70%)':<14} {'Low(15-30%)':<14} {'Spread':<10} {'Separation':<12}")
+    print("-" * 100)
+    
+    for result in results_summary:
+        print(f"{result['name']:<40} {result['high_prob_count']:<12} "
+              f"{result['medium_prob_count']:<14} {result['low_prob_count']:<14} "
+              f"{result['probability_spread']:<10.4f} {result['confidence_separation']:<12.4f}")
+    
+    # Identify best by multiple criteria
     best_by_mse = min(results_summary, key=lambda x: x['mse'])
+    best_by_separation = max(results_summary, key=lambda x: x['confidence_separation'])
+    best_by_spread = max(results_summary, key=lambda x: x['probability_spread'])
     
-    print("\n" + "="*60)
-    print("RECOMMENDATION")
-    print("="*60)
+    print("\n" + "="*100)
+    print("RECOMMENDATION ANALYSIS")
+    print("="*100)
     print(f"\nBest by Validation MSE: {best_by_mse['name']} (MSE: {best_by_mse['mse']:.4f})")
+    print(f"  → Lowest prediction error on synthetic validation data")
+    
+    print(f"\nBest by Confidence Separation: {best_by_separation['name']} (Sep: {best_by_separation['confidence_separation']:.4f})")
+    print(f"  → Best discrimination between high-confidence and low-confidence matches")
+    
+    print(f"\nBest by Probability Spread: {best_by_spread['name']} (Spread: {best_by_spread['probability_spread']:.4f})")
+    print(f"  → Widest range of probabilities, better differentiation between cases")
+    
     print("\nNext Steps:")
     print("  1. Review detailed clustering files: Output_Hyperparameter_Test_*.txt")
-    print("  2. Compare with your expert knowledge of correct clusters")
-    print("  3. Select configuration that best matches your domain expertise")
-    print("  4. Update Level_Matcher.py parameters with chosen configuration")
+    print("  2. Review pairwise probabilities: Output_Hyperparameter_Pairwise_*.txt")
+    print("  3. Compare with your expert knowledge of correct clusters")
+    print("  4. Consider all metrics: MSE measures accuracy, Separation measures discrimination")
+    print("  5. Select configuration that best balances accuracy and discrimination")
+    print("  6. Update Level_Matcher.py parameters with chosen configuration")
