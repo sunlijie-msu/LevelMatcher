@@ -80,11 +80,11 @@ def load_dataset(dataset_code):
 
 def plot_level_schemes():
     """Generate visualization of input level schemes from all datasets."""
-    datasets = ['A', 'B', 'C']
-    figure, axis = plt.subplots(figsize=(15, 10))
+    datasets = ['A', 'B', 'C', 'D', 'E', 'F']
+    figure, axis = plt.subplots(figsize=(20, 10))
     
     # X-axis positions for each dataset column
-    x_positions = {'A': 0, 'B': 2.5, 'C': 5.0}
+    x_positions = {'A': 0, 'B': 2.5, 'C': 5.0, 'D': 7.5, 'E': 10.0, 'F': 12.5}
     line_width = 0.8
     maximum_energy = 0
     
@@ -180,10 +180,11 @@ def plot_level_schemes():
                     axis.text(x_end + 0.1, y_text, item['label_right'], va='center', ha='left', fontsize=20, family='Times New Roman')
 
     # Styling
-    axis.set_xlim(-1.5, 6.5)
+    axis.set_xlim(-1.5, 14.0)
     axis.set_ylim(0, maximum_energy * 1.15)
-    axis.set_xticks([0, 2.5, 5.0])
-    axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C'], fontsize=20, fontweight='bold', family='Times New Roman')
+    axis.set_xticks([0, 2.5, 5.0, 7.5, 10.0, 12.5])
+    axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C', 'Dataset D', 'Dataset E', 'Dataset F'], 
+                         fontsize=20, fontweight='bold', family='Times New Roman')
     
     axis.spines['top'].set_visible(False)
     axis.spines['right'].set_visible(False)
@@ -287,11 +288,11 @@ def plot_clustering_results():
     # Sort clusters by anchor energy (Low Energy at Bottom)
     clusters.sort(key=lambda x: x.get('anchor_energy', 0))
     
-    datasets = ['A', 'B', 'C']
+    datasets = ['A', 'B', 'C', 'D', 'E', 'F']
     
     # Calculate figure size based on density (tunable multiplier)
     fig_height = max(8, len(clusters) * clustering_fig_height_multiplier)
-    figure, axis = plt.subplots(figsize=(clustering_fig_width_inches, fig_height))
+    figure, axis = plt.subplots(figsize=(clustering_fig_width_inches + 5, fig_height))
     
     # X-axis positions (tunable spacing)
     x_positions = {ds: index * clustering_x_spacing for index, ds in enumerate(datasets)}
@@ -349,7 +350,7 @@ def plot_clustering_results():
     
     # X-Axis Labels
     axis.set_xticks([index * clustering_x_spacing for index in range(len(datasets))])
-    axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C'], 
+    axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C', 'Dataset D', 'Dataset E', 'Dataset F'], 
                          fontsize=16, fontweight='bold', family='Times New Roman')
     
     # Y-Axis Label
