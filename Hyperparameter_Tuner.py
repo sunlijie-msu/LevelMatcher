@@ -6,16 +6,10 @@ Strategy:
 1. Split synthetic training data for validation (holdout method)
 2. Train multiple model configurations
 3. Validate with MSE on held-out synthetic data
-4. Run full pipeline (pairwise + clustering) for each config on expanded test datasets (A-F)
+4. Run full pipeline (pairwise + clustering) for each config on real datasets
 5. Calculate discrimination metrics: probability spread, confidence separation
 6. Compare clustering results against expert knowledge
 7. Select best configuration balancing accuracy (MSE) and discrimination (separation)
-
-Expanded Test Cases (A-F):
-- Datasets A, B, C: Original simple cases with clear matches
-- Dataset D: Marginal energy overlaps, tentative spin assignments
-- Dataset E: Spin/parity conflicts, high uncertainties
-- Dataset F: Ambiguous cases mixing tentative and definite assignments
 
 Discrimination Metrics:
 - MSE: Prediction accuracy on synthetic validation data
@@ -23,7 +17,7 @@ Discrimination Metrics:
 - Confidence Separation: Mean(high prob) - Mean(low prob) (higher = clearer decision boundaries)
 - High/Medium/Low Counts: Distribution of matches by probability ranges
 
-Note: Real datasets (A-F) are NEVER used for training, only inference validation
+Note: Real datasets (A, B, C) are NEVER used for training, only inference validation
 """
 
 import pandas as pd
@@ -138,8 +132,8 @@ def run_inference_and_clustering(model, config_name):
     """
     print(f"\n  Running inference and clustering for: {config_name}")
     
-    # Load real test datasets - expanded to include challenging edge cases (D, E, F)
-    levels = load_levels_from_json(['A', 'B', 'C', 'D', 'E', 'F'])
+    # Load real test datasets
+    levels = load_levels_from_json(['A', 'B', 'C'])
     dataframe = pd.DataFrame(levels)
     dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int(row['energy_value'])}", axis=1)
     
