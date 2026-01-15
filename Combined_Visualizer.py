@@ -272,7 +272,7 @@ def plot_level_schemes():
 
     # Styling
     axis.set_xlim(-1.5, 8.0)
-    axis.set_ylim(0, maximum_energy * 1.15)
+    axis.set_ylim(-200, maximum_energy * 1.15)
     axis.set_xticks([0, 3.0, 6.0])
     axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C'], 
                          fontsize=FONT_CONFIG['axis_labels'], fontweight='bold', family='Times New Roman')
@@ -379,7 +379,12 @@ def plot_clustering_results():
     # Sort clusters by anchor energy (Low Energy at Bottom)
     clusters.sort(key=lambda x: x.get('anchor_energy', 0))
     
-    datasets = ['A', 'B', 'C', 'D', 'E', 'F']
+    # Dynamically extract unique datasets from cluster members (not hardcoded)
+    unique_datasets = set()
+    for cluster in clusters:
+        for member in cluster['members']:
+            unique_datasets.add(member['dataset'])
+    datasets = sorted(list(unique_datasets))
     
     # Calculate figure size based on density (tunable multiplier)
     fig_height = max(8, len(clusters) * clustering_fig_height_multiplier)
@@ -441,7 +446,8 @@ def plot_clustering_results():
     
     # X-Axis Labels
     axis.set_xticks([index * clustering_x_spacing for index in range(len(datasets))])
-    axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C', 'Dataset D', 'Dataset E', 'Dataset F'], 
+    dataset_labels = [f'Dataset {ds}' for ds in datasets]
+    axis.set_xticklabels(dataset_labels, 
                          fontsize=FONT_CONFIG['cluster_axis_labels'], fontweight='bold', family='Times New Roman')
     
     # Y-Axis Label
