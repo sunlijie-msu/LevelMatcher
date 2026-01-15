@@ -5,203 +5,146 @@ import argparse
 
 def parse_jpi(jpi_str):
     """
-    Parses a Jπ string into the project's structured JSON format.
-    Handles ranges, lists, suffixes, and complex tentativeness logic (e.g. (1+, 2+), 3/2, 5/2(+)).
+    Parses Jπ string into structured format.
+    Handles ranges "1:3", tentative "(1)-", and lists "1+,2+".
     """
-    if not jpi_str:
+    if not jpi_str or jpi_str.lower() in ['unknown', 'none']: 
         return []
 
-    jpi_str = jpi_str.strip().rstrip('.')
-    if not jpi_str or jpi_str.lower() == 'unknown':
-        return []
+    clean_str = jpi_str.strip().rstrip('.')
 
-    # 1. Check for Range e.g., 1:3
-    if ':' in jpi_str and all(c.isdigit() or c.isspace() or c == ':' for c in jpi_str):
+    # 1. Range support (e.g. 1:3)
+    if ':' in clean_str and all(c.isdigit() or c.isspace() or c == ':' for c in clean_str):
         try:
-            parts = jpi_str.split(':')
-            if len(parts) == 2:
-                start = int(parts[0].strip())
-                end = int(parts[1].strip())
-                return [{
-                    "twoTimesSpin": s * 2,
-                    "isTentativeSpin": False,
-                    "parity": None,
-                    "isTentativeParity": False
-                } for s in range(start, end + 1)]
-        except ValueError:
-            pass 
+            start_s, end_s = map(int, clean_str.split(':'))
+            return [{
+                "twoTimesSpin": s * 2,
+                "isTentativeSpin": False,
+                "parity": None,
+                "isTentativeParity": False
+            } for s in range(start_s, end_s + 1)]
+        except ValueError: pass
 
-    # 2. General Parsing Strategy
-    is_wrapper_tentative = False
-    content_str = jpi_str
-    
-    # Global Suffix Parity: (1, 2)+ or (1, 2)(+)
-    suffix_pattern = r'^\((.*)\)(\(?[\+\-]\)?)$'
-    suffix_match = re.match(suffix_pattern, jpi_str)
-    
-    global_suffix_parity_info = None 
+    # 2. List parsing
+    # Handle global parentheses like (1,2)+
+    is_global_tentative = clean_str.startswith('(') and clean_str.endswith(')') and ',' in clean_str
+    if is_global_tentative: 
+        clean_str = clean_str[1:-1]
 
-    if suffix_match and ',' in suffix_match.group(1):
-        content_str = suffix_match.group(1)
-        is_wrapper_tentative = True 
-        
-        suffix_str = suffix_match.group(2)
-        s_match = re.search(r'(\(?)([\+\-])(\)?)$', suffix_str)
-        if s_match:
-             global_suffix_parity_info = {
-                 'symbol': s_match.group(2),
-                 'is_tentative': (s_match.group(1) == '(' or s_match.group(3) == ')'),
-                 'source': 'global_suffix'
-             }
-             
-    # Global Parens without suffix: (1+, 2+)
-    elif jpi_str.startswith('(') and jpi_str.endswith(')') and ',' in jpi_str:
-        content_str = jpi_str[1:-1]
-        is_wrapper_tentative = True
-
-    # 3. Split Items
-    raw_items = [x.strip() for x in content_str.split(',')]
-    parsed_items = []
-    
-    for item in raw_items:
-        current_spin_str = item
-        current_parity_info = None 
-
-        # Extract Parity from end of item
-        p_match = re.search(r'(\(?)([\+\-])(\)?)$', item)
-        
-        if p_match:
-            full_p_str = p_match.group(0)
-            p_symbol = p_match.group(2)
-            p_is_tentative = (p_match.group(1) == '(' or p_match.group(3) == ')')
-            
-            current_parity_info = {
-                'symbol': p_symbol,
-                'is_tentative': p_is_tentative,
-                'source': 'local'
-            }
-            current_spin_str = item[:item.rfind(full_p_str)].strip()
-            
-        parsed_items.append({
-            'spin_str': current_spin_str,
-            'parity_info': current_parity_info,
-        })
-        
-    # 4. Parity Distribution / Backfill
-    if global_suffix_parity_info:
-        for p_item in parsed_items:
-            if p_item['parity_info'] is None:
-                p_item['parity_info'] = global_suffix_parity_info
-    # else:
-        # REMOVED Backfill Logic per strict user rule:
-        # "3/2,5/2,7/2(+) means 3, 5, 7(+) and 3,5 have no parities! only 7 has a tentative + parity!"
-        # We only apply parity to multiple items if there is a global wrapper or suffix.
-
-    # 5. Finalize Results
+    parts = [p.strip() for p in clean_str.split(',')]
     results = []
-    
-    for p_item in parsed_items:
-        s_str = p_item['spin_str']
-        item_spin_tentative = is_wrapper_tentative
-        
-        # Check for local spin parens e.g. (1)
-        if '(' in s_str or ')' in s_str:
-            item_spin_tentative = True
-            s_str = s_str.replace('(', '').replace(')', '')
-            
-        s_str = s_str.strip()
-        if not s_str: 
-            continue
 
+    for part in parts:
+        if not part: continue
+        
+        # Heuristic parsing for "3/2+" or "(5/2-)" or "1(+)"
+        # Extract parity
+        parity = '+' if '+' in part else '-' if '-' in part else None
+        
+        # Check tentativeness (local parens)
+        is_local_tentative = '(' in part or ')' in part
+        is_tentative = is_global_tentative or is_local_tentative
+
+        # Extract numeric spin: remove parens, parity signs
+        spin_raw = part.replace('+', '').replace('-', '').replace('(', '').replace(')', '').strip()
+        
         try:
-            val = float(eval(s_str))
+            val = float(eval(spin_raw))
             two_spin = int(round(val * 2))
-        except:
-            continue 
-           
-        p_info = p_item['parity_info']
-        out_parity = None
-        out_par_tentative = False
-        
-        if p_info:
-            out_parity = p_info['symbol']
             
-            if p_info['source'] == 'global_suffix':
-                 out_par_tentative = p_info['is_tentative']
-                 
-            elif p_info['source'] == 'local' or p_info['source'] == 'inherited':
-                if is_wrapper_tentative:
-                     out_par_tentative = True
-                else:
-                     out_par_tentative = p_info['is_tentative']
-        
-        results.append({
-            "twoTimesSpin": two_spin,
-            "isTentativeSpin": item_spin_tentative,
-            "parity": out_parity,
-            "isTentativeParity": out_par_tentative
-        })
+            results.append({
+                "twoTimesSpin": two_spin,
+                "isTentativeSpin": is_tentative,
+                "parity": parity,
+                "isTentativeParity": is_tentative if parity else False
+            })
+        except: continue
         
     return results
 
-def parse_log_line(line):
-    # Expected format: E_level = 1000(3) keV; Jπ: unknown. [Gammas: 1500(3) keV (BR: 100), 2000(1) keV (BR: 50).]
-    # Regex: E_level = (value)((unc)) keV; Jπ: (string) [optional gamma section]
+def calculate_absolute_uncertainty(val_str, unc_str):
+    """
+    Calculates absolute uncertainty based on ENSDF convention.
+    123(12) -> 12
+    123.4(12) -> 1.2
+    0.123(4) -> 0.0004
+    """
+    if not unc_str:
+        return 0.0
     
-    # First extract energy and Jπ
-    pattern = r"E_level\s*=\s*([\d\.]+)\(?([\d\.]*)\)?\s*keV;\s*Jπ:\s*([^\.]+)"
+    val_str = val_str.strip()
+    if '.' in val_str:
+        decimal_part = val_str.split('.')[1]
+        decimals = len(decimal_part)
+    else:
+        decimals = 0
+        
+    return float(unc_str) * (10 ** -decimals)
+
+def format_evaluator_input(val_str, unc_str):
+    if not unc_str:
+        return val_str
+    return f"{val_str} {unc_str}"
+
+def parse_log_line(line):
+    # Regex for Level: E_level = 1000(3) [keV]; Jπ: ... [Gammas: ...]
+    pattern = r"E_level\s*=\s*([\d\.]+)(?:\(([\d\.]+)\))?(?:\s*keV)?;\s*Jπ:\s*([^;\.]+)(?:(?:\.|;)\s*Gammas:\s*(.*))?"
     match = re.search(pattern, line)
     
-    if not match:
-        return None
+    if not match: return None
         
-    energy_val = float(match.group(1))
+    # Capture raw strings for formatting
+    energy_str = match.group(1)
     unc_str = match.group(2)
-    unc_val = float(unc_str) if unc_str else 0.0
     jpi_raw = match.group(3).strip()
     
-    spin_parity_data = parse_jpi(jpi_raw)
+    # Calculate values
+    energy_val = float(energy_str)
+    unc_val = calculate_absolute_uncertainty(energy_str, unc_str)
     
     level_obj = {
         "energy": {
             "value": energy_val,
-            "uncertainty": { "value": unc_val },
-            "evaluatorInput": f"{energy_val:.0f} {unc_val:.0f}" if unc_val >= 1 else f"{energy_val} {unc_val}"
+            "uncertainty": { "value": unc_val, "type": "symmetric" } if unc_val > 0 else {"value": 0.0},
+            "evaluatorInput": format_evaluator_input(energy_str, unc_str)
         },
         "spinParity": {
-            "values": spin_parity_data,
+            "values": parse_jpi(jpi_raw),
             "evaluatorInput": jpi_raw
         }
     }
     
-    # Parse gamma decays if present
-    # Format: Gammas: 1500(3) keV (BR: 100), 2000(1) keV (BR: 50).
-    gamma_pattern = r"Gammas:\s*(.+?)(?:\.|$)"
-    gamma_match = re.search(gamma_pattern, line)
-    
-    if gamma_match:
-        gamma_str = gamma_match.group(1).strip()
+    # Parse Gammas
+    gamma_str = match.group(4)
+    if gamma_str:
         gamma_decays = []
+        # Regex: 1400(3) [keV] (BR: 100(5))
+        entries = re.findall(r'([\d\.]+)(?:\(([\d\.]+)\))?(?:\s*keV)?\s*\(BR:\s*([\d\.]+)(?:\(([\d\.]+)\))?\)', gamma_str)
         
-        # Parse individual gamma entries: "1500(3) keV (BR: 100)"
-        gamma_entries = re.findall(r'([\d\.]+)\(([\d\.]+)\)\s*keV\s*\(BR:\s*([\d\.]+)\)', gamma_str)
-        
-        for gamma_energy_str, gamma_unc_str, branching_ratio_str in gamma_entries:
-            gamma_decays.append({
-                "energy": float(gamma_energy_str),
-                "branching_ratio": float(branching_ratio_str)
-            })
-        
-        # Normalize branching ratios relative to strongest branch (ENSDF convention: strongest = 100)
-        if gamma_decays:
-            maximum_branching_ratio = max(g["branching_ratio"] for g in gamma_decays)
-            if maximum_branching_ratio > 0:
-                normalization_factor = 100.0 / maximum_branching_ratio
-                for gamma in gamma_decays:
-                    gamma["branching_ratio"] *= normalization_factor
+        for g_en_str, g_unc_str, g_br_str, g_br_unc_str in entries:
+            g_unc_val = calculate_absolute_uncertainty(g_en_str, g_unc_str)
+            g_br_unc_val = calculate_absolute_uncertainty(g_br_str, g_br_unc_str)
             
+            gamma_decays.append({
+                "energy": float(g_en_str),
+                "energy_unc": g_unc_val,
+                "energy_input": format_evaluator_input(g_en_str, g_unc_str),
+                "branching_ratio": float(g_br_str),
+                "bra_unc": g_br_unc_val,
+                "br_input": format_evaluator_input(g_br_str, g_br_unc_str)
+            })
+            
+        # Normalize BR to 100
+        if gamma_decays:
+            max_br = max(g["branching_ratio"] for g in gamma_decays)
+            if max_br > 0:
+                norm = 100.0 / max_br
+                for g in gamma_decays:
+                    g["branching_ratio"] *= norm
+                    g["bra_unc"] *= norm
+                    
             level_obj["gamma_decays"] = gamma_decays
-    
+            
     return level_obj
 
 def convert_log_to_datasets(log_path):
@@ -212,103 +155,82 @@ def convert_log_to_datasets(log_path):
     with open(log_path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
 
-    current_dataset = None
-    datasets = {}  # Key: 'A', 'B', etc. Value: list of levels with temp gamma data
-
+    datasets = {}
+    current_ds = None
+    
     for line in lines:
         line = line.strip()
-        if not line:
+        if not line: continue
+        
+        if line.startswith("# Dataset"):
+            parts = line.split("Dataset")
+            if len(parts) > 1:
+                current_ds = parts[1].split(":")[0].strip()
+                datasets[current_ds] = []
+                print(f"Processing Dataset {current_ds}...")
             continue
             
-        # Check for dataset header
-        header_match = re.search(r"#\s*Dataset\s*([A-Z0-9]+)\s*:", line, re.IGNORECASE)
-        if header_match:
-            current_dataset = header_match.group(1)
-            datasets[current_dataset] = []
-            print(f"Found Dataset: {current_dataset}")
-            continue
-        
-        # Parse Level Line
-        if line.startswith("E_level"):
-            level_data = parse_log_line(line)
-            if level_data and current_dataset:
-                datasets[current_dataset].append(level_data)
-    
-    # Write JSON files with proper ENSDF structure
+        if line.startswith("E_level") and current_ds:
+            lvl = parse_log_line(line)
+            if lvl: datasets[current_ds].append(lvl)
+
+    # Output JSONs
     for code, levels in datasets.items():
-        filename = f"test_dataset_{code}.json"
-        
-        # Build gammasTable from level gamma_decays
         gammas_table = []
-        gamma_index = 0
+        gamma_counter = 0
         
-        for level_index, level in enumerate(levels):
+        for lvl_idx, level in enumerate(levels):
             if "gamma_decays" in level:
-                level_gamma_indices = []
-                initial_level_energy = level["energy"]["value"]
+                level_gammas = []
+                initial_E = level["energy"]["value"]
                 
-                for gamma_data in level["gamma_decays"]:
-                    gamma_energy = gamma_data["energy"]
+                for g_data in level["gamma_decays"]:
+                    g_E = g_data["energy"]
+                    final_E_target = initial_E - g_E
                     
-                    # Calculate final level: E_final = E_initial - E_gamma
-                    final_level_energy = initial_level_energy - gamma_energy
-                    
-                    # Find the level index that matches this energy (closest match within tolerance)
-                    final_level_index = 0  # Default to ground state
-                    tolerance = 50.0  # Increased tolerance for datasets with large uncertainties
-                    min_diff = float('inf')
-                    best_match_idx = 0
-                    
-                    for idx, lvl in enumerate(levels):
-                        lvl_energy = lvl["energy"]["value"]
-                        diff = abs(lvl_energy - final_level_energy)
+                    # Match Final Level
+                    best_match = 0
+                    min_diff = 1e9
+                    for c_idx, cand in enumerate(levels):
+                        diff = abs(cand["energy"]["value"] - final_E_target)
                         if diff < min_diff:
                             min_diff = diff
-                            best_match_idx = idx
+                            best_match = c_idx
                             
-                    if min_diff < tolerance:
-                        final_level_index = best_match_idx
+                    final_idx = best_match if min_diff <= 50.0 else 0
                     
-                    # Create gamma entry in ENSDF format
-                    gamma_entry = {
+                    # Structuring Gamma Entry
+                    g_entry = {
                         "energy": {
-                            "value": gamma_energy,
-                            "unit": "keV"
+                            "value": g_E,
+                            "uncertainty": { "value": g_data["energy_unc"], "type": "symmetric" } if g_data["energy_unc"] > 0 else {"value": 0.0},
+                            "evaluatorInput": g_data["energy_input"]
                         },
                         "gammaIntensity": {
-                            "value": gamma_data["branching_ratio"]
+                            "value": g_data["branching_ratio"],
+                            "uncertainty": { "value": g_data["bra_unc"], "type": "symmetric" } if g_data["bra_unc"] > 0 else {"value": 0.0},
+                            "evaluatorInput": g_data["br_input"]
                         },
-                        "initialLevel": level_index,
-                        "finalLevel": final_level_index
+                        "initialLevel": lvl_idx,
+                        "finalLevel": final_idx
                     }
-                    gammas_table.append(gamma_entry)
-                    level_gamma_indices.append(gamma_index)
-                    gamma_index += 1
+                    gammas_table.append(g_entry)
+                    level_gammas.append(gamma_counter)
+                    gamma_counter += 1
                 
-                # Replace gamma_decays with gamma indices array
-                level["gammas"] = level_gamma_indices
+                level["gammas"] = level_gammas
                 del level["gamma_decays"]
         
-        # Build final structure
-        structure = {
-            "levelsTable": {
-                "levels": levels
-            }
-        }
-        
-        # Add gammasTable only if there are gammas
+        output = { "levelsTable": { "levels": levels } }
         if gammas_table:
-            structure["gammasTable"] = {
-                "gammas": gammas_table
-            }
-        
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(structure, f, indent=4)
-        print(f"Generated {filename} with {len(levels)} levels.")
+            output["gammasTable"] = { "gammas": gammas_table }
+            
+        with open(f"test_dataset_{code}.json", 'w', encoding='utf-8') as f:
+            json.dump(output, f, indent=4)
+        print(f"Dataset {code} saved.")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Convert ENSDF-style log files to structured JSON datasets.")
-    parser.add_argument("input_file", nargs='?', default="evaluatorInput.log", help="Path to the input log file")
-    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input_file", nargs='?', default="evaluatorInput.log")
     args = parser.parse_args()
     convert_log_to_datasets(args.input_file)

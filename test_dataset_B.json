@@ -7,7 +7,7 @@
                     "uncertainty": {
                         "value": 0.0
                     },
-                    "evaluatorInput": "0.0 0.0"
+                    "evaluatorInput": "0"
                 },
                 "spinParity": {
                     "values": [
@@ -23,41 +23,30 @@
             },
             {
                 "energy": {
-                    "value": 503.0,
+                    "value": 603.0,
                     "uncertainty": {
-                        "value": 1.0
+                        "value": 3.0,
+                        "type": "symmetric"
                     },
-                    "evaluatorInput": "503 1"
+                    "evaluatorInput": "603 3"
                 },
                 "spinParity": {
                     "values": [],
-                    "evaluatorInput": "unknown"
-                }
-            },
-            {
-                "energy": {
-                    "value": 1005.0,
-                    "uncertainty": {
-                        "value": 3.0
-                    },
-                    "evaluatorInput": "1005 3"
-                },
-                "spinParity": {
-                    "values": [],
-                    "evaluatorInput": "unknown"
+                    "evaluatorInput": "none"
                 }
             },
             {
                 "energy": {
                     "value": 2008.0,
                     "uncertainty": {
-                        "value": 2.0
+                        "value": 2.0,
+                        "type": "symmetric"
                     },
                     "evaluatorInput": "2008 2"
                 },
                 "spinParity": {
                     "values": [],
-                    "evaluatorInput": "unknown"
+                    "evaluatorInput": "none"
                 },
                 "gammas": [
                     0,
@@ -68,7 +57,8 @@
                 "energy": {
                     "value": 3000.0,
                     "uncertainty": {
-                        "value": 2.0
+                        "value": 2.0,
+                        "type": "symmetric"
                     },
                     "evaluatorInput": "3000 2"
                 },
@@ -88,7 +78,8 @@
                 "energy": {
                     "value": 4000.0,
                     "uncertainty": {
-                        "value": 2.0
+                        "value": 2.0,
+                        "type": "symmetric"
                     },
                     "evaluatorInput": "4000 2"
                 },
@@ -96,7 +87,7 @@
                     "values": [
                         {
                             "twoTimesSpin": 4,
-                            "isTentativeSpin": false,
+                            "isTentativeSpin": true,
                             "parity": "+",
                             "isTentativeParity": true
                         }
@@ -108,7 +99,8 @@
                 "energy": {
                     "value": 5000.0,
                     "uncertainty": {
-                        "value": 2.0
+                        "value": 2.0,
+                        "type": "symmetric"
                     },
                     "evaluatorInput": "5000 2"
                 },
@@ -130,24 +122,40 @@
         "gammas": [
             {
                 "energy": {
-                    "value": 1500.0,
-                    "unit": "keV"
+                    "value": 1405.0,
+                    "uncertainty": {
+                        "value": 3.0,
+                        "type": "symmetric"
+                    },
+                    "evaluatorInput": "1405 3"
                 },
                 "gammaIntensity": {
-                    "value": 100.0
+                    "value": 100.0,
+                    "uncertainty": {
+                        "value": 0.0
+                    },
+                    "evaluatorInput": "100"
                 },
-                "initialLevel": 3,
+                "initialLevel": 2,
                 "finalLevel": 1
             },
             {
                 "energy": {
-                    "value": 2000.0,
-                    "unit": "keV"
+                    "value": 2008.0,
+                    "uncertainty": {
+                        "value": 1.0,
+                        "type": "symmetric"
+                    },
+                    "evaluatorInput": "2008 1"
                 },
                 "gammaIntensity": {
-                    "value": 50.0
+                    "value": 10.0,
+                    "uncertainty": {
+                        "value": 0.0
+                    },
+                    "evaluatorInput": "10"
                 },
-                "initialLevel": 3,
+                "initialLevel": 2,
                 "finalLevel": 0
             }
         ]
