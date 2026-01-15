@@ -133,16 +133,7 @@ def parse_log_line(line):
                 "bra_unc": g_br_unc_val,
                 "br_input": format_evaluator_input(g_br_str, g_br_unc_str)
             })
-            
-        # Normalize BR to 100
-        if gamma_decays:
-            max_br = max(g["branching_ratio"] for g in gamma_decays)
-            if max_br > 0:
-                norm = 100.0 / max_br
-                for g in gamma_decays:
-                    g["branching_ratio"] *= norm
-                    g["bra_unc"] *= norm
-                    
+                            
             level_obj["gamma_decays"] = gamma_decays
             
     return level_obj

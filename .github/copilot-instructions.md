@@ -10,6 +10,10 @@
 
 - **Visual Output Verification:** If your code generates figures or plots, ensure the output quality is high. Examples include no overlapping text and legible fonts. Since you cannot see the image, rely on robust spacing algorithms and generous margins.
 
+- **Mandatory Testing After Code Changes:** After every code modification (edits, new functions, logic changes), immediately execute the affected code to verify it runs without errors. Do not claim task completion until runtime validation passes. Test the full pipeline when changes affect dependent modules.
+
+- **Zero Tolerance for Untested Changes:** Never submit incomplete code or skip testing due to time constraints. Testing is non-negotiable. If code fails testing, immediately identify and fix errors before proceeding.
+
 ## Instruction Compliance
 
 ### Mandatory Zero Tolerance
