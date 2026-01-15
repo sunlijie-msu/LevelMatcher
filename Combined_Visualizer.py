@@ -65,31 +65,33 @@ def spread_text_positions(energies, min_distance=250):
 # ============================================================================
 
 def load_dataset(dataset_code):
-    """Load level data from JSON file for a given dataset code."""
+    """Load level data and gamma table from JSON file for a given dataset code."""
     filename = f"test_dataset_{dataset_code}.json"
     if not os.path.exists(filename):
-        return []
+        return [], []
     
     with open(filename, 'r', encoding='utf-8') as file_handle:
         data = json.load(file_handle)
         if isinstance(data, dict) and 'levelsTable' in data:
-            return data['levelsTable'].get('levels', [])
+            levels = data['levelsTable'].get('levels', [])
+            gammas = data.get('gammasTable', {}).get('gammas', [])
+            return levels, gammas
         elif isinstance(data, list):
-            return data
-    return []
+            return data, []
+    return [], []
 
 def plot_level_schemes():
-    """Generate visualization of input level schemes from all datasets."""
-    datasets = ['A', 'B', 'C', 'D', 'E', 'F']
-    figure, axis = plt.subplots(figsize=(20, 10))
+    """Generate visualization of input level schemes from all datasets with gamma transitions."""
+    datasets = ['A', 'B', 'C']
+    figure, axis = plt.subplots(figsize=(14, 10))
     
     # X-axis positions for each dataset column
-    x_positions = {'A': 0, 'B': 2.5, 'C': 5.0, 'D': 7.5, 'E': 10.0, 'F': 12.5}
+    x_positions = {'A': 0, 'B': 3.0, 'C': 6.0}
     line_width = 0.8
     maximum_energy = 0
     
     for dataset_code in datasets:
-        raw_levels = load_dataset(dataset_code)
+        raw_levels, gammas_table = load_dataset(dataset_code)
         
         # Extract level data
         levels_data = []
@@ -178,12 +180,83 @@ def plot_level_schemes():
                 axis.text(x_start - 0.1, y_text, item['label_left'], va='center', ha='right', fontsize=20, family='Times New Roman')
                 if item['label_right']:
                     axis.text(x_end + 0.1, y_text, item['label_right'], va='center', ha='left', fontsize=20, family='Times New Roman')
+        
+        # Draw gamma transitions
+        if gammas_table:
+            # Collect all gammas with their positions for global arrow placement
+            all_gamma_data = []
+            
+            for gamma_idx, gamma in enumerate(gammas_table):
+                initial_level_index = gamma.get('initialLevel')
+                final_level_index = gamma.get('finalLevel')
+                
+                # Validate indices
+                if initial_level_index is None or final_level_index is None:
+                    continue
+                if initial_level_index >= len(levels_data) or final_level_index >= len(levels_data):
+                    continue
+                if initial_level_index < 0 or final_level_index < 0:
+                    continue
+                
+                # Get energy positions WITH bar offsets applied
+                initial_energy = levels_data[initial_level_index]['energy'] + bar_offsets[initial_level_index]
+                final_energy = levels_data[final_level_index]['energy'] + bar_offsets[final_level_index]
+                
+                # Get gamma properties
+                gamma_energy = gamma.get('energy', {}).get('value', 0)
+                gamma_intensity = gamma.get('gammaIntensity', {}).get('value', 100)
+                
+                all_gamma_data.append({
+                    'gamma_idx': gamma_idx,
+                    'initial_level_index': initial_level_index,
+                    'final_level_index': final_level_index,
+                    'initial_energy': initial_energy,
+                    'final_energy': final_energy,
+                    'gamma_energy': gamma_energy,
+                    'gamma_intensity': gamma_intensity
+                })
+            
+            # Calculate unique horizontal positions for ALL gammas in this dataset
+            # Arrows should be positioned NEAR the right side of the bar, but still within reasonable bounds
+            # Level bar extends from (x_center - 0.4) to (x_center + 0.4)
+            # Place arrows starting close to center, spreading rightward within/near the bar
+            num_total_gammas = len(all_gamma_data)
+            
+            for idx, gamma_data in enumerate(all_gamma_data):
+                # Dynamically center arrows within the bar
+                arrow_spacing = 0.20  # Increased spacing for better separation
+                if num_total_gammas > 1:
+                    total_width = (num_total_gammas - 1) * arrow_spacing
+                    base_offset = -total_width / 2.0
+                else:
+                    base_offset = 0.0
+                
+                arrow_x = x_center + base_offset + (idx * arrow_spacing)
+                
+                initial_energy = gamma_data['initial_energy']
+                final_energy = gamma_data['final_energy']
+                gamma_intensity = gamma_data['gamma_intensity']
+                
+                # Draw vertical arrow from initial to final level
+                axis.annotate('', 
+                            xy=(arrow_x, final_energy), 
+                            xytext=(arrow_x, initial_energy),
+                            arrowprops=dict(arrowstyle='->', color='black', lw=1.0))
+                
+                # Place BR label at midpoint of arrow, centered with background to mask line
+                mid_energy = (initial_energy + final_energy) / 2.0
+                label_text = f"{int(gamma_intensity)}"
+                
+                axis.text(arrow_x, mid_energy, label_text, 
+                         va='center', ha='center', fontsize=9, 
+                         family='Times New Roman',
+                         bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none', alpha=1.0))
 
     # Styling
-    axis.set_xlim(-1.5, 14.0)
+    axis.set_xlim(-1.5, 8.0)
     axis.set_ylim(0, maximum_energy * 1.15)
-    axis.set_xticks([0, 2.5, 5.0, 7.5, 10.0, 12.5])
-    axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C', 'Dataset D', 'Dataset E', 'Dataset F'], 
+    axis.set_xticks([0, 3.0, 6.0])
+    axis.set_xticklabels(['Dataset A', 'Dataset B', 'Dataset C'], 
                          fontsize=20, fontweight='bold', family='Times New Roman')
     
     axis.spines['top'].set_visible(False)
@@ -292,7 +365,7 @@ def plot_clustering_results():
     
     # Calculate figure size based on density (tunable multiplier)
     fig_height = max(8, len(clusters) * clustering_fig_height_multiplier)
-    figure, axis = plt.subplots(figsize=(clustering_fig_width_inches + 5, fig_height))
+    figure, axis = plt.subplots(figsize=(clustering_fig_width_inches, fig_height))
     
     # X-axis positions (tunable spacing)
     x_positions = {ds: index * clustering_x_spacing for index, ds in enumerate(datasets)}

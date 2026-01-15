@@ -145,33 +145,64 @@ def parse_jpi(jpi_str):
     return results
 
 def parse_log_line(line):
-    # Expected format: E_level = 1000(3) keV; Jπ: unknown.
-    # Regex: E_level = (value)((unc)) keV; Jπ: (string)
-    pattern = r"E_level\s*=\s*([\d\.]+)\(([\d\.]+)\)\s*keV;\s*Jπ:\s*(.*)"
+    # Expected format: E_level = 1000(3) keV; Jπ: unknown. [Gammas: 1500(3) keV (BR: 100), 2000(1) keV (BR: 50).]
+    # Regex: E_level = (value)((unc)) keV; Jπ: (string) [optional gamma section]
+    
+    # First extract energy and Jπ
+    pattern = r"E_level\s*=\s*([\d\.]+)\(?([\d\.]*)\)?\s*keV;\s*Jπ:\s*([^\.]+)"
     match = re.search(pattern, line)
-    if match:
-        energy_val = float(match.group(1))
-        unc_val = float(match.group(2))
-        jpi_raw = match.group(3).strip().rstrip('.')
+    
+    if not match:
+        return None
         
-        # Reconstruct evaluatorInput string for Energy (e.g., "1000 3")
-        # Assuming unc is absolute from log format context in example
-        
-        spin_parity_data = parse_jpi(jpi_raw)
-        
-        level_obj = {
-            "energy": {
-                "value": energy_val,
-                "uncertainty": { "value": unc_val },
-                "evaluatorInput": f"{energy_val:.0f} {unc_val:.0f}" if unc_val >= 1 else f"{energy_val} {unc_val}"
-            },
-            "spinParity": {
-                "values": spin_parity_data,
-                "evaluatorInput": jpi_raw
-            }
+    energy_val = float(match.group(1))
+    unc_str = match.group(2)
+    unc_val = float(unc_str) if unc_str else 0.0
+    jpi_raw = match.group(3).strip()
+    
+    spin_parity_data = parse_jpi(jpi_raw)
+    
+    level_obj = {
+        "energy": {
+            "value": energy_val,
+            "uncertainty": { "value": unc_val },
+            "evaluatorInput": f"{energy_val:.0f} {unc_val:.0f}" if unc_val >= 1 else f"{energy_val} {unc_val}"
+        },
+        "spinParity": {
+            "values": spin_parity_data,
+            "evaluatorInput": jpi_raw
         }
-        return level_obj
-    return None
+    }
+    
+    # Parse gamma decays if present
+    # Format: Gammas: 1500(3) keV (BR: 100), 2000(1) keV (BR: 50).
+    gamma_pattern = r"Gammas:\s*(.+?)(?:\.|$)"
+    gamma_match = re.search(gamma_pattern, line)
+    
+    if gamma_match:
+        gamma_str = gamma_match.group(1).strip()
+        gamma_decays = []
+        
+        # Parse individual gamma entries: "1500(3) keV (BR: 100)"
+        gamma_entries = re.findall(r'([\d\.]+)\(([\d\.]+)\)\s*keV\s*\(BR:\s*([\d\.]+)\)', gamma_str)
+        
+        for gamma_energy_str, gamma_unc_str, branching_ratio_str in gamma_entries:
+            gamma_decays.append({
+                "energy": float(gamma_energy_str),
+                "branching_ratio": float(branching_ratio_str)
+            })
+        
+        # Normalize branching ratios relative to strongest branch (ENSDF convention: strongest = 100)
+        if gamma_decays:
+            maximum_branching_ratio = max(g["branching_ratio"] for g in gamma_decays)
+            if maximum_branching_ratio > 0:
+                normalization_factor = 100.0 / maximum_branching_ratio
+                for gamma in gamma_decays:
+                    gamma["branching_ratio"] *= normalization_factor
+            
+            level_obj["gamma_decays"] = gamma_decays
+    
+    return level_obj
 
 def convert_log_to_datasets(log_path):
     if not os.path.exists(log_path):
@@ -182,7 +213,7 @@ def convert_log_to_datasets(log_path):
         lines = f.readlines()
 
     current_dataset = None
-    datasets = {}  # Key: 'A', 'B', etc. Value: list of levels
+    datasets = {}  # Key: 'A', 'B', etc. Value: list of levels with temp gamma data
 
     for line in lines:
         line = line.strip()
@@ -190,7 +221,6 @@ def convert_log_to_datasets(log_path):
             continue
             
         # Check for dataset header
-        # Relaxed regex: case insensitive, allows space before colon
         header_match = re.search(r"#\s*Dataset\s*([A-Z0-9]+)\s*:", line, re.IGNORECASE)
         if header_match:
             current_dataset = header_match.group(1)
@@ -204,19 +234,73 @@ def convert_log_to_datasets(log_path):
             if level_data and current_dataset:
                 datasets[current_dataset].append(level_data)
     
-    # Write JSON files
+    # Write JSON files with proper ENSDF structure
     for code, levels in datasets.items():
         filename = f"test_dataset_{code}.json"
         
-        # If file exists, try to preserve structure (like wrapping in "levelsTable")
-        # The prompt implies strictly "update ... according to evaluator input"
-        # We will generate the standard structure used in this project
+        # Build gammasTable from level gamma_decays
+        gammas_table = []
+        gamma_index = 0
         
+        for level_index, level in enumerate(levels):
+            if "gamma_decays" in level:
+                level_gamma_indices = []
+                initial_level_energy = level["energy"]["value"]
+                
+                for gamma_data in level["gamma_decays"]:
+                    gamma_energy = gamma_data["energy"]
+                    
+                    # Calculate final level: E_final = E_initial - E_gamma
+                    final_level_energy = initial_level_energy - gamma_energy
+                    
+                    # Find the level index that matches this energy (closest match within tolerance)
+                    final_level_index = 0  # Default to ground state
+                    tolerance = 50.0  # Increased tolerance for datasets with large uncertainties
+                    min_diff = float('inf')
+                    best_match_idx = 0
+                    
+                    for idx, lvl in enumerate(levels):
+                        lvl_energy = lvl["energy"]["value"]
+                        diff = abs(lvl_energy - final_level_energy)
+                        if diff < min_diff:
+                            min_diff = diff
+                            best_match_idx = idx
+                            
+                    if min_diff < tolerance:
+                        final_level_index = best_match_idx
+                    
+                    # Create gamma entry in ENSDF format
+                    gamma_entry = {
+                        "energy": {
+                            "value": gamma_energy,
+                            "unit": "keV"
+                        },
+                        "gammaIntensity": {
+                            "value": gamma_data["branching_ratio"]
+                        },
+                        "initialLevel": level_index,
+                        "finalLevel": final_level_index
+                    }
+                    gammas_table.append(gamma_entry)
+                    level_gamma_indices.append(gamma_index)
+                    gamma_index += 1
+                
+                # Replace gamma_decays with gamma indices array
+                level["gammas"] = level_gamma_indices
+                del level["gamma_decays"]
+        
+        # Build final structure
         structure = {
             "levelsTable": {
                 "levels": levels
             }
         }
+        
+        # Add gammasTable only if there are gammas
+        if gammas_table:
+            structure["gammasTable"] = {
+                "gammas": gammas_table
+            }
         
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(structure, f, indent=4)

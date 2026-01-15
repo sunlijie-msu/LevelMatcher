@@ -3,11 +3,31 @@
         "levels": [
             {
                 "energy": {
-                    "value": 1000.0,
+                    "value": 0.0,
+                    "uncertainty": {
+                        "value": 0.0
+                    },
+                    "evaluatorInput": "0.0 0.0"
+                },
+                "spinParity": {
+                    "values": [
+                        {
+                            "twoTimesSpin": 0,
+                            "isTentativeSpin": false,
+                            "parity": "+",
+                            "isTentativeParity": false
+                        }
+                    ],
+                    "evaluatorInput": "0+"
+                }
+            },
+            {
+                "energy": {
+                    "value": 500.0,
                     "uncertainty": {
                         "value": 1.0
                     },
-                    "evaluatorInput": "1000 1"
+                    "evaluatorInput": "500 1"
                 },
                 "spinParity": {
                     "values": [],
@@ -25,7 +45,28 @@
                 "spinParity": {
                     "values": [],
                     "evaluatorInput": "unknown"
-                }
+                },
+                "gammas": [
+                    0,
+                    1
+                ]
+            },
+            {
+                "energy": {
+                    "value": 2005.0,
+                    "uncertainty": {
+                        "value": 1.0
+                    },
+                    "evaluatorInput": "2005 1"
+                },
+                "spinParity": {
+                    "values": [],
+                    "evaluatorInput": "unknown"
+                },
+                "gammas": [
+                    2,
+                    3
+                ]
             },
             {
                 "energy": {
@@ -170,6 +211,54 @@
                     ],
                     "evaluatorInput": "(3-,4-,5-)"
                 }
+            }
+        ]
+    },
+    "gammasTable": {
+        "gammas": [
+            {
+                "energy": {
+                    "value": 1500.0,
+                    "unit": "keV"
+                },
+                "gammaIntensity": {
+                    "value": 100.0
+                },
+                "initialLevel": 2,
+                "finalLevel": 1
+            },
+            {
+                "energy": {
+                    "value": 2000.0,
+                    "unit": "keV"
+                },
+                "gammaIntensity": {
+                    "value": 50.0
+                },
+                "initialLevel": 2,
+                "finalLevel": 0
+            },
+            {
+                "energy": {
+                    "value": 1505.0,
+                    "unit": "keV"
+                },
+                "gammaIntensity": {
+                    "value": 10.0
+                },
+                "initialLevel": 3,
+                "finalLevel": 1
+            },
+            {
+                "energy": {
+                    "value": 2005.0,
+                    "unit": "keV"
+                },
+                "gammaIntensity": {
+                    "value": 100.0
+                },
+                "initialLevel": 3,
+                "finalLevel": 0
             }
         ]
     }

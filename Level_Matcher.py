@@ -46,12 +46,13 @@ dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int
 # ==========================================
 # 2. Model Training (Physics-Informed XGBoost)
 # ==========================================
-# Feature Vector: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
+# Feature Vector: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Similarity]
 # All Features Monotonic Increasing (higher value → higher match probability):
 # 1. Energy_Similarity (+1): Gaussian kernel exp(-0.1×z²) where z=ΔE/σ_combined. Perfect overlap (z=0)→1.0, far apart (z>5)→~0.0
 # 2. Spin_Similarity (+1): Best-case compatibility across spin options. Firm match→1.0, tentative match→0.9, adjacent mismatch→0.05-0.2, incompatible→0.0
 # 3. Parity_Similarity (+1): Best-case compatibility across parity options. Firm match→1.0, tentative match→0.9, opposite parity→0.0-0.1
 # 4. Specificity (+1): Ambiguity penalty = 1/sqrt(multiplicity). Single Jπ→1.0, double options→0.71, triple options→0.58, high ambiguity→0.33
+# 5. Gamma_Decay_Similarity (+1): Weighted overlap of decay patterns. Perfect match→1.0, no overlap→0.0, missing data→0.5 (neutral)
 #
 # Note: Certainty features removed (redundant - tentativeness already encoded in similarity scores via 1.0 vs 0.9 penalty)
 
@@ -60,13 +61,13 @@ if __name__ == "__main__":
     training_features, training_labels = generate_synthetic_training_data()
 
     # Train XGBoost regressor with monotonic constraints enforcing physics rules
-    # All four features designed so higher value → better match probability
+    # All five features designed so higher value → better match probability
     level_matcher_model = XGBRegressor(objective='binary:logistic',
                                        # Learning Objective Function: Training Loss + Regularization.
                                        # The loss function computes the difference between the true y value and the predicted y value.
                                        # The regularization term discourages overly complex trees.
-                                       monotone_constraints='(1, 1, 1, 1)',
-                                       # Enforce increasing constraint on all four features.
+                                       monotone_constraints='(1, 1, 1, 1, 1)',
+                                       # Enforce increasing constraint on all five features.
                                        # Physics prior: higher feature values always indicate better matches.
                                        # Monotonic constraints improve predictive performance when strong prior beliefs exist.
                                        n_estimators=1000,
@@ -131,12 +132,12 @@ if __name__ == "__main__":
         output_file.write(f"Total Level Pairs Found: {len(matching_level_pairs)}\n\n")
         
         for matching_level_pair in matching_level_pairs:
-            energy_sim, spin_sim, parity_sim, specificity = matching_level_pair['features']
+            energy_sim, spin_sim, parity_sim, specificity, gamma_sim = matching_level_pair['features']
             output_file.write(
                 f"{matching_level_pair['ID1']} <-> {matching_level_pair['ID2']} | "
                 f"Probability: {matching_level_pair['probability']:.1%}\n"
                 f"  Features: Energy_Sim={energy_sim:.2f}, Spin_Sim={spin_sim:.2f}, "
-                f"Parity_Sim={parity_sim:.2f}, Specificity={specificity:.2f}\n\n"
+                f"Parity_Sim={parity_sim:.2f}, Specificity={specificity:.2f}, Gamma_Sim={gamma_sim:.2f}\n\n"
             )
     
     print(f"\n[INFO] Pairwise Inference Complete: {len(matching_level_pairs)} level pairs (>{threshold_percent}%) written to 'Output_Level_Pairwise_Inference.txt'")

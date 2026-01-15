@@ -103,14 +103,28 @@ def load_levels_from_json(dataset_codes):
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
-                # Format: New ENSDF JSON schema (levelsTable -> levels)
+                # Format: New ENSDF JSON schema (levelsTable -> levels, gammasTable -> gammas)
                 if isinstance(data, dict) and 'levelsTable' in data:
                     raw_levels = data['levelsTable'].get('levels', [])
-                    for item in raw_levels:
+                    gammas_table = data.get('gammasTable', {}).get('gammas', [])
+                    
+                    for level_index, item in enumerate(raw_levels):
                         energy_value = item.get('energy', {}).get('value')
                         energy_uncertainty = item.get('energy', {}).get('uncertainty', {}).get('value')
                         spin_parity_list = item.get('spinParity', {}).get('values', [])
-                        spin_parity_string = item.get('spinParity', {}).get('evaluatorInput') 
+                        spin_parity_string = item.get('spinParity', {}).get('evaluatorInput')
+                        
+                        # Extract gamma decays for this level from gammasTable
+                        gamma_decays = []
+                        if 'gammas' in item and gammas_table:
+                            # Level has gamma indices pointing to gammasTable
+                            for gamma_index in item['gammas']:
+                                if 0 <= gamma_index < len(gammas_table):
+                                    gamma = gammas_table[gamma_index]
+                                    gamma_decays.append({
+                                        'energy': gamma.get('energy', {}).get('value'),
+                                        'branching_ratio': gamma.get('gammaIntensity', {}).get('value', 100.0)
+                                    })
                         
                         if energy_value is not None:
                             levels.append({
@@ -119,7 +133,8 @@ def load_levels_from_json(dataset_codes):
                                 'energy_value': float(energy_value),
                                 'energy_uncertainty': float(energy_uncertainty) if energy_uncertainty is not None else 10.0,
                                 'spin_parity_list': spin_parity_list,
-                                'spin_parity_string': spin_parity_string
+                                'spin_parity_string': spin_parity_string,
+                                'gamma_decays': gamma_decays
                             })
     return levels
 
@@ -318,11 +333,95 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
                 
     return max_parity_similarity_score
 
+
+def calculate_gamma_decay_similarity(gamma_decays_1, gamma_decays_2):
+    """
+    Calculates gamma decay pattern similarity (0 to 1) for matching levels across experimental datasets.
+    
+    Physics Rationale:
+    - Gamma decay patterns are unique "fingerprints" for nuclear levels
+    - If two levels decay to the same final states with similar branching ratios, they are likely identical
+    - Example: Level at 5400 keV decaying via 1400 keV (70%) and 4400 keV (30%) gammas
+    
+    Implementation Strategy:
+    - Compare gamma energy lists with measurement tolerance (±5 keV default)
+    - Weight by branching ratios when available, equal weights when missing
+    - Use weighted overlap coefficient: (sum of matched weights) / (total possible weight)
+    
+    Input Format:
+    gamma_decays = [
+        {'energy': 1400.0, 'branching_ratio': 0.7},  # Branching ratio optional
+        {'energy': 4400.0, 'branching_ratio': 0.3}   # If missing, treat as equal weight
+    ]
+    
+    Scoring Logic:
+    - Guard: Return neutral score (0.5) if either level lacks gamma data
+    - Perfect match (all gammas overlap within tolerance): 1.0
+    - Partial overlap: proportional to weighted overlap
+    - No overlap: 0.0
+    
+    Tolerance Handling:
+    - Gamma energy tolerance from Scoring_Config['Energy']['Default_Uncertainty'] (typically 10 keV)
+    - Two gammas match if |E_gamma1 - E_gamma2| < tolerance
+    """
+    # Guard: If either level has no gamma decay data, return neutral score
+    if not gamma_decays_1 or not gamma_decays_2:
+        return Scoring_Config['General']['Neutral_Score']
+    
+    # Extract gamma energies and branching ratios (default to 1.0 if missing)
+    gammas_1 = [(g.get('energy'), g.get('branching_ratio', 1.0)) for g in gamma_decays_1 if g.get('energy') is not None]
+    gammas_2 = [(g.get('energy'), g.get('branching_ratio', 1.0)) for g in gamma_decays_2 if g.get('energy') is not None]
+    
+    # Guard: After filtering, check if any valid gammas remain
+    if not gammas_1 or not gammas_2:
+        return Scoring_Config['General']['Neutral_Score']
+    
+    # Normalize branching ratios (handle cases where sum != 1.0)
+    total_ratio_1 = sum(ratio for _, ratio in gammas_1)
+    total_ratio_2 = sum(ratio for _, ratio in gammas_2)
+    gammas_1_normalized = [(energy, ratio/total_ratio_1) for energy, ratio in gammas_1]
+    gammas_2_normalized = [(energy, ratio/total_ratio_2) for energy, ratio in gammas_2]
+    
+    # Gamma energy matching tolerance (use same as default energy uncertainty)
+    gamma_tolerance = Scoring_Config['Energy']['Default_Uncertainty']
+    
+    # Calculate weighted overlap using greedy matching
+    # For each gamma in set 1, find best match in set 2 (if within tolerance)
+    matched_weight = 0.0
+    used_indices_2 = set()
+    
+    for energy_1, ratio_1 in gammas_1_normalized:
+        best_match_index = None
+        best_match_distance = gamma_tolerance
+        
+        # Find closest matching gamma in set 2
+        for i, (energy_2, ratio_2) in enumerate(gammas_2_normalized):
+            if i in used_indices_2:
+                continue
+            distance = abs(energy_1 - energy_2)
+            if distance < best_match_distance:
+                best_match_distance = distance
+                best_match_index = i
+        
+        # If match found, accumulate weighted overlap
+        if best_match_index is not None:
+            energy_2, ratio_2 = gammas_2_normalized[best_match_index]
+            # Weight by minimum of the two branching ratios (conservative)
+            matched_weight += min(ratio_1, ratio_2)
+            used_indices_2.add(best_match_index)
+    
+    # Overlap coefficient: matched weight / total possible weight
+    # Total possible weight is 1.0 (since we normalized both sets to sum to 1.0)
+    similarity = matched_weight
+    
+    return similarity
+
+
 def extract_features(level_1, level_2):
     """
-    Constructs four-dimensional feature vector for ML-based match probability prediction.
+    Constructs five-dimensional feature vector for ML-based match probability prediction.
     
-    Feature Vector Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
+    Feature Vector Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Similarity]
     
     Design Principle:
     - All features are monotonic increasing: higher value strictly indicates better match likelihood.
@@ -369,6 +468,14 @@ def extract_features(level_1, level_2):
        - Single well-resolved level (1 option): 1.0 (no penalty)
        - Ambiguous levels (3×3=9 options): 0.33 using sqrt (67% penalty)
        - Rationale: Measurement ambiguity reduces confidence in match assessment
+    
+    5. Gamma_Decay_Similarity (0-1):
+       - Weighted overlap of gamma energy patterns (decay "fingerprint")
+       - Tolerance from Scoring_Config['Energy']['Default_Uncertainty'] (typically 10 keV)
+       - Weight by branching ratios when available, equal weights when missing
+       - Guard: Uses Scoring_Config['General']['Neutral_Score'] (typically 0.5) when gamma data missing
+       - Rationale: Levels with similar decay patterns likely identical
+       - Example: Both levels decay via 1400 keV (70%) and 4400 keV (30%) → similarity ≈ 1.0
     
     """
 
@@ -442,7 +549,12 @@ def extract_features(level_1, level_2):
     # parity_certainty = 0.0 if (parity_is_tentative_1 or parity_is_tentative_2) else 1.0
     # ===================================================================
     
-    return np.array([energy_similarity, spin_similarity, parity_similarity, specificity])
+    # Feature 5: Gamma decay pattern similarity
+    gamma_decays_1 = level_1.get('gamma_decays', [])
+    gamma_decays_2 = level_2.get('gamma_decays', [])
+    gamma_decay_similarity = calculate_gamma_decay_similarity(gamma_decays_1, gamma_decays_2)
+    
+    return np.array([energy_similarity, spin_similarity, parity_similarity, specificity, gamma_decay_similarity])
 
 def generate_synthetic_training_data():
     """
@@ -455,15 +567,17 @@ def generate_synthetic_training_data():
         1. Vetoes: Mismatches (Score ~0.0) -> Label 0.0.
         2. Neutrality: Unknown physics (Score 0.5) -> High dependence on Energy.
         3. Match Quality: Higher scores -> Higher probability.
+        4. Gamma Decay: Additional confirmation when decay patterns match.
     """
     training_points = []
     
     # 1. Gather all possible discrete scores from Config
     spin_scores = list(Scoring_Config['Spin'].values()) + [Scoring_Config['General']['Neutral_Score']]
     parity_scores = list(Scoring_Config['Parity'].values()) + [Scoring_Config['General']['Neutral_Score']]
+    gamma_scores = [0.0, 0.3, Scoring_Config['General']['Neutral_Score'], 0.7, 1.0]  # Range: no match to perfect match
     
     # 2. Define Physics Logic for Labeling (Empirically tuned)
-    def calculate_label(e, s, p, spec):
+    def calculate_label(e, s, p, spec, gamma):
         # HARD VETO: If physics explicitly mismatches (score <= near-zero), reject.
         # Allow small tolerance if config uses 0.05 for mismatched.
         if s <= Scoring_Config['Spin'].get('Mismatch_Strong', 0.05) or \
@@ -479,11 +593,12 @@ def generate_synthetic_training_data():
 
         s_factor = value_map(s)
         p_factor = value_map(p)
+        gamma_factor = value_map(gamma)
 
         # PROBABILITY FORMULA:
-        # Base confidence from Energy * Physics Quality
+        # Base confidence from Energy * Physics Quality * Gamma Pattern Match
         # Use geometric mean of physics factors to balance them.
-        physics_confidence = np.sqrt(s_factor * p_factor)
+        physics_confidence = np.sqrt(s_factor * p_factor * gamma_factor)
         
         prob = e * physics_confidence * spec
         return min(max(prob, 0.0), 0.99)
@@ -501,8 +616,9 @@ def generate_synthetic_training_data():
             for p in set(parity_scores):
                 # Specificity mostly 1.0, but add some noise/variation
                 for spec in [1.0, 0.7, 0.5]:
-                     label = calculate_label(e, s, p, spec)
-                     training_points.append(([e, s, p, spec], label))
+                    for gamma in gamma_scores:
+                        label = calculate_label(e, s, p, spec, gamma)
+                        training_points.append(([e, s, p, spec, gamma], label))
 
     # 4. Random Sampling (Fill gaps and prevent overfitting)
     np.random.seed(42)
@@ -511,10 +627,11 @@ def generate_synthetic_training_data():
         s = np.random.choice(list(set(spin_scores)))
         p = np.random.choice(list(set(parity_scores)))
         # Generate specificity roughly following 1/sqrt(N) distribution
-        spec = np.random.choice([1.0, 0.707, 0.577, 0.5, 0.4]) 
+        spec = np.random.choice([1.0, 0.707, 0.577, 0.5, 0.4])
+        gamma = np.random.choice(gamma_scores)
         
-        label = calculate_label(e, s, p, spec)
-        training_points.append(([e, s, p, spec], label))
+        label = calculate_label(e, s, p, spec, gamma)
+        training_points.append(([e, s, p, spec, gamma], label))
 
     # 5. Additional Boost for "Perfect" cases to ensure 1.0-like behavior
     # Forces model to be very confident when everything is perfect
@@ -523,7 +640,8 @@ def generate_synthetic_training_data():
         s = Scoring_Config['Spin']['Match_Firm']
         p = Scoring_Config['Parity']['Match_Firm']
         spec = 1.0
-        training_points.append(([e, s, p, spec], 0.99))
+        gamma = np.random.choice([Scoring_Config['General']['Neutral_Score'], 0.9, 1.0])  # Perfect or neutral gamma
+        training_points.append(([e, s, p, spec, gamma], 0.99))
 
     training_features = np.array([record[0] for record in training_points])
     training_labels = np.array([record[1] for record in training_points])
