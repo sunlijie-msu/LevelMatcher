@@ -1,7 +1,7 @@
 # Dataset A:
 E_level = 0; Jπ: 0+.
 E_level = 600(1); Jπ: none.
-E_level = 2000(1); Jπ: none. Gammas: 1400(1) (BR: 100), 2000(1) (BR: 20).
+E_level = 2000(1); Jπ: none. Gammas: 1400(1) (BR: 100), 2000(1) (BR: 20(4)).
 E_level = 2005(1); Jπ: none. Gammas: 1405(2) (BR: 10), 2005(3) (BR: 100).
 E_level = 3000(1); Jπ: 2+.
 E_level = 3005(1); Jπ: 1-.
