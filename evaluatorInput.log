@@ -1,8 +1,8 @@
 # Dataset A:
 E_level = 0; Jπ: 0+.
 E_level = 600(1); Jπ: none.
-E_level = 2000(1); Jπ: none. Gammas: 1400(1) (BR: 100), 2000(1) (BR: 20(4)).
-E_level = 2005(1); Jπ: none. Gammas: 1405(2) (BR: 10), 2005(3) (BR: 100).
+E_level = 2000(1); Jπ: none. Gammas: 1400(1) BR=100, 2000(1) BR=23(3).
+E_level = 2005(1); Jπ: none. Gammas: 1405(2) BR=10(2), 2005(3) BR=100.
 E_level = 3000(1); Jπ: 2+.
 E_level = 3005(1); Jπ: 1-.
 E_level = 4000(1); Jπ: (1)-
@@ -14,7 +14,7 @@ E_level = 5005(1); Jπ: (3-,4-,5-).
 # Dataset B:
 E_level = 0; Jπ: 0+.
 E_level = 603(3); Jπ: none.
-E_level = 2010(1); Jπ: none. Gammas: 1407(2) (BR: 100), 2010(2) (BR: 18).
+E_level = 2010(1); Jπ: none. Gammas: 1407(2) BR=100, 2010(2) BR=18(3).
 E_level = 3000(2); Jπ: 1-.
 E_level = 4000(2); Jπ: 2(+).
 E_level = 5000(2); Jπ: (4-).
@@ -23,7 +23,7 @@ E_level = 5000(2); Jπ: (4-).
 # Dataset C:
 E_level = 0; Jπ: 0+.
 E_level = 601(3); Jπ: none.
-E_level = 2000(1); Jπ: none. Gammas: 1399(2) (BR: 8), 1999(2) (BR: 100).
+E_level = 2000(1); Jπ: none. Gammas: 1399(2) BR=8(2), 1999(2) BR=100.
 E_level = 3005(30); Jπ: none.
 E_level = 4003(30); Jπ: 1:3.
 E_level = 5003(30); Jπ: 2,3,4.

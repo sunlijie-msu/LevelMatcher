@@ -5,7 +5,7 @@
                 "energy": {
                     "value": 0.0,
                     "uncertainty": {
-                        "value": 0.0
+                        "type": "unreported"
                     },
                     "evaluatorInput": "0"
                 },
@@ -237,7 +237,7 @@
                 "gammaIntensity": {
                     "value": 100.0,
                     "uncertainty": {
-                        "value": 0.0
+                        "type": "unreported"
                     },
                     "evaluatorInput": "100"
                 },
@@ -254,11 +254,12 @@
                     "evaluatorInput": "2000 1"
                 },
                 "gammaIntensity": {
-                    "value": 20.0,
+                    "value": 23.0,
                     "uncertainty": {
-                        "value": 0.0
+                        "value": 3.0,
+                        "type": "symmetric"
                     },
-                    "evaluatorInput": "20"
+                    "evaluatorInput": "23 3"
                 },
                 "initialLevel": 2,
                 "finalLevel": 0
@@ -275,9 +276,10 @@
                 "gammaIntensity": {
                     "value": 10.0,
                     "uncertainty": {
-                        "value": 0.0
+                        "value": 2.0,
+                        "type": "symmetric"
                     },
-                    "evaluatorInput": "10"
+                    "evaluatorInput": "10 2"
                 },
                 "initialLevel": 3,
                 "finalLevel": 1
@@ -294,7 +296,7 @@
                 "gammaIntensity": {
                     "value": 100.0,
                     "uncertainty": {
-                        "value": 0.0
+                        "type": "unreported"
                     },
                     "evaluatorInput": "100"
                 },

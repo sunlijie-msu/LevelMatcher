@@ -1,6 +1,6 @@
 === PAIRWISE INFERENCE RESULTS (>0%) ===
 
-Total Level Pairs Found: 127
+Total Level Pairs Found: 128
 
 A_0 <-> B_0 | Probability: 93.9%
   Features: Energy_Sim=1.00, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00, Gamma_Pattern_Sim=0.50
@@ -34,6 +34,9 @@ A_600 <-> B_603 | Probability: 68.5%
 
 A_4005 <-> B_4000 | Probability: 47.1%
   Features: Energy_Sim=0.61, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=1.00, Gamma_Pattern_Sim=0.50
+
+A_2000 <-> C_2000 | Probability: 44.9%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.30
 
 A_4000 <-> C_4003 | Probability: 39.0%
   Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50

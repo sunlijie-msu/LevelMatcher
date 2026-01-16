@@ -3,11 +3,11 @@ Total Clusters: 11
 === FINAL CLUSTERING RESULTS ===
 
 Cluster 1:
-  Anchor: A_0 | E=0.0±0.0 keV | Jπ=0+
+  Anchor: A_0 | E=0.0±10.0 keV | Jπ=0+
   Members:
-    [A] A_0: E=0.0±0.0 keV, Jπ=0+ (Anchor)
-    [B] B_0: E=0.0±0.0 keV, Jπ=0+ (Match Prob: 93.9%)
-    [C] C_0: E=0.0±0.0 keV, Jπ=0+ (Match Prob: 93.9%)
+    [A] A_0: E=0.0±10.0 keV, Jπ=0+ (Anchor)
+    [B] B_0: E=0.0±10.0 keV, Jπ=0+ (Match Prob: 93.9%)
+    [C] C_0: E=0.0±10.0 keV, Jπ=0+ (Match Prob: 93.9%)
 
 Cluster 2:
   Anchor: A_600 | E=600.0±1.0 keV | Jπ=none
@@ -20,6 +20,7 @@ Cluster 3:
   Anchor: A_2000 | E=2000.0±1.0 keV | Jπ=none
   Members:
     [A] A_2000: E=2000.0±1.0 keV, Jπ=none (Anchor)
+    [C] C_2000: E=2000.0±1.0 keV, Jπ=none (Match Prob: 44.9%)
 
 Cluster 4:
   Anchor: A_2005 | E=2005.0±1.0 keV | Jπ=none

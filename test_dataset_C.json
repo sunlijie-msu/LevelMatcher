@@ -5,7 +5,7 @@
                 "energy": {
                     "value": 0.0,
                     "uncertainty": {
-                        "value": 0.0
+                        "type": "unreported"
                     },
                     "evaluatorInput": "0"
                 },
@@ -149,9 +149,10 @@
                 "gammaIntensity": {
                     "value": 8.0,
                     "uncertainty": {
-                        "value": 0.0
+                        "value": 2.0,
+                        "type": "symmetric"
                     },
-                    "evaluatorInput": "8"
+                    "evaluatorInput": "8 2"
                 },
                 "initialLevel": 2,
                 "finalLevel": 1
@@ -168,7 +169,7 @@
                 "gammaIntensity": {
                     "value": 100.0,
                     "uncertainty": {
-                        "value": 0.0
+                        "type": "unreported"
                     },
                     "evaluatorInput": "100"
                 },

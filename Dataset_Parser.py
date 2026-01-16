@@ -105,7 +105,7 @@ def parse_log_line(line):
     level_obj = {
         "energy": {
             "value": energy_val,
-            "uncertainty": { "value": unc_val, "type": "symmetric" } if unc_val > 0 else {"value": 0.0},
+            "uncertainty": { "value": unc_val, "type": "symmetric" } if unc_val > 0 else {"type": "unreported"},
             "evaluatorInput": format_evaluator_input(energy_str, unc_str)
         },
         "spinParity": {
@@ -118,8 +118,8 @@ def parse_log_line(line):
     gamma_str = match.group(4)
     if gamma_str:
         gamma_decays = []
-        # Regex: 1400(3) [keV] (BR: 100(5))
-        entries = re.findall(r'([\d\.]+)(?:\(([\d\.]+)\))?(?:\s*keV)?\s*\(BR:\s*([\d\.]+)(?:\(([\d\.]+)\))?\)', gamma_str)
+        # Regex: 1400(1) BR=100, 2000(1) BR=20(4)
+        entries = re.findall(r'([\d\.]+)(?:\(([\d\.]+)\))?\s+BR=(\d+)(?:\(([\d\.]+)\))?', gamma_str)
         
         for g_en_str, g_unc_str, g_br_str, g_br_unc_str in entries:
             g_unc_val = calculate_absolute_uncertainty(g_en_str, g_unc_str)
@@ -194,12 +194,12 @@ def convert_log_to_datasets(log_path):
                     g_entry = {
                         "energy": {
                             "value": g_E,
-                            "uncertainty": { "value": g_data["energy_unc"], "type": "symmetric" } if g_data["energy_unc"] > 0 else {"value": 0.0},
+                            "uncertainty": { "value": g_data["energy_unc"], "type": "symmetric" } if g_data["energy_unc"] > 0 else {"type": "unreported"},
                             "evaluatorInput": g_data["energy_input"]
                         },
                         "gammaIntensity": {
                             "value": g_data["branching_ratio"],
-                            "uncertainty": { "value": g_data["bra_unc"], "type": "symmetric" } if g_data["bra_unc"] > 0 else {"value": 0.0},
+                            "uncertainty": { "value": g_data["bra_unc"], "type": "symmetric" } if g_data["bra_unc"] > 0 else {"type": "unreported"},
                             "evaluatorInput": g_data["br_input"]
                         },
                         "initialLevel": lvl_idx,
