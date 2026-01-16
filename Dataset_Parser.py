@@ -49,8 +49,8 @@ def parse_jpi(jpi_str):
         spin_raw = part.replace('+', '').replace('-', '').replace('(', '').replace(')', '').strip()
         
         try:
-            val = float(eval(spin_raw))
-            two_spin = int(round(val * 2))
+            spin_value = float(eval(spin_raw))
+            two_spin = int(round(spin_value * 2))
             
             results.append({
                 "twoTimesSpin": two_spin,

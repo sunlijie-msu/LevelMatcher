@@ -41,7 +41,10 @@ Follow these protocols without exception:
 
 - **No Acronyms:** Do not use acronyms for variable names or documentation. Spell out long variable names completely. For example, use `tentative` instead of `tent`, use `error` instead of `err`. Long, descriptive naming is preferred for clarity.
 
-- **No ALL CAPS Naming:** Avoid using ALL CAPS for variable names or constants. For example, avoid `SCORING_CONFIG`. Use `Title_Case` (for example, `Scoring_Config`) or `snake_case` (for example, `scoring_config`) instead.
+- **No ALL CAPS Naming:** Avoid using ALL CAPS (where EVERY letter is uppercase) for variable names, constants, or comments. 
+  - **Forbidden:** `SCORING_CONFIG`, `FONT_CONFIG`, `MAX_VALUE`, `# THIS IS ALL CAPS COMMENT`
+  - **Allowed:** `Scoring_Config` (Title_Case), `scoring_config` (snake_case), `Font_Config` (Title_Case), `font_config` (snake_case)
+  - **Rule Definition:** ALL CAPS means every single character is uppercase. Mixed case like `Title_Case` or `snake_case` are both acceptable alternatives.
 
 - **Self-Explanatory Naming:** Ensure all function and variable names are self-explanatory. Use `calculate_` for math/logic processing. For example, use `calculate_spin_similarity` instead of `evaluate_spin_match`. Use explicit variable names like `energy_similarity` instead of `energy_score`.
 

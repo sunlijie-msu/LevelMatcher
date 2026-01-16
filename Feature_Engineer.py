@@ -578,7 +578,7 @@ def generate_synthetic_training_data():
     Strategy:
     - Uses a grid-based approach to cover all physics scenarios defined in Scoring_Config.
     - Applies a unified physics logic function (calculate_label) rather than hardcoded edge cases.
-    - Implements FEATURE CORRELATION: Perfect spin/parity can "rescue" mediocre energy similarity.
+    - Implements Feature Correlation: Perfect spin/parity can "rescue" mediocre energy similarity.
     - Ensures the model learns:
         1. Vetoes: Mismatches (Score ~0.0) -> Label 0.0.
         2. Neutrality: Unknown physics (Score 0.5) -> High dependence on Energy.
@@ -625,7 +625,7 @@ def generate_synthetic_training_data():
         parity_factor = value_map(parity_similarity)
         gamma_factor = value_map(gamma_similarity)
 
-        # FEATURE CORRELATION: Physics Rescue
+        # Feature Correlation: Physics Rescue
         # If spin AND parity are both essentially perfect (firm matches),
         # relax the dependency on energy similarity by boosting it.
         # Physics rationale: Perfect quantum number agreement suggests the same level
@@ -662,7 +662,7 @@ def generate_synthetic_training_data():
                         label = calculate_label(energy, spin, parity, specificity, gamma)
                         training_points.append(([energy, spin, parity, specificity, gamma], label))
 
-    # 5. FEATURE CORRELATION TEACHING SET (Critical for learning the interaction)
+    # 5. Feature Correlation Teaching Set (Critical for learning the interaction)
     # Explicitly oversample the region where energy is mediocre but physics is perfect.
     # This teaches XGBoost to split on Spin/Parity first, then apply different energy slopes.
     perfect_spin = Scoring_Config['Spin']['Match_Firm']
