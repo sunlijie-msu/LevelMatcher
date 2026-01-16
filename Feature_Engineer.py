@@ -16,6 +16,7 @@ Feature Engineering For Nuclear Level Matching
 3. **5D Feature Vector** (`extract_features`):
    - Five monotonic-increasing features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Pattern_Similarity].
    - Specificity = 1/f(multiplicity) where formula (sqrt/linear/log/tunable) from Scoring_Config['Specificity'].
+   - Gamma Similarity uses dual-mode: Bray-Curtis (with intensities) or Overlap Coefficient (energy-only).
 
 4. **Training Data** (`generate_synthetic_training_data`):
    - Creates labeled training pairs using grid-based feature space coverage + random sampling (500 points) + perfect-match boost (50 points).
@@ -357,15 +358,28 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
     
     Physics Rationale:
     - Gamma decay patterns are unique "fingerprints" for nuclear levels.
-    - Uses Cosine Similarity of Gaussian-broadened spectra to compare decay patterns.
-    - Handles energy shifts, missing peaks, and intensity differences naturally.
+    - Old ENSDF data often lacks intensity information or has incomplete coverage.
+    - Dual-mode approach handles both high-quality and legacy data robustly.
     
-    Implementation Strategy:
-    - Represent each level's gamma decay as a continuous spectral function:
-      S(E) = Sum( Intensity_i * Gaussian(E - E_gamma_i, sigma) )
-    - Compute Similarity = Integral(S1 * S2) / Sqrt(Integral(S1^2) * Integral(S2^2))
-      (Cosine Similarity of the spectral functions)
-    - Analytical solution for integral of product of Gaussians is used for efficiency.
+    Implementation Strategy (Dual-Mode):
+    
+    Mode A (Intensity Mode) - Used when BOTH datasets have branching ratios:
+      - Metric: Bray-Curtis Similarity
+      - Formula: 2 × Sum(Min(Intensity_A, Intensity_B)) / (Sum(Intensity_A) + Sum(Intensity_B))
+      - Physics: Calculates "Shared Area" under spectrum. Robust to detector efficiency
+        fluctuations because it ignores non-overlapping excess intensity.
+      - Normalization: Strongest peak scaled to 100.0 (ENSDF convention).
+    
+    Mode B (Binary Mode) - Used when EITHER dataset lacks intensities:
+      - Metric: Overlap Coefficient (Szymkiewicz-Simpson)
+      - Formula: Count(Matches) / Min(Count_A, Count_B)
+      - Physics: Checks for "Subset Behavior". If Dataset A has 2 gammas and both
+        are found in Dataset B (which has 20), score is 1.0. Handles high-resolution
+        vs low-resolution dataset comparisons perfectly.
+    
+    Energy Matching:
+    - Tolerance: ±3.0 keV (accommodates calibration shifts in old data)
+    - Greedy matching: Each gamma in A matches closest energy in B within tolerance
     
     Input Format:
     gamma_decays = [
@@ -373,61 +387,144 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
         {'energy': 4400.0, 'branching_ratio': 30.0}
     ]
     
-    Parameters:
-    - sigma: Energy resolution from Scoring_Config['Energy']['Default_Uncertainty'] (e.g. 10 keV)
+    Example Scenarios:
+    1. Both with intensities (1000 keV: BR=100, 2000 keV: BR=50):
+       → Uses Bray-Curtis, considers intensity overlap
+    2. One without intensities (only energies listed):
+       → Uses Overlap Coefficient, binary presence/absence
+    3. High-res (20 gammas) vs Low-res (2 gammas):
+       → If 2 gammas found in 20, score=1.0 (perfect subset match)
     """
     # Guard: If either level has no gamma decay data, return neutral score
     if not gamma_decays_1 or not gamma_decays_2:
         return Scoring_Config['General']['Neutral_Score']
     
-    # Extract gamma energies and intensities (default to 1.0 if missing or zero)
-    # Filter out invalid entries
-    def extract_gammas(raw_decays):
-        cleaned = []
-        for g in raw_decays:
-            e = g.get('energy')
-            i = g.get('branching_ratio', 0.0)
-            if e is not None and i > 0:
-                cleaned.append((float(e), float(i)))
-        return cleaned
-
-    gammas_1 = extract_gammas(gamma_decays_1)
-    gammas_2 = extract_gammas(gamma_decays_2)
+    # Energy matching tolerance (keV) - allows for calibration shifts
+    tolerance_kev = 3.0
     
-    # Guard: After filtering, check if any valid gammas remain
-    if not gammas_1 or not gammas_2:
+    # =========================================================================
+    # Phase 1: Data Standardization & Normalization
+    # =========================================================================
+    def process_spectrum(raw_decays):
+        """
+        Parses raw list into clean list of dicts {'energy': value, 'intensity': value}.
+        Detects if valid intensities exist, and normalizes strongest to 100.0.
+        """
+        clean_list = []
+        has_intensity = False
+        max_intensity = 0.0
+        
+        for gamma in raw_decays:
+            # Safely extract values, defaulting to 0.0 if missing
+            energy = float(gamma.get('energy', 0))
+            intensity = float(gamma.get('branching_ratio', 0))
+            
+            # Valid gamma requires positive energy
+            if energy > 0:
+                # Logic: If ANY gamma has intensity > 0, dataset has intensity data
+                if intensity > 0:
+                    has_intensity = True
+                    if intensity > max_intensity:
+                        max_intensity = intensity
+                
+                clean_list.append({'energy': energy, 'intensity': intensity})
+        
+        # Normalize: Scale strongest peak to 100.0 (Standard ENSDF convention)
+        # This aligns the two datasets to the same relative scale
+        if has_intensity and max_intensity > 0:
+            for gamma in clean_list:
+                gamma['intensity'] = (gamma['intensity'] / max_intensity) * 100.0
+        
+        return clean_list, has_intensity
+    
+    # Process both inputs
+    list_A, has_intensity_A = process_spectrum(gamma_decays_1)
+    list_B, has_intensity_B = process_spectrum(gamma_decays_2)
+    
+    # Guard: If normalization resulted in empty lists (all energies were 0), return neutral
+    if not list_A or not list_B:
         return Scoring_Config['General']['Neutral_Score']
     
-    sigma = Scoring_Config['Energy']['Default_Uncertainty']
-    # Precompute squared constants for Gaussian integral (product of two Gaussians)
-    # The term is exp( -(dA - dB)^2 / (2 * (sigma^2 + sigma^2)) ) -> 4*sigma^2
-    sigma_sq_4 = 4 * sigma**2
-    # Limit for correlation calculation optimization (~5 sigma)
-    cutoff_sq = 25 * sigma**2
+    # =========================================================================
+    # Phase 2: Mode Selection & Calculation
+    # =========================================================================
     
-    # Helper to calculate dot product of two spectra
-    # Integral(S_A * S_B) propto Sum_i Sum_j A_i B_j * Exp( -(E_Ai - E_Bj)^2 / 4sigma^2 )
-    def spectrum_dot_product(g_list_a, g_list_b):
-        dot_sum = 0.0
-        for ea, ia in g_list_a:
-            for eb, ib in g_list_b:
-                energy_diff_sq = (ea - eb)**2
-                # Optimization: Ignore negligible terms
-                if energy_diff_sq > cutoff_sq: 
-                    continue
-                weight = np.exp(-energy_diff_sq / sigma_sq_4)
-                dot_sum += ia * ib * weight
-        return dot_sum
-
-    dot_11 = spectrum_dot_product(gammas_1, gammas_1)
-    dot_22 = spectrum_dot_product(gammas_2, gammas_2)
-    dot_12 = spectrum_dot_product(gammas_1, gammas_2)
-    
-    if dot_11 == 0 or dot_22 == 0:
-        return 0.0
+    # -------------------------------------------------------------------------
+    # Mode A: Intensity Mode (Bray-Curtis Similarity)
+    # Triggered only if BOTH datasets have intensity data
+    # -------------------------------------------------------------------------
+    if has_intensity_A and has_intensity_B:
+        intersection_sum = 0.0
+        matched_indices_B = set()  # Track usage to prevent double-counting matches
         
-    similarity = dot_12 / np.sqrt(dot_11 * dot_22)
-    return float(similarity)
+        # Compare every gamma in A against B
+        for gamma_A in list_A:
+            best_match_intensity = 0.0
+            best_index = -1
+            min_energy_diff = 999.0
+            
+            # Greedy Search: Find the closest energy match in B
+            for index, gamma_B in enumerate(list_B):
+                if index in matched_indices_B:
+                    continue  # Don't reuse gammas
+                
+                energy_diff = abs(gamma_A['energy'] - gamma_B['energy'])
+                if energy_diff <= tolerance_kev:
+                    # Pick the closest energy match, not necessarily intensity match
+                    if energy_diff < min_energy_diff:
+                        min_energy_diff = energy_diff
+                        best_match_intensity = gamma_B['intensity']
+                        best_index = index
+            
+            # If a valid match was found within tolerance:
+            if best_index != -1:
+                # Key Physics Logic: Use MINIMUM intensity
+                # If A has 100 and B has 20, they only definitively "share" 20
+                # Using average (60) would hallucinate data B never measured
+                intersection_sum += min(gamma_A['intensity'], best_match_intensity)
+                matched_indices_B.add(best_index)
+        
+        # Calculate totals
+        sum_A = sum(gamma['intensity'] for gamma in list_A)
+        sum_B = sum(gamma['intensity'] for gamma in list_B)
+        
+        # Avoid division by zero
+        if (sum_A + sum_B) == 0:
+            return 0.0
+        
+        # Bray-Curtis Formula: 2 × Intersection / (Total_A + Total_B)
+        return (2.0 * intersection_sum) / (sum_A + sum_B)
+    
+    # -------------------------------------------------------------------------
+    # Mode B: Binary Mode (Overlap Coefficient)
+    # Triggered if EITHER dataset is missing intensities (Energies Only)
+    # -------------------------------------------------------------------------
+    else:
+        matches_count = 0
+        matched_indices_B = set()
+        
+        for gamma_A in list_A:
+            # Search for existence of this energy in B
+            for index, gamma_B in enumerate(list_B):
+                if index in matched_indices_B:
+                    continue
+                
+                if abs(gamma_A['energy'] - gamma_B['energy']) <= tolerance_kev:
+                    matches_count += 1
+                    matched_indices_B.add(index)
+                    break  # Stop looking after first match for this gamma_A
+        
+        # Key Physics Logic: Subset Matching
+        # Divide by the MINIMUM set size
+        # Case: A has 2 gammas, B has 20 gammas
+        # If A's 2 gammas are found in B → Matches=2, Min_Length=2 → Score = 1.0 (Perfect)
+        # This correctly identifies that A is just a "low-stat" version of B
+        min_length = min(len(list_A), len(list_B))
+        
+        if min_length == 0:
+            return 0.0
+        
+        return float(matches_count) / float(min_length)
 
 
 def extract_features(level_1, level_2):
