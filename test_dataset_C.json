@@ -39,10 +39,10 @@
                 "energy": {
                     "value": 2000.0,
                     "uncertainty": {
-                        "value": 5.0,
+                        "value": 1.0,
                         "type": "symmetric"
                     },
-                    "evaluatorInput": "2000 5"
+                    "evaluatorInput": "2000 1"
                 },
                 "spinParity": {
                     "values": [],
@@ -141,29 +141,29 @@
                 "energy": {
                     "value": 1399.0,
                     "uncertainty": {
-                        "value": 3.0,
+                        "value": 2.0,
                         "type": "symmetric"
                     },
-                    "evaluatorInput": "1399 3"
+                    "evaluatorInput": "1399 2"
                 },
                 "gammaIntensity": {
-                    "value": 10.0,
+                    "value": 8.0,
                     "uncertainty": {
                         "value": 0.0
                     },
-                    "evaluatorInput": "10"
+                    "evaluatorInput": "8"
                 },
                 "initialLevel": 2,
                 "finalLevel": 1
             },
             {
                 "energy": {
-                    "value": 2000.0,
+                    "value": 1999.0,
                     "uncertainty": {
                         "value": 2.0,
                         "type": "symmetric"
                     },
-                    "evaluatorInput": "2000 2"
+                    "evaluatorInput": "1999 2"
                 },
                 "gammaIntensity": {
                     "value": 100.0,

@@ -11,14 +11,18 @@ Feature Engineering For Nuclear Level Matching
 2. **Similarity Scoring** (`calculate_*_similarity`):
    - Energy: Gaussian exp(-Sigma_Scale×z²) via Scoring_Config['Energy'].
    - Spin/Parity: Optimistic maximum across option pairs, scores from Scoring_Config['Spin']/['Parity']. Neutral fallback: Scoring_Config['General']['Neutral_Score'].
+   - Gamma Decay Pattern: Cosine similarity of Gaussian-broadened gamma spectra.
 
-3. **4D Feature Vector** (`extract_features`):
-   - Four monotonic-increasing features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity].
+3. **5D Feature Vector** (`extract_features`):
+   - Five monotonic-increasing features: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Pattern_Similarity].
    - Specificity = 1/f(multiplicity) where formula (sqrt/linear/log/tunable) from Scoring_Config['Specificity'].
 
 4. **Training Data** (`generate_synthetic_training_data`):
    - Creates labeled training pairs using grid-based feature space coverage + random sampling (500 points) + perfect-match boost (50 points).
-   - Labels: Hard-veto mismatches→0.0; probability = Energy × sqrt(Spin_factor × Parity_factor) × Specificity.
+   - Labels: Hard-veto mismatches→0.0; probability = Energy × sqrt(Physics_Confidence) × Specificity.
+   - **Feature Correlation**: Perfect spin+parity (both ≥0.95) triggers "Physics Rescue" where
+     effective_energy = energy^Rescue_Exponent. This teaches XGBoost that identical quantum numbers
+     can compensate for calibration-induced energy disagreement.
 
 """
 
@@ -67,6 +71,19 @@ Scoring_Config = {
         # Higher Alpha → steeper penalty. Example: Alpha=0.5 gives mult=9→18% (82% penalty)
         'Alpha': 0.5
     },
+    'Feature_Correlation': {
+        # Controls how perfect spin/parity matching can "rescue" mediocre energy similarity.
+        # Physics rationale: If two levels have identical quantum numbers (Jπ) and are isolated
+        # (no nearby levels with same Jπ), energy disagreement may be due to measurement error
+        # or calibration issues rather than genuine mismatch.
+        #
+        # When Enabled: If spin_sim >= Threshold AND parity_sim >= Threshold,
+        # the effective energy similarity is boosted: effective_e = e^Rescue_Exponent
+        # Example: Rescue_Exponent=0.5 (sqrt) transforms e=0.4→0.63, e=0.6→0.77
+        'Enabled': True,
+        'Threshold': 0.95,        # Minimum spin/parity similarity to trigger rescue (firm matches only)
+        'Rescue_Exponent': 0.5    # Exponent for energy boost: e → e^exponent (0.5 = sqrt, 0.7 = gentler)
+    },
     'General': {
         # Score used when data is missing (e.g. unknown).
         'Neutral_Score': 0.5
@@ -103,14 +120,28 @@ def load_levels_from_json(dataset_codes):
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
-                # Format: New ENSDF JSON schema (levelsTable -> levels)
+                # Format: New ENSDF JSON schema (levelsTable -> levels, gammasTable -> gammas)
                 if isinstance(data, dict) and 'levelsTable' in data:
                     raw_levels = data['levelsTable'].get('levels', [])
-                    for item in raw_levels:
+                    gammas_table = data.get('gammasTable', {}).get('gammas', [])
+                    
+                    for level_index, item in enumerate(raw_levels):
                         energy_value = item.get('energy', {}).get('value')
                         energy_uncertainty = item.get('energy', {}).get('uncertainty', {}).get('value')
                         spin_parity_list = item.get('spinParity', {}).get('values', [])
-                        spin_parity_string = item.get('spinParity', {}).get('evaluatorInput') 
+                        spin_parity_string = item.get('spinParity', {}).get('evaluatorInput')
+                        
+                        # Extract gamma decays for this level from gammasTable
+                        gamma_decays = []
+                        if 'gammas' in item and gammas_table:
+                            # Level has gamma indices pointing to gammasTable
+                            for gamma_index in item['gammas']:
+                                if 0 <= gamma_index < len(gammas_table):
+                                    gamma = gammas_table[gamma_index]
+                                    gamma_decays.append({
+                                        'energy': gamma.get('energy', {}).get('value'),
+                                        'branching_ratio': gamma.get('gammaIntensity', {}).get('value', 100.0)
+                                    })
                         
                         if energy_value is not None:
                             levels.append({
@@ -119,7 +150,8 @@ def load_levels_from_json(dataset_codes):
                                 'energy_value': float(energy_value),
                                 'energy_uncertainty': float(energy_uncertainty) if energy_uncertainty is not None else 10.0,
                                 'spin_parity_list': spin_parity_list,
-                                'spin_parity_string': spin_parity_string
+                                'spin_parity_string': spin_parity_string,
+                                'gamma_decays': gamma_decays
                             })
     return levels
 
@@ -318,11 +350,91 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
                 
     return max_parity_similarity_score
 
+
+def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
+    """
+    Calculates gamma decay pattern similarity (0 to 1) for matching levels across experimental datasets.
+    
+    Physics Rationale:
+    - Gamma decay patterns are unique "fingerprints" for nuclear levels.
+    - Uses Cosine Similarity of Gaussian-broadened spectra to compare decay patterns.
+    - Handles energy shifts, missing peaks, and intensity differences naturally.
+    
+    Implementation Strategy:
+    - Represent each level's gamma decay as a continuous spectral function:
+      S(E) = Sum( Intensity_i * Gaussian(E - E_gamma_i, sigma) )
+    - Compute Similarity = Integral(S1 * S2) / Sqrt(Integral(S1^2) * Integral(S2^2))
+      (Cosine Similarity of the spectral functions)
+    - Analytical solution for integral of product of Gaussians is used for efficiency.
+    
+    Input Format:
+    gamma_decays = [
+        {'energy': 1400.0, 'branching_ratio': 70.0},
+        {'energy': 4400.0, 'branching_ratio': 30.0}
+    ]
+    
+    Parameters:
+    - sigma: Energy resolution from Scoring_Config['Energy']['Default_Uncertainty'] (e.g. 10 keV)
+    """
+    # Guard: If either level has no gamma decay data, return neutral score
+    if not gamma_decays_1 or not gamma_decays_2:
+        return Scoring_Config['General']['Neutral_Score']
+    
+    # Extract gamma energies and intensities (default to 1.0 if missing or zero)
+    # Filter out invalid entries
+    def extract_gammas(raw_decays):
+        cleaned = []
+        for g in raw_decays:
+            e = g.get('energy')
+            i = g.get('branching_ratio', 0.0)
+            if e is not None and i > 0:
+                cleaned.append((float(e), float(i)))
+        return cleaned
+
+    gammas_1 = extract_gammas(gamma_decays_1)
+    gammas_2 = extract_gammas(gamma_decays_2)
+    
+    # Guard: After filtering, check if any valid gammas remain
+    if not gammas_1 or not gammas_2:
+        return Scoring_Config['General']['Neutral_Score']
+    
+    sigma = Scoring_Config['Energy']['Default_Uncertainty']
+    # Precompute squared constants for Gaussian integral (product of two Gaussians)
+    # The term is exp( -(dA - dB)^2 / (2 * (sigma^2 + sigma^2)) ) -> 4*sigma^2
+    sigma_sq_4 = 4 * sigma**2
+    # Limit for correlation calculation optimization (~5 sigma)
+    cutoff_sq = 25 * sigma**2
+    
+    # Helper to calculate dot product of two spectra
+    # Integral(S_A * S_B) propto Sum_i Sum_j A_i B_j * Exp( -(E_Ai - E_Bj)^2 / 4sigma^2 )
+    def spectrum_dot_product(g_list_a, g_list_b):
+        dot_sum = 0.0
+        for ea, ia in g_list_a:
+            for eb, ib in g_list_b:
+                energy_diff_sq = (ea - eb)**2
+                # Optimization: Ignore negligible terms
+                if energy_diff_sq > cutoff_sq: 
+                    continue
+                weight = np.exp(-energy_diff_sq / sigma_sq_4)
+                dot_sum += ia * ib * weight
+        return dot_sum
+
+    dot_11 = spectrum_dot_product(gammas_1, gammas_1)
+    dot_22 = spectrum_dot_product(gammas_2, gammas_2)
+    dot_12 = spectrum_dot_product(gammas_1, gammas_2)
+    
+    if dot_11 == 0 or dot_22 == 0:
+        return 0.0
+        
+    similarity = dot_12 / np.sqrt(dot_11 * dot_22)
+    return float(similarity)
+
+
 def extract_features(level_1, level_2):
     """
-    Constructs four-dimensional feature vector for ML-based match probability prediction.
+    Constructs five-dimensional feature vector for ML-based match probability prediction.
     
-    Feature Vector Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity]
+    Feature Vector Output: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Pattern_Similarity]
     
     Design Principle:
     - All features are monotonic increasing: higher value strictly indicates better match likelihood.
@@ -369,6 +481,16 @@ def extract_features(level_1, level_2):
        - Single well-resolved level (1 option): 1.0 (no penalty)
        - Ambiguous levels (3×3=9 options): 0.33 using sqrt (67% penalty)
        - Rationale: Measurement ambiguity reduces confidence in match assessment
+    
+    5. Gamma_Decay_Pattern_Similarity (0-1):
+       - Cosine Similarity of Gaussian-broadened gamma spectra.
+       - Concept: Represents decay pattern as a continuous function S(E) = Sum(I_i * G(E-E_i)).
+       - Metric: Integral(S1*S2) / Sqrt(Integral(S1^2)*Integral(S2^2)).
+       - Sigma from Scoring_Config['Energy']['Default_Uncertainty'].
+       - Robustly handles energy shifts (via Gaussian overlap) and intensity mismatches (via vector angle).
+       - Guard: Uses Scoring_Config['General']['Neutral_Score'] (typically 0.5) when gamma data missing
+       - Rationale: Levels with similar decay patterns likely identical
+       - Example: Both levels decay via 1400 keV (70%) and 4400 keV (30%) → similarity ≈ 1.0
     
     """
 
@@ -442,7 +564,12 @@ def extract_features(level_1, level_2):
     # parity_certainty = 0.0 if (parity_is_tentative_1 or parity_is_tentative_2) else 1.0
     # ===================================================================
     
-    return np.array([energy_similarity, spin_similarity, parity_similarity, specificity])
+    # Feature 5: Gamma decay pattern similarity
+    gamma_decays_1 = level_1.get('gamma_decays', [])
+    gamma_decays_2 = level_2.get('gamma_decays', [])
+    gamma_decay_pattern_similarity = calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2)
+    
+    return np.array([energy_similarity, spin_similarity, parity_similarity, specificity, gamma_decay_pattern_similarity])
 
 def generate_synthetic_training_data():
     """
@@ -451,44 +578,74 @@ def generate_synthetic_training_data():
     Strategy:
     - Uses a grid-based approach to cover all physics scenarios defined in Scoring_Config.
     - Applies a unified physics logic function (calculate_label) rather than hardcoded edge cases.
+    - Implements Feature Correlation: Perfect spin/parity can "rescue" mediocre energy similarity.
     - Ensures the model learns:
         1. Vetoes: Mismatches (Score ~0.0) -> Label 0.0.
         2. Neutrality: Unknown physics (Score 0.5) -> High dependence on Energy.
         3. Match Quality: Higher scores -> Higher probability.
+        4. Gamma Decay: Additional confirmation when decay patterns match.
+        5. Feature Correlation: Perfect physics (Spin+Parity) relaxes energy strictness.
+    
+    Feature Correlation Physics Rationale:
+    - If two levels have IDENTICAL quantum numbers (firm Jπ match) but disagreeing energies,
+      the energy mismatch may be due to calibration error, not genuine mismatch.
+    - This is especially true for isolated levels (no nearby states with same Jπ).
+    - XGBoost learns this interaction: when Spin_Sim=1.0 AND Parity_Sim=1.0, the model
+      assigns higher probability even with moderate Energy_Sim (e.g., 0.4-0.7).
     """
     training_points = []
     
     # 1. Gather all possible discrete scores from Config
     spin_scores = list(Scoring_Config['Spin'].values()) + [Scoring_Config['General']['Neutral_Score']]
     parity_scores = list(Scoring_Config['Parity'].values()) + [Scoring_Config['General']['Neutral_Score']]
+    gamma_scores = [0.0, 0.3, Scoring_Config['General']['Neutral_Score'], 0.7, 1.0]  # Range: no match to perfect match
     
-    # 2. Define Physics Logic for Labeling (Empirically tuned)
-    def calculate_label(e, s, p, spec):
+    # 2. Feature Correlation Configuration
+    correlation_enabled = Scoring_Config['Feature_Correlation']['Enabled']
+    correlation_threshold = Scoring_Config['Feature_Correlation']['Threshold']
+    rescue_exponent = Scoring_Config['Feature_Correlation']['Rescue_Exponent']
+    
+    # 3. Define Physics Logic for Labeling (with Feature Correlation)
+    def calculate_label(energy_similarity, spin_similarity, parity_similarity, specificity, gamma_similarity):
         # HARD VETO: If physics explicitly mismatches (score <= near-zero), reject.
         # Allow small tolerance if config uses 0.05 for mismatched.
-        if s <= Scoring_Config['Spin'].get('Mismatch_Strong', 0.05) or \
-           p <= Scoring_Config['Parity'].get('Mismatch_Weak', 0.1) / 2: # Logic: Parity mismatch is usually binary (0 or 1).
-             return 0.0
+        if spin_similarity <= Scoring_Config['Spin'].get('Mismatch_Strong', 0.05) or \
+           parity_similarity <= Scoring_Config['Parity'].get('Mismatch_Weak', 0.1) / 2:
+            return 0.0
 
         # ADJUSTMENT FOR NEUTRAL/TENTATIVE:
         # Map raw scores to "Confidence Factors" to prevent multiplicative decay from killing good matches.
-        # If Score is Neutral (0.5), treat it as "No Info" -> Factor ~0.9 (slight penalty vs perfect).
-        def value_map(val):
-            if val == Scoring_Config['General']['Neutral_Score']: return 0.85
-            return val
+        # If Score is Neutral (0.5), treat it as "No Info" -> Factor ~0.85 (slight penalty vs perfect).
+        def value_map(value):
+            if value == Scoring_Config['General']['Neutral_Score']:
+                return 0.85
+            return value
 
-        s_factor = value_map(s)
-        p_factor = value_map(p)
+        spin_factor = value_map(spin_similarity)
+        parity_factor = value_map(parity_similarity)
+        gamma_factor = value_map(gamma_similarity)
+
+        # Feature Correlation: Physics Rescue
+        # If spin AND parity are both essentially perfect (firm matches),
+        # relax the dependency on energy similarity by boosting it.
+        # Physics rationale: Perfect quantum number agreement suggests the same level
+        # even if energy calibration differs slightly between experiments.
+        effective_energy = energy_similarity
+        if correlation_enabled:
+            if spin_similarity >= correlation_threshold and parity_similarity >= correlation_threshold:
+                # Apply rescue: e → e^exponent (e.g., sqrt transforms 0.4→0.63, 0.6→0.77)
+                # This reduces the penalty for mediocre energy when physics is perfect.
+                effective_energy = energy_similarity ** rescue_exponent
 
         # PROBABILITY FORMULA:
-        # Base confidence from Energy * Physics Quality
+        # Base confidence from Energy * Physics Quality * Specificity
         # Use geometric mean of physics factors to balance them.
-        physics_confidence = np.sqrt(s_factor * p_factor)
+        physics_confidence = np.sqrt(spin_factor * parity_factor * gamma_factor)
         
-        prob = e * physics_confidence * spec
-        return min(max(prob, 0.0), 0.99)
+        probability = effective_energy * physics_confidence * specificity
+        return min(max(probability, 0.0), 0.99)
 
-    # 3. Systematic Grid Generation (Cover the feature space)
+    # 4. Systematic Grid Generation (Cover the feature space)
     # Energy grid: dense near 0 (mismatch) and 1 (match)
     energy_grid = np.concatenate([
         np.linspace(0.0, 0.3, 10),  # Low energy (mismatch zone)
@@ -496,34 +653,67 @@ def generate_synthetic_training_data():
         np.linspace(0.8, 1.0, 20)   # High energy (match zone)
     ])
 
-    for e in energy_grid:
-        for s in set(spin_scores):
-            for p in set(parity_scores):
+    for energy in energy_grid:
+        for spin in set(spin_scores):
+            for parity in set(parity_scores):
                 # Specificity mostly 1.0, but add some noise/variation
-                for spec in [1.0, 0.7, 0.5]:
-                     label = calculate_label(e, s, p, spec)
-                     training_points.append(([e, s, p, spec], label))
+                for specificity in [1.0, 0.7, 0.5]:
+                    for gamma in gamma_scores:
+                        label = calculate_label(energy, spin, parity, specificity, gamma)
+                        training_points.append(([energy, spin, parity, specificity, gamma], label))
 
-    # 4. Random Sampling (Fill gaps and prevent overfitting)
+    # 5. Feature Correlation Teaching Set (Critical for learning the interaction)
+    # Explicitly oversample the region where energy is mediocre but physics is perfect.
+    # This teaches XGBoost to split on Spin/Parity first, then apply different energy slopes.
+    perfect_spin = Scoring_Config['Spin']['Match_Firm']
+    perfect_parity = Scoring_Config['Parity']['Match_Firm']
+    imperfect_spin = Scoring_Config['Spin']['Match_Strong']  # e.g., 0.8 (tentative match)
+    imperfect_parity = Scoring_Config['Parity']['Match_Strong']  # e.g., 0.8 (tentative match)
+    
+    # Mediocre energy range where correlation effect is most visible
+    mediocre_energy_values = [0.3, 0.4, 0.5, 0.6, 0.7]
+    
+    for energy in mediocre_energy_values:
+        # Case A: Perfect Physics → Label should be BOOSTED (rescued)
+        # Model learns: [mediocre energy, perfect spin, perfect parity] → high probability
+        label_boosted = calculate_label(energy, perfect_spin, perfect_parity, 1.0, 0.5)
+        training_points.append(([energy, perfect_spin, perfect_parity, 1.0, 0.5], label_boosted))
+        
+        # Case B: Imperfect Physics → Label should be STANDARD (no rescue)
+        # Model learns: [mediocre energy, imperfect physics] → standard (lower) probability
+        # This CONTRAST forces the tree to split on Spin/Parity condition
+        label_standard = calculate_label(energy, imperfect_spin, imperfect_parity, 1.0, 0.5)
+        training_points.append(([energy, imperfect_spin, imperfect_parity, 1.0, 0.5], label_standard))
+        
+        # Case C: Mixed Physics (one perfect, one imperfect) → No rescue
+        # Ensures rescue only triggers when BOTH spin AND parity are perfect
+        label_mixed_1 = calculate_label(energy, perfect_spin, imperfect_parity, 1.0, 0.5)
+        training_points.append(([energy, perfect_spin, imperfect_parity, 1.0, 0.5], label_mixed_1))
+        label_mixed_2 = calculate_label(energy, imperfect_spin, perfect_parity, 1.0, 0.5)
+        training_points.append(([energy, imperfect_spin, perfect_parity, 1.0, 0.5], label_mixed_2))
+
+    # 6. Random Sampling (Fill gaps and prevent overfitting)
     np.random.seed(42)
     for _ in range(500):
-        e = np.random.uniform(0, 1)
-        s = np.random.choice(list(set(spin_scores)))
-        p = np.random.choice(list(set(parity_scores)))
+        energy = np.random.uniform(0, 1)
+        spin = np.random.choice(list(set(spin_scores)))
+        parity = np.random.choice(list(set(parity_scores)))
         # Generate specificity roughly following 1/sqrt(N) distribution
-        spec = np.random.choice([1.0, 0.707, 0.577, 0.5, 0.4]) 
+        specificity = np.random.choice([1.0, 0.707, 0.577, 0.5, 0.4])
+        gamma = np.random.choice(gamma_scores)
         
-        label = calculate_label(e, s, p, spec)
-        training_points.append(([e, s, p, spec], label))
+        label = calculate_label(energy, spin, parity, specificity, gamma)
+        training_points.append(([energy, spin, parity, specificity, gamma], label))
 
-    # 5. Additional Boost for "Perfect" cases to ensure 1.0-like behavior
+    # 7. Additional Boost for "Perfect" cases to ensure 1.0-like behavior
     # Forces model to be very confident when everything is perfect
     for _ in range(50):
-        e = np.random.uniform(0.95, 1.0)
-        s = Scoring_Config['Spin']['Match_Firm']
-        p = Scoring_Config['Parity']['Match_Firm']
-        spec = 1.0
-        training_points.append(([e, s, p, spec], 0.99))
+        energy = np.random.uniform(0.95, 1.0)
+        spin = Scoring_Config['Spin']['Match_Firm']
+        parity = Scoring_Config['Parity']['Match_Firm']
+        specificity = 1.0
+        gamma = np.random.choice([Scoring_Config['General']['Neutral_Score'], 0.9, 1.0])
+        training_points.append(([energy, spin, parity, specificity, gamma], 0.99))
 
     training_features = np.array([record[0] for record in training_points])
     training_labels = np.array([record[1] for record in training_points])
