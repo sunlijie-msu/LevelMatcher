@@ -3,9 +3,21 @@
 ## Level 1: The Foundation
 ### Decision Tree
 
-- **Concept:** A non-parametric supervised machine learning method that predicts target values by learning simple decision rules inferred from data features (Classification and Regression Tree, or CART).
-- **Characteristics:** Low bias, high variance. Deep trees are unstable (sensitive to small data changes) and prone to overfitting (memorizing noise).
-- **Role:** The "Weak Learner" (Base Estimator) in ensemble methods.
+- **Concept:** A non-parametric supervised method that predicts targets by learning simple if-then-else rules from features.
+
+- **Core Components:**
+  - **Root Node:** The starting point containing all data.
+  - **Decision Node (Internal Node):** Where data is split based on a feature's value.
+  - **Branches:** Connect nodes and represent decision outcomes.
+  - **Leaf Node (Terminal Node):** Final outcomes or predictions.
+  - **Splitting:** The process of dividing a node into two sub-nodes.
+
+- **CART (Classification and Regression Trees):** Algorithm that builds trees using binary splits to minimize impurity (Gini impurity for classification, mean squared error for regression).
+
+- **Characteristics:** Low bias and high variance. Deep trees are sensitive to small changes and can overfit.
+
+- **Role:** The base estimator in ensemble methods.
+
 
 ## Level 2: The Strategy
 
@@ -21,7 +33,7 @@ Ensemble Learning: Reduce variance (Bagging) or bias (Boosting) by combining mul
 ### Strategy B: Boosting
 
 - **Logic:** Sequential execution to reduce bias.
-- **Mechanism:** Iterative improvement. Tree m is trained to minimize errors (loss) of ensemble F_(m-1).
+- **Mechanism:** Iterative improvement. Tree $m$ is trained to minimize errors (loss) of ensemble $F_{m-1}$.
 - **Strength for Physics:** Mimics a "Veto" system. If Tree 1 predicts a match, Tree 2 can detect a specific violation (e.g., Parity Mismatch) and output a large negative correction, effectively suppressing match probability.
 
 ## Level 3: The Algorithm
@@ -30,13 +42,13 @@ Mathematical frameworks for implementing Boosting.
 
 ### Algorithm A: AdaBoost (Adaptive Boosting)
 
-- **Mechanism:** Sample Reweighting. At step m, it increases the weights of misclassified observations.
+- **Mechanism:** Sample Reweighting. At step $m$, it increases the weights of misclassified observations.
 - **Reference:** Freund and Schapire (1997).
 - **Verdict:** Reject. Sensitive to noisy data both theoretically and empirically. In nuclear data, experimental outliers (large errors) receive exponential weight, causing the model to fixate on anomalies rather than general trends.
 
 ### Algorithm B: GBM (Gradient Boosting Machine)
 
-- **Mechanism:** Functional Gradient Descent. At step m, a new tree is trained to predict the negative gradient (pseudo-residuals) of the loss function. It fits the error, not the data.
+- **Mechanism:** Functional Gradient Descent. At step $m$, a new tree is trained to predict the negative gradient (pseudo-residuals) of the loss function. It fits the error, not the data.
 - **Reference:** Friedman (2001).
 - **Verdict:** Superior. Optimizing differentiable loss functions (e.g., Log-Loss) makes it more robust to outliers than the exponential loss used in AdaBoost.
 
@@ -49,13 +61,14 @@ Major libraries implementing Gradient Boosting.
 | Scikit-learn GradientBoosting (Legacy) | Fails (Crashes) | Level-wise | Small | Requires imputation (bias risk); slow; lacks regularization. | Reject |
 | LightGBM (Microsoft, 2017) | Native (Safe) | Leaf-wise | Huge (>100k) | "Greedy" growth overfits small data; creates unbalanced trees. | Reject |
 | Scikit-learn HistGradientBoosting (2019) | Native (Safe) | Leaf-wise | Medium/Large | Less tunable regularization than XGBoost; defaults to greedy growth. | Acceptable |
-| XGBoost (Chen and Guestrin, 2016) | Native (Safe) | Level-wise | Any | None. Level-wise growth and L1/L2 regularization ideal for stability. | Best |
+| XGBoost (Chen and Guestrin, 2016) | Native (Safe) | Level-wise | Any | Minimal. Level-wise growth and L1/L2 regularization ideal for stability. | Best |
 | CatBoost (Yandex, 2017) | Native (Safe) | Symmetric | Medium/Large | Slower training for pure numerical tasks; heavier dependency. | Alternative |
 
 #### Growth Strategies
 
-- **Level-wise Growth (XGBoost):** Grows the tree layer-by-layer. Creates balanced trees, acting as a natural regularizer against experimental noise.
-- **Leaf-wise Growth (LightGBM/HGB):** Splits the single leaf with the highest error. Can grow deep, lopsided trees that "memorize" outliers in small datasets.
+- **Leaf-wise Growth (LightGBM / HistGBDT):** Splits the single leaf with the highest error, regardless of tree balance. Can grow deep, lopsided, overfitted trees that "memorize" outliers in small datasets.
+- **Level-wise Growth (XGBoost / Legacy GBDT):** Grows the tree layer-by-layer. Produces balanced trees, acting as a natural regularizer against experimental noise.
+
 
 ### 1. Handles Missing Physics Natively (Sparsity Awareness)
 
