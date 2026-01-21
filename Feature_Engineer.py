@@ -86,7 +86,7 @@ Scoring_Config = {
         'Rescue_Exponent': 0.5    # Exponent for energy boost: e → e^exponent (0.5 = sqrt, 0.7 = gentler)
     },
     'General': {
-        # Score used when data is missing (e.g. unknown).
+        # Score used when data is missing (e.g. unknown). Performe **Manual Imputation**. XGBoost receives a concrete number of 0.5, not a `NaN`, so it treats it like any other feature value.
         'Neutral_Score': 0.5
     }
 }

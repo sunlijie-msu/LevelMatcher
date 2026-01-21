@@ -70,9 +70,9 @@ Major libraries implementing Gradient Boosting.
 - **Level-wise Growth (XGBoost / Legacy GBDT):** Grows the tree layer-by-layer. Produces balanced trees, acting as a natural regularizer against experimental noise.
 
 
-### 1. Native Handling of Missing Physics (Sparsity Awareness)
+### 1. Native Handling of Missing Values (Sparsity Awareness)
 *   **The Challenge:** Nuclear datasets are inherently sparse; Spin ($J$) and Parity ($\pi$) assignments are frequently missing or tentative.
-*   **The XGBoost Solution:** XGBoost utilizes **Sparsity-Aware Split Finding**. Unlike legacy algorithms that fail on `NaN` or require bias-inducing imputation (guessing), XGBoost explicitly learns optimal default directions for missing data. It treats "Unknown" as a distinct state, preserving the ambiguity inherent in experimental data.
+*   **The XGBoost Solution:** XGBoost utilizes **Sparsity-Aware Split Finding**. Unlike legacy algorithms that fail on `NaN` or require bias-inducing imputation (guessing), XGBoost explicitly learns optimal default directions at tree split for `NaN ` based on other training labels. It treats "Unknown" as a distinct state, preserving the ambiguity inherent in experimental data.
 
 ### 2. Prevention of Overfitting on Small Datasets (Regularization)
 *   **The Challenge:** Nuclear level schemes represent "small data" (typically $N < 500$ levels). Algorithms like LightGBM, designed for massive datasets, tend to grow deep, greedy trees that "memorize" experimental noise.
