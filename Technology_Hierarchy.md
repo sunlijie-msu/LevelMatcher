@@ -70,22 +70,21 @@ Major libraries implementing Gradient Boosting.
 - **Level-wise Growth (XGBoost / Legacy GBDT):** Grows the tree layer-by-layer. Produces balanced trees, acting as a natural regularizer against experimental noise.
 
 
-### 1. Handles Missing Physics Natively (Sparsity Awareness)
+### 1. Native Handling of Missing Physics (Sparsity Awareness)
+*   **The Challenge:** Nuclear datasets are inherently sparse; Spin ($J$) and Parity ($\pi$) assignments are frequently missing or tentative.
+*   **The XGBoost Solution:** XGBoost utilizes **Sparsity-Aware Split Finding**. Unlike legacy algorithms that fail on `NaN` or require bias-inducing imputation (guessing), XGBoost explicitly learns optimal default directions for missing data. It treats "Unknown" as a distinct state, preserving the ambiguity inherent in experimental data.
 
-- **The Problem:** Nuclear datasets are sparse and incomplete. Spin (J) or Parity (pi) are often unknown (missing).
-- **The XGBoost Solution:** Unlike older algorithms that crash or require dangerous guessing (imputation), XGBoost treats missing values as information. It automatically learns the optimal path for "Unknown" data (e.g., if Spin is unknown, treat it as a potential match until proven otherwise).
+### 2. Prevention of Overfitting on Small Datasets (Regularization)
+*   **The Challenge:** Nuclear level schemes represent "small data" (typically $N < 500$ levels). Algorithms like LightGBM, designed for massive datasets, tend to grow deep, greedy trees that "memorize" experimental noise.
+*   **The XGBoost Solution:** XGBoost defaults to **Level-wise growth**, constructing balanced and conservative trees. Combined with native **L1 (Lasso) and L2 (Ridge) regularization**, this architecture prevents overfitting and ensures the model captures general physics trends rather than statistical fluctuations.
 
-### 2. Prevents Overfitting on Small Datasets (Regularization)
+### 3. Integration of Physical Logic with Statistical Matching
 
-- **The Problem:** Nuclear level schemes are "small data" (typically less than 200 levels). Algorithms like LightGBM are designed for millions of rows and will aggressively "memorize" experimental noise in small datasets.
-- **The XGBoost Solution:** Uses Level-wise growth (building balanced trees) rather than greedy Leaf-wise growth. Combined with built-in L1/L2 Regularization (mathematical penalties for complex models), it remains conservative and stable, prioritizing general physics trends over noise.
+*   **The Challenge:** Nuclear level matching is not merely a numerical optimization problem; it is constrained by strict physical laws. Standard models often treat logical constraints (e.g., selection rules) as "soft" statistical features, potentially allowing a precise energy match to override a fatal physics violation (e.g., matching $J^\pi = 3^+$ with $4^-$).
+*   **The XGBoost Solution:**
+    *   **Statistical Compliance (Monotonicity):** A larger energy deviation penalizes the match probability, reflecting the statistical nature of experimental uncertainties.
+    *   **Logical Compliance (Hard Vetoes):** As a sequential learner, XGBoost creates a hierarchy of decisions. It can learn that specific physical violations (like Parity Mismatch) act as absolute vetoes that nullify the probability, regardless of how perfect the energy agreement is.
 
-### 3. Enforces Physics Constraints (Statistical and Logical)
-
-- **The Problem:** Standard models can violate physical laws. They might "learn" from noise that a high Z-score (e.g., 3-sigma difference) is better than a low Z-score, or they might "average out" a fatal selection rule violation (e.g., averaging a 90% energy match with a 0% spin match).
-- **The XGBoost Solution:**
-  - **Statistical Logic (Monotonicity):** Explicitly enforce Monotonic Constraints on the Z-score feature (|Delta E|/sigma). This mathematically guarantees that as statistical deviation increases, match probability must decrease, forcing the model to respect experimental uncertainties.
-  - **Hard Vetoes (Boosting Strategy):** As a sequential learner, XGBoost handles binary exclusions (like Spin Parity vetoes) effectively. If an early tree predicts a match based on energy, a subsequent tree can detect the veto condition and apply a strong negative correction, driving the final probability to zero.
 
 ## Level 5: The Implementation
 
