@@ -63,7 +63,7 @@ if __name__ == "__main__":
     training_features, training_labels = generate_synthetic_training_data()
 
     # Train XGBoost regressor with monotonic constraints enforcing physics rules
-    # All five features designed so higher value → better match probability
+    # All five features designed as higher value → better match probability
     level_matcher_model = XGBRegressor(objective='binary:logistic',
                                        # Learning Objective Function: Training Loss + Regularization.
                                        # The loss function computes the difference between the true y value and the predicted y value.
@@ -82,13 +82,13 @@ if __name__ == "__main__":
                                        # Impact on model performance:
                                        # Lower values slow down learning but can improve generalization
                                        # Higher values speed up learning but may lead to suboptimal results
-                                       # Interaction with the number of boosting rounds:
-                                       # Lower learning rates typically require more boosting rounds
+                                       # Interaction with the number of trees:
+                                       # Lower learning rates typically require more trees
                                        # Higher learning rates may converge faster but require careful tuning of other parameters
                                        random_state=42)
                                        # Random number seed for reproducibility.
     
-    # Train model on synthetic training data
+    # Essential Step 1: Train model on synthetic training data
     level_matcher_model.fit(training_features, training_labels)
 
     # ==========================================
@@ -107,10 +107,10 @@ if __name__ == "__main__":
             if level_1['dataset_code'] == level_2['dataset_code']:
                 continue
 
-            # Extract physics-informed features for this level pair
+            # Extract the input features for this level pair
             feature_vector = extract_features(level_1, level_2)
             
-            # Predict match probability using trained XGBoost model
+            # Essential Step 2: Use the trained XGBoost model to predict match probability for this input feature vector
             match_probability = level_matcher_model.predict([feature_vector])[0]
             
             # Record level pairs above output threshold
