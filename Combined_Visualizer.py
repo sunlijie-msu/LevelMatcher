@@ -131,9 +131,17 @@ def plot_level_schemes():
             if isinstance(level.get('spinParity'), dict):
                 spin_parity_string = level.get('spinParity', {}).get('evaluatorInput', '')
             
-            # Format energy label: use evaluatorInput if available, else raw value
-            if isinstance(level.get('energy'), dict) and level.get('energy', {}).get('evaluatorInput'):
-                label_left = level['energy']['evaluatorInput']
+            # Format level label for the reader (e.g. 600(1))
+            # The JSON property 'evaluatorInput' uses NNDC space-separated format (e.g. 600 1)
+            label_left = ""
+            if isinstance(level.get('energy'), dict):
+                eval_input = level['energy'].get('evaluatorInput', '')
+                if ' ' in eval_input:
+                    # Convert NNDC "Value Uncertainty" to scientific "Value(Uncertainty)" for the plot
+                    value_part, uncertainty_part = eval_input.split(' ', 1)
+                    label_left = f"{value_part}({uncertainty_part})"
+                else:
+                    label_left = eval_input
             else:
                 uncertainty_string = f"({int(uncertainty)})" if uncertainty is not None else ""
                 label_left = f"{int(energy_value)}{uncertainty_string}"
