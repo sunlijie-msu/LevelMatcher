@@ -3,12 +3,14 @@
         "levels": [
             {
                 "energy": {
+                    "unit": "keV",
                     "value": 0.0,
                     "uncertainty": {
                         "type": "unreported"
                     },
                     "evaluatorInput": "0"
                 },
+                "isStable": false,
                 "spinParity": {
                     "values": [
                         {
@@ -23,6 +25,7 @@
             },
             {
                 "energy": {
+                    "unit": "keV",
                     "value": 601.0,
                     "uncertainty": {
                         "value": 3.0,
@@ -30,13 +33,11 @@
                     },
                     "evaluatorInput": "601 3"
                 },
-                "spinParity": {
-                    "values": [],
-                    "evaluatorInput": "none"
-                }
+                "isStable": false
             },
             {
                 "energy": {
+                    "unit": "keV",
                     "value": 2000.0,
                     "uncertainty": {
                         "value": 1.0,
@@ -44,10 +45,7 @@
                     },
                     "evaluatorInput": "2000 1"
                 },
-                "spinParity": {
-                    "values": [],
-                    "evaluatorInput": "none"
-                },
+                "isStable": false,
                 "gammas": [
                     0,
                     1
@@ -55,6 +53,7 @@
             },
             {
                 "energy": {
+                    "unit": "keV",
                     "value": 3005.0,
                     "uncertainty": {
                         "value": 30.0,
@@ -62,13 +61,11 @@
                     },
                     "evaluatorInput": "3005 30"
                 },
-                "spinParity": {
-                    "values": [],
-                    "evaluatorInput": "none"
-                }
+                "isStable": false
             },
             {
                 "energy": {
+                    "unit": "keV",
                     "value": 4003.0,
                     "uncertainty": {
                         "value": 30.0,
@@ -76,6 +73,7 @@
                     },
                     "evaluatorInput": "4003 30"
                 },
+                "isStable": false,
                 "spinParity": {
                     "values": [
                         {
@@ -102,6 +100,7 @@
             },
             {
                 "energy": {
+                    "unit": "keV",
                     "value": 5003.0,
                     "uncertainty": {
                         "value": 30.0,
@@ -109,6 +108,7 @@
                     },
                     "evaluatorInput": "5003 30"
                 },
+                "isStable": false,
                 "spinParity": {
                     "values": [
                         {
@@ -139,6 +139,7 @@
         "gammas": [
             {
                 "energy": {
+                    "unit": "keV",
                     "value": 1399.0,
                     "uncertainty": {
                         "value": 2.0,
@@ -159,6 +160,7 @@
             },
             {
                 "energy": {
+                    "unit": "keV",
                     "value": 1999.0,
                     "uncertainty": {
                         "value": 2.0,

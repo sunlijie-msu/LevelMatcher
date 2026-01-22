@@ -24,7 +24,7 @@ Engine for Nuclear Level Matching
    - Key params (see code): n_estimators=1000, max_depth=10, learning_rate=0.05, random_state=42.
 
 4. **Pairwise Inference** (cross-dataset only):
-   - Enumerate all level pairs across datasets, extract features, predict match probability.
+   - Enumerate all level pairs across datasets, extract features, predict match probability pair-by-pair.
    - Keep pairs above pairwise_output_threshold (default 0.1%) and write Output_Level_Pairwise_Inference.txt.
 
 5. **Graph Clustering (rule-based, no ML)**:

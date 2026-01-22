@@ -86,57 +86,68 @@ def format_evaluator_input(val_str, unc_str):
         return val_str
     return f"{val_str} {unc_str}"
 
-def parse_log_line(line):
-    # Regex for Level: E_level = 1000(3) [keV]; Jπ: ... [Gammas: ...]
-    pattern = r"E_level\s*=\s*([\d\.]+)(?:\(([\d\.]+)\))?(?:\s*keV)?;\s*Jπ:\s*([^;\.]+)(?:(?:\.|;)\s*Gammas:\s*(.*))?"
-    match = re.search(pattern, line)
-    
-    if not match: return None
+def parse_ensdf_line(line):
+    """
+    Parses a single ENSDF line (L or G record) using fixed-width slicing.
+    """
+    if len(line) < 8:
+        return None, None
         
-    # Capture raw strings for formatting
-    energy_str = match.group(1)
-    unc_str = match.group(2)
-    jpi_raw = match.group(3).strip()
+    record_type = line[7]
+    if record_type not in ['L', 'G']:
+        return None, None
+        
+    energy_str = line[9:19].strip()
+    unc_str = line[19:21].strip()
     
-    # Calculate values
+    if not energy_str:
+        return None, None
+        
     energy_val = float(energy_str)
     unc_val = calculate_absolute_uncertainty(energy_str, unc_str)
     
-    level_obj = {
-        "energy": {
-            "value": energy_val,
-            "uncertainty": { "value": unc_val, "type": "symmetric" } if unc_val > 0 else {"type": "unreported"},
-            "evaluatorInput": format_evaluator_input(energy_str, unc_str)
-        },
-        "spinParity": {
-            "values": parse_jpi(jpi_raw),
-            "evaluatorInput": jpi_raw
+    if record_type == 'L':
+        jpi_raw = line[22:39].strip()
+        data = {
+            "energy": {
+                "unit": "keV",
+                "value": energy_val,
+                "uncertainty": { "value": unc_val, "type": "symmetric" } if unc_val > 0 else {"type": "unreported"}
+            },
+            "isStable": False,
+            "gamma_decays": []
         }
-    }
+        if energy_str:
+            data["energy"]["evaluatorInput"] = format_evaluator_input(energy_str, unc_str)
+            
+        jpi_values = parse_jpi(jpi_raw)
+        if jpi_values or jpi_raw:
+            data["spinParity"] = {}
+            if jpi_values:
+                data["spinParity"]["values"] = jpi_values
+            if jpi_raw:
+                data["spinParity"]["evaluatorInput"] = jpi_raw
+                
+        return "L", data
     
-    # Parse Gammas
-    gamma_str = match.group(4)
-    if gamma_str:
-        gamma_decays = []
-        # Regex: 1400(1) BR=100, 2000(1) BR=20(4)
-        entries = re.findall(r'([\d\.]+)(?:\(([\d\.]+)\))?\s+BR=(\d+)(?:\(([\d\.]+)\))?', gamma_str)
+    elif record_type == 'G':
+        ri_str = line[22:29].strip()
+        dri_str = line[29:31].strip()
         
-        for g_en_str, g_unc_str, g_br_str, g_br_unc_str in entries:
-            g_unc_val = calculate_absolute_uncertainty(g_en_str, g_unc_str)
-            g_br_unc_val = calculate_absolute_uncertainty(g_br_str, g_br_unc_str)
-            
-            gamma_decays.append({
-                "energy": float(g_en_str),
-                "energy_unc": g_unc_val,
-                "energy_input": format_evaluator_input(g_en_str, g_unc_str),
-                "branching_ratio": float(g_br_str),
-                "bra_unc": g_br_unc_val,
-                "br_input": format_evaluator_input(g_br_str, g_br_unc_str)
-            })
-                            
-            level_obj["gamma_decays"] = gamma_decays
-            
-    return level_obj
+        ri_val = float(ri_str) if ri_str else 0.0
+        dri_val = calculate_absolute_uncertainty(ri_str, dri_str) if dri_str else 0.0
+        
+        data = {
+            "energy_val": energy_val,
+            "energy_unc": unc_val,
+            "energy_input": format_evaluator_input(energy_str, unc_str) if energy_str else None,
+            "branching_ratio": ri_val,
+            "bra_unc": dri_val,
+            "br_input": format_evaluator_input(ri_str, dri_str) if ri_str else None
+        }
+        return "G", data
+
+    return None, None
 
 def convert_log_to_datasets(log_path):
     if not os.path.exists(log_path):
@@ -148,8 +159,10 @@ def convert_log_to_datasets(log_path):
 
     datasets = {}
     current_ds = None
+    last_level = None
     
     for line in lines:
+        raw_line = line # Keep for slicing
         line = line.strip()
         if not line: continue
         
@@ -158,12 +171,17 @@ def convert_log_to_datasets(log_path):
             if len(parts) > 1:
                 current_ds = parts[1].split(":")[0].strip()
                 datasets[current_ds] = []
+                last_level = None
                 print(f"Processing Dataset {current_ds}...")
             continue
             
-        if line.startswith("E_level") and current_ds:
-            lvl = parse_log_line(line)
-            if lvl: datasets[current_ds].append(lvl)
+        rec_type, rec_data = parse_ensdf_line(raw_line)
+        
+        if rec_type == "L" and current_ds is not None:
+            datasets[current_ds].append(rec_data)
+            last_level = rec_data
+        elif rec_type == "G" and last_level is not None:
+            last_level["gamma_decays"].append(rec_data)
 
     # Output JSONs
     for code, levels in datasets.items():
@@ -172,11 +190,12 @@ def convert_log_to_datasets(log_path):
         
         for lvl_idx, level in enumerate(levels):
             if "gamma_decays" in level:
+                has_gammas = len(level["gamma_decays"]) > 0
                 level_gammas = []
                 initial_E = level["energy"]["value"]
                 
                 for g_data in level["gamma_decays"]:
-                    g_E = g_data["energy"]
+                    g_E = g_data["energy_val"]
                     final_E_target = initial_E - g_E
                     
                     # Match Final Level
@@ -193,23 +212,28 @@ def convert_log_to_datasets(log_path):
                     # Structuring Gamma Entry
                     g_entry = {
                         "energy": {
+                            "unit": "keV",
                             "value": g_E,
-                            "uncertainty": { "value": g_data["energy_unc"], "type": "symmetric" } if g_data["energy_unc"] > 0 else {"type": "unreported"},
-                            "evaluatorInput": g_data["energy_input"]
+                            "uncertainty": { "value": g_data["energy_unc"], "type": "symmetric" } if g_data["energy_unc"] > 0 else {"type": "unreported"}
                         },
                         "gammaIntensity": {
                             "value": g_data["branching_ratio"],
-                            "uncertainty": { "value": g_data["bra_unc"], "type": "symmetric" } if g_data["bra_unc"] > 0 else {"type": "unreported"},
-                            "evaluatorInput": g_data["br_input"]
+                            "uncertainty": { "value": g_data["bra_unc"], "type": "symmetric" } if g_data["bra_unc"] > 0 else {"type": "unreported"}
                         },
                         "initialLevel": lvl_idx,
                         "finalLevel": final_idx
                     }
+                    if g_data.get("energy_input"):
+                        g_entry["energy"]["evaluatorInput"] = g_data["energy_input"]
+                    if g_data.get("br_input"):
+                        g_entry["gammaIntensity"]["evaluatorInput"] = g_data["br_input"]
+                        
                     gammas_table.append(g_entry)
                     level_gammas.append(gamma_counter)
                     gamma_counter += 1
                 
-                level["gammas"] = level_gammas
+                if level_gammas:
+                    level["gammas"] = level_gammas
                 del level["gamma_decays"]
         
         output = { "levelsTable": { "levels": levels } }
