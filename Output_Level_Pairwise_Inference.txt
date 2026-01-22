@@ -77,7 +77,7 @@ B_3000 <-> C_4003 | Probability: 0.5%
 A_0 <-> B_603 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_0 <-> B_2010 | Probability: 0.5%
+A_0 <-> B_2008 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
 A_0 <-> C_601 | Probability: 0.5%
@@ -92,7 +92,7 @@ A_0 <-> C_3005 | Probability: 0.5%
 A_600 <-> B_0 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_600 <-> B_2010 | Probability: 0.5%
+A_600 <-> B_2008 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
 A_600 <-> B_3000 | Probability: 0.5%
@@ -164,7 +164,7 @@ A_2005 <-> C_3005 | Probability: 0.5%
 A_3000 <-> B_603 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_3000 <-> B_2010 | Probability: 0.5%
+A_3000 <-> B_2008 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
 A_3000 <-> B_4000 | Probability: 0.5%
@@ -179,7 +179,7 @@ A_3000 <-> C_2000 | Probability: 0.5%
 A_3005 <-> B_603 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_3005 <-> B_2010 | Probability: 0.5%
+A_3005 <-> B_2008 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
 A_3005 <-> C_601 | Probability: 0.5%
@@ -191,7 +191,7 @@ A_3005 <-> C_2000 | Probability: 0.5%
 A_4000 <-> B_603 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_4000 <-> B_2010 | Probability: 0.5%
+A_4000 <-> B_2008 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
 A_4000 <-> B_3000 | Probability: 0.5%
@@ -209,7 +209,7 @@ A_4000 <-> C_3005 | Probability: 0.5%
 A_4005 <-> B_603 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-A_4005 <-> B_2010 | Probability: 0.5%
+A_4005 <-> B_2008 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
 A_4005 <-> C_601 | Probability: 0.5%
@@ -239,13 +239,13 @@ B_603 <-> C_2000 | Probability: 0.5%
 B_603 <-> C_3005 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-B_2010 <-> C_0 | Probability: 0.5%
+B_2008 <-> C_0 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-B_2010 <-> C_601 | Probability: 0.5%
+B_2008 <-> C_601 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
-B_2010 <-> C_3005 | Probability: 0.5%
+B_2008 <-> C_3005 | Probability: 0.5%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Pattern_Sim=0.50
 
 B_3000 <-> C_601 | Probability: 0.5%
@@ -296,7 +296,7 @@ A_4005 <-> C_5003 | Probability: 0.4%
 A_5000 <-> B_603 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-A_5000 <-> B_2010 | Probability: 0.4%
+A_5000 <-> B_2008 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
 A_5000 <-> B_4000 | Probability: 0.4%
@@ -314,7 +314,7 @@ A_5000 <-> C_3005 | Probability: 0.4%
 A_5005 <-> B_603 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-A_5005 <-> B_2010 | Probability: 0.4%
+A_5005 <-> B_2008 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
 A_5005 <-> C_601 | Probability: 0.4%
@@ -332,10 +332,10 @@ B_603 <-> C_4003 | Probability: 0.4%
 B_603 <-> C_5003 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-B_2010 <-> C_4003 | Probability: 0.4%
+B_2008 <-> C_4003 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
-B_2010 <-> C_5003 | Probability: 0.4%
+B_2008 <-> C_5003 | Probability: 0.4%
   Features: Energy_Sim=0.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=0.58, Gamma_Pattern_Sim=0.50
 
 B_4000 <-> C_5003 | Probability: 0.4%

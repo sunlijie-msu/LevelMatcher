@@ -10,44 +10,44 @@ Cluster 1:
     [C] C_0: E=0.0±10.0 keV, Jπ=0+ (Match Prob: 93.9%)
 
 Cluster 2:
-  Anchor: A_600 | E=600.0±1.0 keV | Jπ=none
+  Anchor: A_600 | E=600.0±1.0 keV | Jπ=None
   Members:
-    [A] A_600: E=600.0±1.0 keV, Jπ=none (Anchor)
-    [B] B_603: E=603.0±3.0 keV, Jπ=none (Match Prob: 68.5%)
-    [C] C_601: E=601.0±3.0 keV, Jπ=none (Match Prob: 74.8%)
+    [A] A_600: E=600.0±1.0 keV, Jπ=None (Anchor)
+    [B] B_603: E=603.0±3.0 keV, Jπ=None (Match Prob: 68.5%)
+    [C] C_601: E=601.0±3.0 keV, Jπ=None (Match Prob: 74.8%)
 
 Cluster 3:
-  Anchor: A_2000 | E=2000.0±1.0 keV | Jπ=none
+  Anchor: A_2000 | E=2000.0±1.0 keV | Jπ=None
   Members:
-    [A] A_2000: E=2000.0±1.0 keV, Jπ=none (Anchor)
+    [A] A_2000: E=2000.0±1.0 keV, Jπ=None (Anchor)
 
 Cluster 4:
-  Anchor: C_2000 | E=2000.0±1.0 keV | Jπ=none
+  Anchor: C_2000 | E=2000.0±1.0 keV | Jπ=None
   Members:
-    [C] C_2000: E=2000.0±1.0 keV, Jπ=none (Anchor)
+    [C] C_2000: E=2000.0±1.0 keV, Jπ=None (Anchor)
 
 Cluster 5:
-  Anchor: A_2005 | E=2005.0±1.0 keV | Jπ=none
+  Anchor: A_2005 | E=2005.0±1.0 keV | Jπ=None
   Members:
-    [A] A_2005: E=2005.0±1.0 keV, Jπ=none (Anchor)
+    [A] A_2005: E=2005.0±1.0 keV, Jπ=None (Anchor)
 
 Cluster 6:
-  Anchor: B_2010 | E=2010.0±1.0 keV | Jπ=none
+  Anchor: B_2008 | E=2008.0±1.0 keV | Jπ=None
   Members:
-    [B] B_2010: E=2010.0±1.0 keV, Jπ=none (Anchor)
+    [B] B_2008: E=2008.0±1.0 keV, Jπ=None (Anchor)
 
 Cluster 7:
   Anchor: A_3000 | E=3000.0±1.0 keV | Jπ=2+
   Members:
     [A] A_3000: E=3000.0±1.0 keV, Jπ=2+ (Anchor)
-    [C] C_3005: E=3005.0±30.0 keV, Jπ=none (Match Prob: 74.8%)
+    [C] C_3005: E=3005.0±30.0 keV, Jπ=None (Match Prob: 74.8%)
 
 Cluster 8:
   Anchor: A_3005 | E=3005.0±1.0 keV | Jπ=1-
   Members:
     [A] A_3005: E=3005.0±1.0 keV, Jπ=1- (Anchor)
     [B] B_3000: E=3000.0±2.0 keV, Jπ=1- (Match Prob: 81.6%)
-    [C] C_3005: E=3005.0±30.0 keV, Jπ=none (Match Prob: 75.0%)
+    [C] C_3005: E=3005.0±30.0 keV, Jπ=None (Match Prob: 75.0%)
 
 Cluster 9:
   Anchor: A_4000 | E=4000.0±1.0 keV | Jπ=(1)-
