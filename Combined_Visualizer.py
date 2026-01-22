@@ -130,11 +130,14 @@ def plot_level_schemes():
             spin_parity_string = ""
             if isinstance(level.get('spinParity'), dict):
                 spin_parity_string = level.get('spinParity', {}).get('evaluatorInput', '')
-            else:
-                spin_parity_string = level.get('spin_parity_string', '')
             
-            uncertainty_string = f"({int(uncertainty)})" if uncertainty is not None else ""
-            label_left = f"{int(energy_value)}{uncertainty_string}"
+            # Format energy label: use evaluatorInput if available, else raw value
+            if isinstance(level.get('energy'), dict) and level.get('energy', {}).get('evaluatorInput'):
+                label_left = level['energy']['evaluatorInput']
+            else:
+                uncertainty_string = f"({int(uncertainty)})" if uncertainty is not None else ""
+                label_left = f"{int(energy_value)}{uncertainty_string}"
+                
             label_right = spin_parity_string
             
             levels_data.append({
@@ -168,7 +171,7 @@ def plot_level_schemes():
         
         for index, item in enumerate(levels_data):
             energy = item['energy']
-            y_text = text_y_positions[index]
+            y_text_position = text_y_positions[index]
             bar_offset = bar_offsets[index]
             
             # Draw level line with vertical offset for close-by levels
@@ -176,28 +179,28 @@ def plot_level_schemes():
             axis.hlines(y=bar_y_position, xmin=x_start, xmax=x_end, colors='black', linewidth=1.5)
             
             # Check if text is displaced significantly
-            is_displaced = abs(bar_y_position - y_text) > 50
+            is_displaced = abs(bar_y_position - y_text_position) > 50
             
             if is_displaced:
                 # Energy label with connector
                 axis.annotate(item['label_left'], 
                             xy=(x_start, bar_y_position), xycoords='data',
-                            xytext=(x_start - 0.2, y_text), textcoords='data',
-                            arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
+                            xytext=(x_start - 0.2, y_text_position), textcoords='data',
+                            arrowprops=dict(arrowstyle="-", color='gray', linewidth=2.5),
                             va='center', ha='right', fontsize=Font_Config['level_labels'], family='Times New Roman')
                 
                 # Spin/Parity label with connector
                 if item['label_right']:
                     axis.annotate(item['label_right'], 
                                 xy=(x_end, bar_y_position), xycoords='data',
-                                xytext=(x_end + 0.2, y_text), textcoords='data',
-                                arrowprops=dict(arrowstyle="-", color='gray', lw=2.5),
+                                xytext=(x_end + 0.2, y_text_position), textcoords='data',
+                                arrowprops=dict(arrowstyle="-", color='gray', linewidth=2.5),
                                 va='center', ha='left', fontsize=Font_Config['level_labels'], family='Times New Roman')
             else:
                 # Standard text placement
-                axis.text(x_start - 0.1, y_text, item['label_left'], va='center', ha='right', fontsize=Font_Config['level_labels'], family='Times New Roman')
+                axis.text(x_start - 0.1, y_text_position, item['label_left'], va='center', ha='right', fontsize=Font_Config['level_labels'], family='Times New Roman')
                 if item['label_right']:
-                    axis.text(x_end + 0.1, y_text, item['label_right'], va='center', ha='left', fontsize=Font_Config['level_labels'], family='Times New Roman')
+                    axis.text(x_end + 0.1, y_text_position, item['label_right'], va='center', ha='left', fontsize=Font_Config['level_labels'], family='Times New Roman')
         
         # Draw gamma transitions
         if gammas_table:
@@ -249,7 +252,7 @@ def plot_level_schemes():
                 else:
                     base_offset = 0.0
                 
-                arrow_x = x_center + base_offset + (index * arrow_spacing)
+                arrow_x_position = x_center + base_offset + (index * arrow_spacing)
                 
                 initial_energy = gamma_data['initial_energy']
                 final_energy = gamma_data['final_energy']
@@ -257,18 +260,18 @@ def plot_level_schemes():
                 
                 # Draw vertical arrow from initial to final level
                 axis.annotate('', 
-                            xy=(arrow_x, final_energy), 
-                            xytext=(arrow_x, initial_energy),
-                            arrowprops=dict(arrowstyle='->', color='black', lw=1.0))
+                            xy=(arrow_x_position, final_energy), 
+                            xytext=(arrow_x_position, initial_energy),
+                            arrowprops=dict(arrowstyle='->', color='black', linewidth=1.0))
                 
-                # Place BR label at midpoint of arrow, centered with background to mask line
+                # Place Branching_Ratio label at midpoint of arrow, centered with background to mask line
                 mid_energy = (initial_energy + final_energy) / 2.0
                 label_text = f"{int(gamma_intensity)}"
                 
-                axis.text(arrow_x, mid_energy, label_text, 
+                axis.text(arrow_x_position, mid_energy, label_text, 
                          va='center', ha='center', fontsize=Font_Config['gamma_labels'], 
                          family='Times New Roman',
-                         bbox=dict(boxstyle='square,pad=0.1', fc='white', ec='none', alpha=1.0))
+                         bbox=dict(boxstyle='square,pad=0.1', facecolor='white', edgecolor='none', alpha=1.0))
 
     # Styling
     axis.set_xlim(-1.5, 8.0)
@@ -332,11 +335,11 @@ def parse_clustering_results(clustering_file_path):
             # Match member line
             member_match = re.match(r'^\[(\w+)\]\s+(\S+):\s+E=([\d.]+)±([\d.]+)\s+keV,\s+Jπ=(.+?)\s+\((.+)\)$', line)
             if member_match and current_cluster is not None:
-                dataset = member_match.group(1)
+                dataset_name = member_match.group(1)
                 level_id = member_match.group(2)
                 energy = float(member_match.group(3))
                 uncertainty = float(member_match.group(4))
-                jpi = member_match.group(5).strip()
+                spin_parity = member_match.group(5).strip()
                 status_info = member_match.group(6).strip()
                 
                 is_anchor = status_info == "Anchor"
@@ -347,11 +350,11 @@ def parse_clustering_results(clustering_file_path):
                         match_probability = float(probability_match.group(1)) / 100.0
                 
                 current_cluster['members'].append({
-                    'dataset': dataset,
+                    'dataset': dataset_name,
                     'level_id': level_id,
                     'energy': energy,
                     'uncertainty': uncertainty,
-                    'jpi': jpi,
+                    'spin_parity': spin_parity,
                     'is_anchor': is_anchor,
                     'match_probability': match_probability
                 })
@@ -404,39 +407,39 @@ def plot_clustering_results():
         y_max_limit = 1000
 
     # Plot Text for each cluster
-    for i, cluster in enumerate(clusters):
-        y_pos = y_positions[i]
-        cluster_id = cluster['cluster_number']
+    for index, cluster in enumerate(clusters):
+        y_position = y_positions[index]
+        cluster_number = cluster['cluster_number']
         
         # Plot members
         for member in cluster['members']:
-            ds = member['dataset']
-            if ds not in x_positions: continue
+            dataset_code = member['dataset']
+            if dataset_code not in x_positions: continue
             
-            x_pos = x_positions[ds]
+            x_position = x_positions[dataset_code]
             
             # Text Content
             # Format: 'Energy(Unc)', 'Jpi', 'Prob', 'ClusterID'
-            e_str = f"{member['energy']:.0f}({int(member['uncertainty'])})"
-            jpi_str = member['jpi']
+            energy_string = f"{member['energy']:.0f}({int(member['uncertainty'])})"
+            spin_parity_string = member['spin_parity']
             
             if member['is_anchor']:
-                prob_str = "Anchor"
+                probability_string = "Anchor"
             elif member.get('match_probability') is not None:
-                prob_str = f"{member['match_probability']:.1%}"
+                probability_string = f"{member['match_probability']:.1%}"
             else:
-                prob_str = "N/A"
+                probability_string = "N/A"
             
             # Combine into block - 2 lines for wider, shorter box
             text_block = (
-                f"C{cluster_id} | {e_str}\n"
-                f"{jpi_str} | {prob_str}"
+                f"Cluster {cluster_number} | {energy_string}\n"
+                f"{spin_parity_string} | {probability_string}"
             )
             
-            axis.text(x_pos, y_pos, text_block, 
+            axis.text(x_position, y_position, text_block, 
                      ha='center', va='center', 
                      fontsize=Font_Config['cluster_text'], family='Times New Roman',
-                     bbox=dict(boxstyle=f"round,pad={clustering_box_pad}", fc="white", ec="gray", alpha=0.9))
+                     bbox=dict(boxstyle=f"round,pad={clustering_box_pad}", facecolor="white", edgecolor="gray", alpha=0.9))
 
     # Determine Y-Axis Limits
     axis.set_ylim(-200, y_max_limit)
@@ -446,7 +449,7 @@ def plot_clustering_results():
     
     # X-Axis Labels
     axis.set_xticks([index * clustering_x_spacing for index in range(len(datasets))])
-    dataset_labels = [f'Dataset {ds}' for ds in datasets]
+    dataset_labels = [f'Dataset {dataset_name}' for dataset_name in datasets]
     axis.set_xticklabels(dataset_labels, 
                          fontsize=Font_Config['cluster_axis_labels'], fontweight='bold', family='Times New Roman')
     
