@@ -65,7 +65,7 @@ Scoring_Config = {
     },
     'Feature_Correlation': {
         'Enabled': True,                 # Enable physics rescue for perfect spin+parity
-        'Threshold': 0.95,               # Minimum similarity to trigger rescue
+        'Threshold': 0.85,               # Minimum similarity to trigger rescue
         'Rescue_Exponent': 0.5           # Energy boost: e → e^0.5 (sqrt transformation)
     },
     'General': {
@@ -83,7 +83,11 @@ Scoring_Config = {
 
 2.  **Model Training (Supervised Learning):**
     *   Generates 580+ synthetic training samples encoding physics rules across six scenarios (perfect matches, physics vetoes, energy mismatches, ambiguous physics, weak matches, random background)
-    *   Implements **Feature Correlation**: Perfect spin+parity (≥0.95) triggers "Physics Rescue" where energy similarity is boosted via sqrt transformation
+    *   Implements **Feature Correlation** ("Physics Rescue"):
+        *   **Condition**: Spin+Parity ≥ 0.85 OR Gamma Pattern ≥ 0.85.
+        *   **Action**: Boosts energy similarity using `energy^Rescue_Exponent` (soft rescue).
+        *   **Rationale**: Validates matches where internal structure is identical but energy calibration differs.
+        *   **Effect**: Rescue != Firm Match. It prevents invalidation (0 $\to$ 15-20%) rather than forcing a high probability match, preserving the energy disagreement penalty while keeping the candidate alive.
     *   Trains XGBoost regressor with `objective='binary:logistic'`
     *   Enforces `monotone_constraints='(1, 1, 1, 1, 1)'` on all five features
     *   Hyperparameters: `n_estimators=1000`, `max_depth=10`, `learning_rate=0.05`

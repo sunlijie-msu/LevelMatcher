@@ -33,9 +33,10 @@ Feature Engineering For Nuclear Level Matching
 4. **Training Data** (`generate_synthetic_training_data`):
    - Grid-based feature space coverage + random sampling (500 points) + perfect-match boost (50 points).
    - Labels: Hard-veto mismatches→0.0; probability = Energy_Similarity × sqrt(Physics_Confidence) × Specificity.
-   - **Feature Correlation**: When Spin_Similarity≥0.95 AND Parity_Similarity≥0.95 (firm matches),
-     applies "Physics Rescue": effective_energy = energy^Rescue_Exponent (default 0.5 = sqrt).
-     Teaches XGBoost that perfect quantum number agreement can compensate for energy calibration errors.
+   - **Feature Correlation** ("Physics Rescue"):
+     • **Quantum/Gamma Match** (Score ≥ 0.85): Triggers Rescue (effective_energy = energy^Rescue_Exponent).
+     • Uses `Rescue_Exponent` (default 0.5) to dampen energy penalties when physics strongly agrees.
+     Teaches XGBoost that structural fingerprints (Gamma) definitively identify levels despite calibration shifts.
 
 """
 
@@ -92,7 +93,7 @@ Scoring_Config = {
         # the effective energy similarity is boosted: effective_e = e^Rescue_Exponent
         # Example: Rescue_Exponent=0.5 (sqrt) transforms e=0.4→0.63, e=0.6→0.77
         'Enabled': True,
-        'Threshold': 0.95,        # Minimum spin/parity similarity to trigger rescue (firm matches only)
+        'Threshold': 0.85,        # Minimum spin/parity similarity to trigger rescue (firm matches only)
         'Rescue_Exponent': 0.5    # Exponent for energy boost: e → e^exponent (0.5 = sqrt, 0.7 = gentler)
     },
     'General': {
@@ -740,7 +741,7 @@ def generate_synthetic_training_data():
     # 1. Gather all possible discrete scores from Config
     spin_scores = list(Scoring_Config['Spin'].values()) + [Scoring_Config['General']['Neutral_Score']]
     parity_scores = list(Scoring_Config['Parity'].values()) + [Scoring_Config['General']['Neutral_Score']]
-    gamma_scores = [0.0, 0.3, Scoring_Config['General']['Neutral_Score'], 0.7, 0.95, 1.0]  # Added 0.95 for rescue threshold
+    gamma_scores = [0.0, 0.3, Scoring_Config['General']['Neutral_Score'], 0.7, 0.85, 1.0]  # Standardized 0.85 for rescue threshold
     
     # 2. Feature Correlation Configuration
     correlation_enabled = Scoring_Config['Feature_Correlation']['Enabled']
@@ -768,18 +769,22 @@ def generate_synthetic_training_data():
         gamma_factor = value_map(gamma_similarity)
 
         # Feature Correlation: Physics Rescue
-        # Condition 1: Perfect Quantum Numbers (Spin=1.0 AND Parity=1.0)
-        # Condition 2: Strong Gamma Decay Fingerprint (Gamma >= 0.95)
-        # Either condition implies rigorous physical identity, justifying a rescue of mediocre energy scores.
-        # Physics rationale: Perfect internal structure agreement trumps calibration shifts.
+        # Condition 1: Perfect Quantum Numbers (Spin/Parity >= Threshold)
+        # Condition 2: Strong Gamma Decay Fingerprint (Gamma >= Threshold)
+        # Physics rationale: If internal structure (Gamma/Spin/Parity) matches strongly,
+        # energy disagreement is likely due to calibration. We "rescue" the energy score
+        # by boosting it (reducing the penalty) rather than using the raw low score.
+        # NOTE: Rescue != Firm Match. It prevents a 0% veto (Survival), allowing the candidate
+        # to remain in consideration. It typically raises probability from <1% to ~15-25%
+        # for poor energy matches, which may pass the pairwise filter but not yet cluster.
         effective_energy = energy_similarity
         if correlation_enabled:
             is_quantum_match = (spin_similarity >= correlation_threshold and parity_similarity >= correlation_threshold)
-            is_gamma_match = (gamma_similarity >= 0.95)
+            is_gamma_match = (gamma_similarity >= correlation_threshold)
 
             if is_quantum_match or is_gamma_match:
-                # Apply rescue: e → e^exponent (e.g., sqrt transforms 0.4→0.63, 0.6→0.77)
-                effective_energy = energy_similarity ** rescue_exponent
+                 # Apply rescue: e → e^exponent (e.g., sqrt transforms 0.04→0.2, 0.4→0.63)
+                 effective_energy = energy_similarity ** rescue_exponent
 
         # PROBABILITY FORMULA:
         # Base confidence from Energy * Physics Quality * Specificity
@@ -814,9 +819,11 @@ def generate_synthetic_training_data():
     imperfect_spin = Scoring_Config['Spin']['Match_Strong']  # e.g., 0.8 (tentative match)
     imperfect_parity = Scoring_Config['Parity']['Match_Strong']  # e.g., 0.8 (tentative match)
     neutral_score = Scoring_Config['General']['Neutral_Score']
+    rescue_threshold = Scoring_Config['Feature_Correlation']['Threshold']
     
-    # Mediocre energy range where correlation effect is most visible
-    mediocre_energy_values = [0.3, 0.4, 0.5, 0.6, 0.7]
+    # Mediocre AND Low energy range where correlation effect is most visible
+    # Validation Note: Added low values (0.05, 0.1) to ensure model learns rescue even at poor energy matches.
+    mediocre_energy_values = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
     
     for energy in mediocre_energy_values:
         # Case A: Perfect Quantum Numbers -> Label should be BOOSTED (rescued)
@@ -826,8 +833,13 @@ def generate_synthetic_training_data():
         
         # Case B: Perfect Gamma Fingerprint -> Label should be BOOSTED (rescued)
         # Model learns: [mediocre energy, unknown spin, unknown parity, Match Gamma] -> high probability
+        # Teach both Perfect (1.0) and Threshold (0.85) cases
         label_boosted_g = calculate_label(energy, neutral_score, neutral_score, 1.0, 1.0)
         training_points.append(([energy, neutral_score, neutral_score, 1.0, 1.0], label_boosted_g))
+        
+        # Explicitly teach the threshold value (0.85) to ensure the cut-off is learned
+        label_boosted_g_threshold = calculate_label(energy, neutral_score, neutral_score, 1.0, rescue_threshold)
+        training_points.append(([energy, neutral_score, neutral_score, 1.0, rescue_threshold], label_boosted_g_threshold))
 
         # Case C: Imperfect Physics -> Label should be STANDARD (no rescue)
         # Model learns: [mediocre energy, imperfect physics] -> standard (lower) probability
