@@ -1,21 +1,19 @@
 """
-Quick validation script for default uncertainty consolidation.
+Quick validation script for precision-based uncertainty inference.
 """
 import Feature_Engineer
 
-# Test 1: Module constants accessible
-print("=== Module Constants ===")
-print(f"Default_Energy_Uncertainty: {Feature_Engineer.Default_Energy_Uncertainty} keV")
-print(f"Default_Intensity_Relative_Uncertainty: {Feature_Engineer.Default_Intensity_Relative_Uncertainty}")
-print(f"Default_Minimum_Intensity_Uncertainty: {Feature_Engineer.Default_Minimum_Intensity_Uncertainty}")
+# Test 1: Precision-based inference functions exist
+print("=== Precision-Based Inference Functions ===")
+print(f"infer_energy_uncertainty: {Feature_Engineer.infer_energy_uncertainty}")
+print(f"infer_intensity_uncertainty: {Feature_Engineer.infer_intensity_uncertainty}")
 
-# Test 2: Scoring_Config no longer has duplicate
-print("\n=== Scoring_Config['Energy'] Keys ===")
-print(list(Feature_Engineer.Scoring_Config['Energy'].keys()))
-if 'Default_Uncertainty' in Feature_Engineer.Scoring_Config['Energy']:
-    print("ERROR: Duplicate 'Default_Uncertainty' still exists in Scoring_Config!")
-else:
-    print("✓ No duplication - only 'Sigma_Scale' in config")
+# Test 2: Example uncertainty inference
+print("\n=== Example Inferences ===")
+print(f"Energy 2000 keV → ±{Feature_Engineer.infer_energy_uncertainty(2000):.1f} keV")
+print(f"Energy 1234.5 keV → ±{Feature_Engineer.infer_energy_uncertainty(1234.5):.1f} keV")
+print(f"Intensity 10 → ±{Feature_Engineer.infer_intensity_uncertainty(10):.1f}")
+print(f"Intensity 10.0 → ±{Feature_Engineer.infer_intensity_uncertainty(10.0):.1f}")
 
 # Test 3: Load levels and verify defaults are applied
 print("\n=== Level Loading Test ===")

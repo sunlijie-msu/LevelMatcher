@@ -9,7 +9,9 @@ Feature Engineering For Nuclear Level Matching
    - Parses NNDC JSON schema with nested uncertainty structure.
    - Extracts: dataset_code, level_id, energy_value, energy_uncertainty, spin_parity_list, spin_parity_string.
    - Attaches gamma_decays list with energy/intensity and their uncertainties.
-   - Applies default uncertainties: Energy=10.0 keV, Intensity=20% relative (minimum 0.5).
+   - **Uncertainty Handling**: Dataset_Parser.py infers uncertainties from precision during ENSDF parsing.
+     JSON contains either explicit uncertainties (type="symmetric") or inferred (type="inferred").
+     Feature_Engineer trusts parser output; fallbacks only for edge cases (manual data, corrupted JSON).
 
 2. **Similarity Scoring** (`calculate_*_similarity`):
    - **Energy**: Gaussian kernel exp(-Sigma_Scale×z²) where z=ΔE/σ_combined. Sigma_Scale=0.1 (lenient).
@@ -26,8 +28,7 @@ Feature Engineering For Nuclear Level Matching
      Specificity, Gamma_Decay_Pattern_Similarity].
    - **Specificity**: Ambiguity penalty = 1/f(multiplicity) where multiplicity = options_count_1 × options_count_2.
      Formula configurable: sqrt (default), linear, log, or tunable via Scoring_Config['Specificity']['Formula'].
-   - All features use consistent defaults: module constants (Default_Energy_Uncertainty, etc.) 
-     replace hardcoded values and Scoring_Config duplicates.
+   - Features use precision-based uncertainty inference when data missing (no hardcoded defaults).
 
 4. **Training Data** (`generate_synthetic_training_data`):
    - Grid-based feature space coverage + random sampling (500 points) + perfect-match boost (50 points).
@@ -42,11 +43,6 @@ import re
 import numpy as np
 import json
 import os
-
-# Configuration: Default uncertainties if none provided in dataset
-Default_Energy_Uncertainty = 10.0  # keV
-Default_Intensity_Relative_Uncertainty = 0.20  # 20% relative uncertainty if missing
-Default_Minimum_Intensity_Uncertainty = 0.5  # Absolute minimum uncertainty floor (prevents division by zero)
 
 # ==========================================
 # Configuration: Scoring Parameters
@@ -143,6 +139,7 @@ def load_levels_from_json(dataset_codes):
                     for level_index, item in enumerate(raw_levels):
                         energy_value = item.get('energy', {}).get('value')
                         energy_uncertainty = item.get('energy', {}).get('uncertainty', {}).get('value')
+                        energy_evaluator_input = item.get('energy', {}).get('evaluatorInput')
                         spin_parity_list = item.get('spinParity', {}).get('values', [])
                         spin_parity_string = item.get('spinParity', {}).get('evaluatorInput')
                         
@@ -155,9 +152,14 @@ def load_levels_from_json(dataset_codes):
                                     gamma = gammas_table[gamma_index]
                                     gamma_energy = gamma.get('energy', {})
                                     gamma_intensity = gamma.get('gammaIntensity', {})
+                                    
+                                    # Extract gamma energy and uncertainty (parser handles inference)
+                                    gamma_energy_value = gamma_energy.get('value')
+                                    gamma_energy_unc = gamma_energy.get('uncertainty', {}).get('value', 5.0)  # Fallback only if corrupted JSON
+                                    
                                     gamma_decays.append({
-                                        'energy': gamma_energy.get('value'),
-                                        'energy_uncertainty': gamma_energy.get('uncertainty', {}).get('value', Default_Energy_Uncertainty),
+                                        'energy': gamma_energy_value,
+                                        'energy_uncertainty': gamma_energy_unc,
                                         'intensity': gamma_intensity.get('value', 100.0),
                                         'intensity_uncertainty': gamma_intensity.get('uncertainty', {}).get('value')
                                     })
@@ -167,13 +169,19 @@ def load_levels_from_json(dataset_codes):
                                 'dataset_code': dataset_code,
                                 'level_id': f"{dataset_code}_{int(energy_value)}",
                                 'energy_value': float(energy_value),
-                                'energy_uncertainty': float(energy_uncertainty) if energy_uncertainty is not None else Default_Energy_Uncertainty,
+                                'energy_uncertainty': float(energy_uncertainty) if energy_uncertainty is not None else 5.0,  # Fallback only if corrupted JSON
                                 'spin_parity_list': spin_parity_list,
                                 'spin_parity_string': spin_parity_string,
                                 'gamma_decays': gamma_decays
                             })
     return levels
 
+def get_z_score(value_1, uncertainty_1, value_2, uncertainty_2):
+    """Calculates statistical separation (Z-score in sigma units)."""
+    combined_uncertainty = np.sqrt(uncertainty_1**2 + uncertainty_2**2)
+    if combined_uncertainty == 0:
+        combined_uncertainty = 1.0
+    return abs(value_1 - value_2) / combined_uncertainty
 
 def calculate_energy_similarity(energy_1, energy_uncertainty_1, energy_2, energy_uncertainty_2):
     """
@@ -193,11 +201,9 @@ def calculate_energy_similarity(energy_1, energy_uncertainty_1, energy_2, energy
     # Sigma_Scale=1.0 (extreme):  1σ→36.8%, 2σ→1.8%, 3σ→0.0%, 4σ→0.0%, 5σ→0.0%
     #   Ultra-strict: even 1σ penalized
     """
-    if energy_1 is None or energy_2 is None: return 0.0
-    combined_uncertainty = np.sqrt(energy_uncertainty_1**2 + energy_uncertainty_2**2)
-    if combined_uncertainty == 0: combined_uncertainty = 1.0
-    
-    z_score = abs(energy_1 - energy_2) / combined_uncertainty
+    if energy_1 is None or energy_2 is None:
+        return 0.0
+    z_score = get_z_score(energy_1, energy_uncertainty_1, energy_2, energy_uncertainty_2)
     return np.exp(-Scoring_Config['Energy']['Sigma_Scale'] * z_score**2)
 
 
@@ -424,24 +430,20 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
         max_intensity = 0.0
         
         for gamma in raw_decays:
-            # 1. Extract Energy & Uncertainty
+            # 1. Extract Energy & Uncertainty (parser handles inference)
             energy_value = float(gamma.get('energy', 0))
             if energy_value <= 0: continue
             
-            # Default Energy Uncertainty: 1.0 keV if missing/zero
-            energy_uncertainty = float(gamma.get('energy_uncertainty', 0))
-            if energy_uncertainty <= 0: energy_uncertainty = Default_Energy_Uncertainty
+            # Simple fallback only if parser failed (corrupted JSON, manual data)
+            energy_uncertainty = float(gamma.get('energy_uncertainty', 5.0))
             
-            # 2. Extract Intensity & Uncertainty
+            # 2. Extract Intensity & Uncertainty (parser handles inference)
             intensity_value = float(gamma.get('intensity', 0))
             intensity_uncertainty_raw = gamma.get('intensity_uncertainty')
-            intensity_uncertainty = float(intensity_uncertainty_raw) if intensity_uncertainty_raw is not None else 0.0
+            intensity_uncertainty = float(intensity_uncertainty_raw) if intensity_uncertainty_raw is not None else 0.5
             
             if intensity_value > 0:
                 has_intensity = True
-                # Default Intensity Uncertainty: 20% of value if missing (with minimum floor)
-                if intensity_uncertainty <= 0: 
-                    intensity_uncertainty = max(Default_Minimum_Intensity_Uncertainty, intensity_value * Default_Intensity_Relative_Uncertainty)
                 if intensity_value > max_intensity: max_intensity = intensity_value
             
             clean_list.append({
@@ -467,15 +469,8 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
         return Scoring_Config['General']['Neutral_Score']
 
     # =========================================================================
-    # Phase 2: Helper Math Functions
+    # Phase 2: Matching Thresholds
     # =========================================================================
-    def get_z_score(val1, uncertainty1, val2, uncertainty2):
-        """Calculates statistical separation (sigma distance)."""
-        sigma = np.sqrt(uncertainty1**2 + uncertainty2**2)
-        if sigma == 0: sigma = 1.0
-        return abs(val1 - val2) / sigma
-
-    # Thresholds
     Energy_Match_Threshold = 3.0       # Energy match allowed up to 3 sigma
     Intensity_Match_Threshold = 3.0     # Intensity match allowed up to 3 sigma
 
@@ -681,8 +676,8 @@ def extract_features(level_1, level_2):
     """
 
     energy_similarity = calculate_energy_similarity(
-        level_1.get('energy_value'), level_1.get('energy_uncertainty', Default_Energy_Uncertainty),
-        level_2.get('energy_value'), level_2.get('energy_uncertainty', Default_Energy_Uncertainty)
+        level_1.get('energy_value'), level_1.get('energy_uncertainty', 5.0),
+        level_2.get('energy_value'), level_2.get('energy_uncertainty', 5.0)
     )
     
     spin_parity_list_1 = level_1.get('spin_parity_list', [])

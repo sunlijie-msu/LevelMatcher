@@ -3,6 +3,64 @@ import re
 import os
 import argparse
 
+def infer_uncertainty_from_precision(value_str):
+    """
+    Infers uncertainty from reported precision in ENSDF evaluatorInput string.
+    
+    Nuclear physics convention: Uncertainty = 0.5 × least_significant_digit_place_value
+    
+    Examples:
+    - "2000" → ±5 keV (integer, precision to 10s place)
+    - "2.0E3" → ±500 keV (scientific notation, 1 decimal in mantissa)
+    - "2.00E3" → ±50 keV (scientific notation, 2 decimals in mantissa)
+    - "1234.5" → ±0.5 keV (1 decimal place)
+    - "567.89" → ±0.05 keV (2 decimal places)
+    
+    Returns: Inferred uncertainty as float, or 5.0 (conservative default) if cannot parse
+    """
+    if not value_str:
+        return 5.0
+    
+    value_str = value_str.strip()
+    
+    # Handle scientific notation (e.g., "2.0E3" or "1.5e+02")
+    if 'E' in value_str.upper():
+        parts = value_str.upper().split('E')
+        if len(parts) != 2:
+            return 5.0
+        
+        mantissa = parts[0]
+        try:
+            exponent = int(parts[1])
+        except ValueError:
+            return 5.0
+        
+        # Count decimal places in mantissa (DO NOT strip trailing zeros)
+        # Example: "2.0E3" has 1 decimal → ±500 keV
+        # Example: "2.00E3" has 2 decimals → ±50 keV
+        if '.' in mantissa:
+            decimal_part = mantissa.split('.')[1]
+            decimal_places = len(decimal_part)
+            
+            # Uncertainty: 5 × 10^(-decimal_places) × 10^exponent
+            mantissa_uncertainty = 5.0 * (10 ** (-decimal_places))
+            return mantissa_uncertainty * (10 ** exponent)
+        else:
+            # Integer mantissa: "2E3" → ±5×10^3 = ±5000
+            return 5.0 * (10 ** exponent)
+    
+    # Handle regular decimal notation
+    if '.' in value_str:
+        # Count decimal places WITHOUT stripping trailing zeros
+        # Example: "2000.0" has 1 decimal place → precision to 0.1 keV → ±0.5 keV
+        # Example: "1234.56" has 2 decimal places → precision to 0.01 keV → ±0.05 keV
+        decimal_part = value_str.split('.')[1]
+        decimal_places = len(decimal_part)
+        return 5.0 * (10 ** (-decimal_places))
+    else:
+        # Integer: precision to nearest 10
+        return 5.0
+
 def parse_jpi(jpi_str):
     """
     Parses Jπ string into structured format.
@@ -89,6 +147,7 @@ def format_evaluator_input(val_str, unc_str):
 def parse_ensdf_line(line):
     """
     Parses a single ENSDF line (L or G record) using fixed-width slicing.
+    Applies precision-based uncertainty inference when explicit uncertainty is missing.
     """
     if len(line) < 8:
         return None, None
@@ -104,7 +163,12 @@ def parse_ensdf_line(line):
         return None, None
         
     energy_val = float(energy_str)
-    unc_val = calculate_absolute_uncertainty(energy_str, unc_str)
+    
+    # Calculate uncertainty: explicit if provided, otherwise infer from precision
+    if unc_str:
+        unc_val = calculate_absolute_uncertainty(energy_str, unc_str)
+    else:
+        unc_val = infer_uncertainty_from_precision(energy_str)
     
     if record_type == 'L':
         jpi_raw = line[22:39].strip()
@@ -112,7 +176,10 @@ def parse_ensdf_line(line):
             "energy": {
                 "unit": "keV",
                 "value": energy_val,
-                "uncertainty": { "value": unc_val, "type": "symmetric" } if unc_val > 0 else {"type": "unreported"}
+                "uncertainty": { 
+                    "value": unc_val, 
+                    "type": "symmetric" if unc_str else "inferred"
+                }
             },
             "isStable": False,
             "gamma_decays": []
@@ -135,7 +202,14 @@ def parse_ensdf_line(line):
         dri_str = line[29:31].strip()
         
         ri_val = float(ri_str) if ri_str else 0.0
-        dri_val = calculate_absolute_uncertainty(ri_str, dri_str) if dri_str else 0.0
+        
+        # Infer intensity uncertainty if not explicitly provided
+        if dri_str:
+            dri_val = calculate_absolute_uncertainty(ri_str, dri_str)
+        elif ri_val > 0:
+            dri_val = infer_uncertainty_from_precision(ri_str)
+        else:
+            dri_val = 0.0
         
         data = {
             "energy_val": energy_val,
