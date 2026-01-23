@@ -167,6 +167,9 @@ def parse_ensdf_line(line):
     # Calculate uncertainty: explicit if provided, otherwise infer from precision
     if unc_str:
         unc_val = calculate_absolute_uncertainty(energy_str, unc_str)
+    elif energy_val == 0.0:
+        # Ground state (0.0 keV) is the absolute reference => 0 uncertainty
+        unc_val = 0.0
     else:
         unc_val = infer_uncertainty_from_precision(energy_str)
     

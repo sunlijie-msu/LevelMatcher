@@ -6,7 +6,8 @@
                     "unit": "keV",
                     "value": 0.0,
                     "uncertainty": {
-                        "type": "unreported"
+                        "value": 0.0,
+                        "type": "inferred"
                     },
                     "evaluatorInput": "0"
                 },
@@ -246,7 +247,8 @@
                 "gammaIntensity": {
                     "value": 100.0,
                     "uncertainty": {
-                        "type": "unreported"
+                        "value": 5.0,
+                        "type": "symmetric"
                     },
                     "evaluatorInput": "100"
                 },
@@ -308,7 +310,8 @@
                 "gammaIntensity": {
                     "value": 100.0,
                     "uncertainty": {
-                        "type": "unreported"
+                        "value": 5.0,
+                        "type": "symmetric"
                     },
                     "evaluatorInput": "100"
                 },
