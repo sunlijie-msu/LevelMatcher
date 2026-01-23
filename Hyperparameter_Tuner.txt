@@ -22,6 +22,15 @@ Note: Real datasets (A, B, C) are NEVER used for training, only inference valida
 
 import pandas as pd
 import numpy as np
+import sys
+import os
+
+# Robustly add project root to sys.path to allow importing Feature_Engineer
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 from xgboost import XGBRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
@@ -310,7 +319,8 @@ def save_clustering_results(config_name, clustering_results, model):
     Save detailed clustering results to file for expert review.
     Includes match probabilities relative to anchor (like Level_Matcher.py).
     """
-    filename = f"Output_Hyperparameter_Test_{config_name.replace(' ', '_')}.txt"
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    filename = os.path.join(base_dir, f"Output_Hyperparameter_Test_{config_name.replace(' ', '_')}.txt")
     
     with open(filename, 'w', encoding='utf-8') as output_file:
         output_file.write(f"=== CLUSTERING RESULTS: {config_name} ===\n")
@@ -355,19 +365,20 @@ def save_pairwise_results(config_name, matching_level_pairs):
     """
     Save pairwise inference results with match probabilities to file for expert review.
     """
-    filename = f"Output_Hyperparameter_Pairwise_{config_name.replace(' ', '_')}.txt"
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    filename = os.path.join(base_dir, f"Output_Hyperparameter_Pairwise_{config_name.replace(' ', '_')}.txt")
     
     with open(filename, 'w', encoding='utf-8') as output_file:
         output_file.write(f"=== PAIRWISE INFERENCE RESULTS: {config_name} ===\n")
         output_file.write(f"Total Level Pairs: {len(matching_level_pairs)}\n\n")
         
         for matching_level_pair in matching_level_pairs:
-            energy_sim, spin_sim, parity_sim, specificity = matching_level_pair['features']
+            energy_sim, spin_sim, parity_sim, specificity, gamma_sim = matching_level_pair['features']
             output_file.write(
                 f"{matching_level_pair['ID1']} <-> {matching_level_pair['ID2']} | "
                 f"Probability: {matching_level_pair['probability']:.1%}\n"
                 f"  Features: Energy_Sim={energy_sim:.2f}, Spin_Sim={spin_sim:.2f}, "
-                f"Parity_Sim={parity_sim:.2f}, Specificity={specificity:.2f}\n\n"
+                f"Parity_Sim={parity_sim:.2f}, Specificity={specificity:.2f}, Gamma_Sim={gamma_sim:.2f}\n\n"
             )
     
     print(f"    Saved pairwise results to: {filename}")

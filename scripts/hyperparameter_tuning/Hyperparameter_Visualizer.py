@@ -234,12 +234,13 @@ def plot_all_hyperparameter_results():
     Matches Combined_Visualizer.py figure size and style exactly.
     """
     # Define all five configuration files
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     configurations = [
-        ('Baseline (Current)', 'Output_Hyperparameter_Test_Baseline_(Current).txt'),
-        ('Conservative (Shallow)', 'Output_Hyperparameter_Test_Conservative_(Shallow).txt'),
-        ('Aggressive (Deep)', 'Output_Hyperparameter_Test_Aggressive_(Deep).txt'),
-        ('Slow Learner (High Regularization)', 'Output_Hyperparameter_Test_Slow_Learner_(High_Regularization).txt'),
-        ('Fast Learner (Low Regularization)', 'Output_Hyperparameter_Test_Fast_Learner_(Low_Regularization).txt')
+        ('Baseline (Current)', os.path.join(base_dir, 'Output_Hyperparameter_Test_Baseline_(Current).txt')),
+        ('Conservative (Shallow)', os.path.join(base_dir, 'Output_Hyperparameter_Test_Conservative_(Shallow).txt')),
+        ('Aggressive (Deep)', os.path.join(base_dir, 'Output_Hyperparameter_Test_Aggressive_(Deep).txt')),
+        ('Slow Learner (High Regularization)', os.path.join(base_dir, 'Output_Hyperparameter_Test_Slow_Learner_(High_Regularization).txt')),
+        ('Fast Learner (Low Regularization)', os.path.join(base_dir, 'Output_Hyperparameter_Test_Fast_Learner_(Low_Regularization).txt'))
     ]
     
     # Create separate figure for each configuration
@@ -268,7 +269,7 @@ def plot_all_hyperparameter_results():
         
         # Save individual PNG
         safe_name = config_name.replace(' ', '_').replace('(', '').replace(')', '')
-        output_file = f'Output_Hyperparameter_Visualization_{safe_name}.png'
+        output_file = os.path.join(base_dir, f'Output_Hyperparameter_Visualization_{safe_name}.png')
         plt.savefig(output_file, dpi=300)
         print(f"[INFO] Saved {output_file}")
         plt.close()
