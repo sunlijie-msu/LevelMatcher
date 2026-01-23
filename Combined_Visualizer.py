@@ -374,17 +374,19 @@ def parse_clustering_results(clustering_file_path):
     
     return clusters
 
-def plot_clustering_results():
+def plot_clustering_results(input_path='Output_Clustering_Results.txt', output_path='Output_Cluster_Scheme.png', title_suffix=''):
     """
     Generates a textual table-like visualization of clustering results.
     Aligned horizontally by cluster, sorted vertically by energy.
-    Reads directly from Output_Clustering_Results.txt.
     """
-    clustering_file_path = 'Output_Clustering_Results.txt'
-    clusters = parse_clustering_results(clustering_file_path)
+    if not os.path.exists(input_path):
+        print(f"[WARNING] Input file {input_path} does not exist. Skipping.")
+        return
+
+    clusters = parse_clustering_results(input_path)
     
     if not clusters:
-        print("[WARNING] No clusters found in Output_Clustering_Results.txt")
+        print(f"[WARNING] No clusters found in {input_path}")
         return
     
     # Sort clusters by anchor energy (Low Energy at Bottom)
@@ -474,12 +476,16 @@ def plot_clustering_results():
     for label in axis.get_yticklabels():
         label.set_family('Times New Roman')
     
-    axis.set_title("Clustering Results (Aligned by Cluster)", fontsize=Font_Config['cluster_title'], fontweight='bold', pad=20, family='Times New Roman')
+    full_title = "Clustering Results"
+    if title_suffix:
+        full_title += f" {title_suffix}"
+    full_title += " (Aligned by Cluster)"
+    
+    axis.set_title(full_title, fontsize=Font_Config['cluster_title'], fontweight='bold', pad=20, family='Times New Roman')
     
     plt.tight_layout()
-    output_file = 'Output_Cluster_Scheme.png'
-    plt.savefig(output_file, dpi=300)
-    print(f"[INFO] Clustering visualization saved to {output_file}")
+    plt.savefig(output_path, dpi=300)
+    print(f"[INFO] Clustering visualization saved to {output_path}")
     plt.close()
 
 # ============================================================================
@@ -488,12 +494,25 @@ def plot_clustering_results():
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Combined Visualizer: Generating both plots...")
+    print("Combined Visualizer: Generating plots...")
     print("=" * 60)
     
-    # Generate both visualizations
+    # Generate level schemes
     plot_level_schemes()
-    plot_clustering_results()
+    
+    # Generate Clustering Results (XGBoost) - Baseline
+    plot_clustering_results(
+        input_path='Output_Clustering_Results_XGB.txt', 
+        output_path='Output_Cluster_Scheme_XGB.png', 
+        title_suffix='(XGBoost / Energy-Dominant)'
+    )
+    
+    # Generate Clustering Results (LightGBM) - Foil
+    plot_clustering_results(
+        input_path='Output_Clustering_Results_LightGBM.txt', 
+        output_path='Output_Cluster_Scheme_LightGBM.png', 
+        title_suffix='(LightGBM / Gamma-Pattern-Aware)'
+    )
     
     print("=" * 60)
     print("All visualizations complete!")

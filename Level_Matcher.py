@@ -24,7 +24,9 @@ Engine for Nuclear Level Matching
    - Monotone constraints: all five features constrained positive to preserve physics priors.
    - Feature Correlation: Model learns that perfect spin+parity can "rescue" mediocre energy similarity.
    - XGBoost: Standard robust performance.
-   - LightGBM: Optimized for comparison and validation.
+   - LightGBM: Independent validation model.
+     * Configuration: Heavily regularized (L1/L2, restricted depth) to prevent overfitting on small datasets.
+     * Behavior: Acts as a foil to XGBoost. Observed to favor Gamma patterns more strongly than XGBoost (e.g., A_2000 vs B_2006).
 
 4. **Pairwise Inference** (cross-dataset only):
    - Enumerate all level pairs across datasets, extract features, predict match probability pair-by-pair.
@@ -325,11 +327,22 @@ if __name__ == "__main__":
 
     # Initialize LightGBM Regressor (Ensemble component)
     print("Training LightGBM Model...")
+    # Note: 'objective="binary"' in LightGBM is equivalent to 'binary:logistic' in XGBoost (outputs probability).
+    # We apply strong regularization to prevent overconfidence (100%/0% outputs) on small datasets.
+    # Configuration Logic:
+    # 1. reg_alpha=1.0 (L1), reg_lambda=10.0 (L2): Penalize extreme weights to ensure soft probability outputs (e.g. 99.5% instead of 100%).
+    # 2. num_leaves=7, max_depth=5: Constrain model complexity to prevent memorization of synthetic samples.
+    # 3. min_child_samples=20: Force generalization by requiring more data per leaf.
+    # Observation: This configuration causes LGBM to weight perfect Gamma Patterns higher than XGBoost (e.g., A_2000<->B_2006 case).
     level_matcher_model_lgbm = LGBMRegressor(objective='binary',
                                              monotone_constraints="1,1,1,1,1",  # Increasing constraints
-                                             n_estimators=1000,
-                                             max_depth=10,
-                                             learning_rate=0.05,
+                                             n_estimators=500,
+                                             max_depth=5,
+                                             num_leaves=7,
+                                             min_child_samples=20,
+                                             learning_rate=0.02,
+                                             reg_alpha=1.0,       # L1 regularization to encourage sparse solutions
+                                             reg_lambda=10.0,     # L2 regularization to prevent extreme leaf weights (100% confidence)
                                              verbose=-1,
                                              random_state=42)
     
