@@ -39,12 +39,12 @@
             {
                 "energy": {
                     "unit": "keV",
-                    "value": 2008.0,
+                    "value": 2006.0,
                     "uncertainty": {
                         "value": 1.0,
                         "type": "symmetric"
                     },
-                    "evaluatorInput": "2008 1"
+                    "evaluatorInput": "2006 1"
                 },
                 "isStable": false,
                 "gammas": [
@@ -128,12 +128,12 @@
             {
                 "energy": {
                     "unit": "keV",
-                    "value": 1405.0,
+                    "value": 1403.0,
                     "uncertainty": {
                         "value": 2.0,
                         "type": "symmetric"
                     },
-                    "evaluatorInput": "1405 2"
+                    "evaluatorInput": "1403 2"
                 },
                 "gammaIntensity": {
                     "value": 100.0,
