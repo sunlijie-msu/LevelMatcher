@@ -138,7 +138,7 @@ def load_levels_from_json(dataset_codes):
                     
                     for level_index, item in enumerate(raw_levels):
                         energy_value = item.get('energy', {}).get('value')
-                        energy_uncertainty = item.get('energy', {}).get('uncertainty', {}).get('value')
+                        energy_uncertainty = item.get('energy', {}).get('uncertainty', {}).get('value', 5.0)
                         energy_evaluator_input = item.get('energy', {}).get('evaluatorInput')
                         spin_parity_list = item.get('spinParity', {}).get('values', [])
                         spin_parity_string = item.get('spinParity', {}).get('evaluatorInput')
@@ -150,18 +150,14 @@ def load_levels_from_json(dataset_codes):
                             for gamma_index in item['gammas']:
                                 if 0 <= gamma_index < len(gammas_table):
                                     gamma = gammas_table[gamma_index]
-                                    gamma_energy = gamma.get('energy', {})
+                                    gamma_energy = gamma['energy']
                                     gamma_intensity = gamma.get('gammaIntensity', {})
                                     
-                                    # Extract gamma energy and uncertainty (parser handles inference)
-                                    gamma_energy_value = gamma_energy.get('value')
-                                    gamma_energy_unc = gamma_energy.get('uncertainty', {}).get('value', 5.0)  # Fallback only if corrupted JSON
-                                    
                                     gamma_decays.append({
-                                        'energy': gamma_energy_value,
-                                        'energy_uncertainty': gamma_energy_unc,
-                                        'intensity': gamma_intensity.get('value', 100.0),
-                                        'intensity_uncertainty': gamma_intensity.get('uncertainty', {}).get('value')
+                                        'energy': gamma_energy['value'],
+                                        'energy_uncertainty': gamma_energy['uncertainty'].get('value', 5.0),
+                                        'intensity': gamma_intensity.get('value', 0),
+                                        'intensity_uncertainty': gamma_intensity.get('uncertainty', {}).get('value', 0)
                                     })
                         
                         if energy_value is not None:
@@ -169,7 +165,7 @@ def load_levels_from_json(dataset_codes):
                                 'dataset_code': dataset_code,
                                 'level_id': f"{dataset_code}_{int(energy_value)}",
                                 'energy_value': float(energy_value),
-                                'energy_uncertainty': float(energy_uncertainty) if energy_uncertainty is not None else 5.0,  # Fallback only if corrupted JSON
+                                'energy_uncertainty': float(energy_uncertainty),
                                 'spin_parity_list': spin_parity_list,
                                 'spin_parity_string': spin_parity_string,
                                 'gamma_decays': gamma_decays
@@ -379,42 +375,57 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
 def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
     """
     Compares gamma decay patterns between two nuclear levels to assess match likelihood.
+    Returns similarity score from 0.0 (no match) to 1.0 (perfect match).
     
-    High-Level Purpose:
-    -------------------
-    Quantifies how well two sets of gamma ray transitions match, accounting for measurement
-    uncertainties, intensity fluctuations, and incomplete observations. Returns similarity
-    score from 0.0 (no match) to 1.0 (perfect match).
+    Example 1: Good Match (Partial Observation vs Complete Dataset)
+    ----------------------------------------------------------------
+    Dataset A (Complete): Level 2000±1 keV
+      - γ1: 2000±2 keV, BR=100
+      - γ2: 1400±3 keV, BR=80±10
+      - γ3: 900±3 keV, BR=25±5
+      - γ4: 600±3 keV, BR=5±2
+      - γ5: 300±3 keV, BR=5±2
     
-    Dual-Mode Operation:
-    --------------------
-    - **Intensity Mode**: Uses both energy and intensity data with statistical Z-tests.
-      Implements Subset-Robust Bray-Curtis similarity (normalized by smaller dataset).
-      Handles swapped intensity rankings via uncertainty-aware scoring.
-      
-    - **Binary Mode**: Uses only energy data when intensities are missing or unreported.
-      Implements Statistical Overlap Coefficient (match count / smaller dataset size).
+    Dataset B (Partial): Level 2005±2 keV
+      - γ1: 2005±2 keV, BR=85±10
+      - γ2: 1405±3 keV, BR=100
     
-    Key Physics Constraints Addressed:
-    ----------------------------------
-    1. **Subset Matching**: Partial observations (3 gammas) can perfectly match subsets
-       of complete datasets (20 gammas). Score=1.0 if all observed gammas match.
-       
-    2. **Swapped Intensities**: Statistical consistency test prevents false negatives.
-       Example: 80±10 vs 100±10 are treated as matching (Z<3σ) despite rank swap.
-       
-    3. **Missing Data**: Automatic mode switching when intensity data unavailable.
-       Falls back to energy-only matching without penalizing absence of intensity.
-
-    Input Format:
+    A vs B:
+      1. Normalize: A=[100, 80±10, 25±5, 5±2, 5±2], B=[85±10, 100] (totals: 215 vs 185)
+      2. Energy matching: A_γ1↔B_γ1 (ΔE=5, Z=1.8σ ✓), A_γ2↔B_γ2 (ΔE=5, Z=1.2σ ✓)
+      3. Intensity check: 100 vs 85±10 (Z=1.5σ compatible), 80±10 vs 100 (Z=2.0σ compatible)
+      4. Overlaps: (100+85)/2=92.5, (80+100)/2=90 → total=182.5
+      5. Score: 182.5/min(215,185) = 0.986 (98.6% match)
+    
+    Example 2: Bad Match (Energy Match but Wrong Intensities)
+    ----------------------------------------------------------
+    Dataset C: Level 1999±2 keV
+      - γ1: 899±2 keV, BR=65±10
+      - γ2: 598±3 keV, BR=100
+    
+    A vs C:
+      1. Normalize: A=[100, 80±10, 25±5, 5±2, 5±2], C=[65±10, 100] (totals: 215 vs 165)
+      2. Energy matching: A_γ3↔C_γ1 (ΔE=1, Z=0.3σ ✓), A_γ4↔C_γ2 (ΔE=2, Z=0.5σ ✓)
+      3. Intensity check: 25±5 vs 65±10 (Z=3.6σ inconsistent), 5±2 vs 100 (Z=47.5σ inconsistent)
+      4. Overlaps: min(25,65)=25, min(5,100)=5 → total=30
+      5. Score: 30/min(215,165) = 0.182 (18.2% match, severe intensity mismatch)
+    
+    Example 3: Binary Mode (No Intensity Data)
+    -------------------------------------------
+    Dataset D: Level 2002±2 keV
+      - γ1: 902±2 keV (no BR)
+      - γ2: 1400±3 keV (no BR)
+    
+    A vs D:
+      1. Energy-only mode activated (D has no intensities)
+      2. Energy matching: A_γ3↔D_γ1 (ΔE=2, Z=0.6σ ✓), A_γ2↔D_γ2 (ΔE=0, Z=0 ✓)
+      3. Score: 2 matches / min(5,2) = 1.0 (100% match, subset D fully matches subset of A)
+    
+    Key Features:
     -------------
-    List of dictionaries with gamma ray properties:
-    [{'energy': 1000.0, 'energy_uncertainty': 1.0, 
-      'intensity': 100.0, 'intensity_uncertainty': 5.0}, ...]
-    
-    Output:
-    -------
-    Float in range [0.0, 1.0] representing similarity score.
+    - **Subset Matching**: Partial datasets score 1.0 if fully contained in complete dataset
+    - **Intensity Consistency**: Uses average if Z<3σ, minimum if inconsistent (penalizes mismatches)
+    - **Binary Mode Fallback**: Energy-only matching when intensities missing/unreported
     """
     
     # --- Guard Clause: Missing Data ---
@@ -422,7 +433,7 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
         return Scoring_Config['General']['Neutral_Score']
 
     # =========================================================================
-    # Phase 1: Data Standardization & Normalization
+    # Phase 1: Normalize Intensities (Strongest=100)
     # =========================================================================
     def normalize_gamma_intensities(raw_decays):
         clean_list = []
@@ -430,17 +441,13 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
         max_intensity = 0.0
         
         for gamma in raw_decays:
-            # 1. Extract Energy & Uncertainty (parser handles inference)
-            energy_value = float(gamma.get('energy', 0))
-            if energy_value <= 0: continue
-            
-            # Simple fallback only if parser failed (corrupted JSON, manual data)
-            energy_uncertainty = float(gamma.get('energy_uncertainty', 5.0))
-            
-            # 2. Extract Intensity & Uncertainty (parser handles inference)
+            energy_value = float(gamma['energy'])
+            energy_uncertainty = float(gamma['energy_uncertainty'])
             intensity_value = float(gamma.get('intensity', 0))
-            intensity_uncertainty_raw = gamma.get('intensity_uncertainty')
-            intensity_uncertainty = float(intensity_uncertainty_raw) if intensity_uncertainty_raw is not None else 0.5
+            intensity_uncertainty = float(gamma.get('intensity_uncertainty', 0))
+            
+            if energy_value <= 0:
+                continue
             
             if intensity_value > 0:
                 has_intensity = True
@@ -453,12 +460,12 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
                 'intensity_uncertainty': intensity_uncertainty
             })
             
-        # 3. Normalize Strongest to 100.0 (Preserving relative errors)
+        # Normalize strongest gamma to 100.0 (scales uncertainties proportionally)
         if has_intensity and max_intensity > 0:
             scale = 100.0 / max_intensity
             for gamma in clean_list:
                 gamma['intensity'] *= scale
-                gamma['intensity_uncertainty'] *= scale  # Scale uncertainty linearly
+                gamma['intensity_uncertainty'] *= scale
                 
         return clean_list, has_intensity
 
@@ -469,123 +476,74 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
         return Scoring_Config['General']['Neutral_Score']
 
     # =========================================================================
-    # Phase 2: Matching Thresholds
+    # Phase 2: Greedy Energy Matching (3σ Threshold)
     # =========================================================================
-    Energy_Match_Threshold = 3.0       # Energy match allowed up to 3 sigma
-    Intensity_Match_Threshold = 3.0     # Intensity match allowed up to 3 sigma
+    Energy_Match_Threshold = 3.0
+    Intensity_Match_Threshold = 3.0
 
     # =========================================================================
-    # Phase 3: Mode Selection & Calculation
+    # Phase 3: Intensity Mode (Uses BR data) vs Binary Mode (Energy only)
     # =========================================================================
     
-    # -------------------------------------------------------------------------
-    # Mode A: Intensity Mode (Subset-Robust Bray-Curtis)
-    # Used when both datasets have intensity data.
-    # -------------------------------------------------------------------------
     if has_int_A and has_int_B:
-        # --- Algorithm Overview ---
-        # Strategy: Greedy one-to-one matching with intensity-aware scoring
-        # 1. For each gamma in Dataset A, find its best energy match in Dataset B
-        # 2. Once a gamma in B is matched, mark it as "used" (no double-matching)
-        # 3. Check intensity consistency: if statistically compatible, use average; else use minimum
-        # 4. Sum all overlap intensities to compute total intersection
+        # Example: Dataset A=[100, 80±10, 15, 35], Dataset B=[85±10, 100]
+        # Goal: Match each gamma in A to best energy match in B (one-to-one)
         
-        intersection_sum = 0.0  # Accumulator for matched intensity overlap
-        matched_indices_B = set()  # Track which gammas in B have been claimed
+        intersection_sum = 0.0
+        matched_indices_B = set()
         
-        # === Step 1: Iterate Through Dataset A (Query Set) ===
         for gamma_A in list_A:
-            # --- Step 1a: Initialize Search for Best Match in Dataset B ---
-            best_match_idx = -1  # Index of best match in list_B (-1 means no match found)
-            best_z_energy = 999.0  # Track smallest energy separation (lower = better match)
+            # Find best energy match in B (smallest Z-score within 3σ)
+            best_match_idx = -1
+            best_z_energy = 999.0
             
-            # --- Step 1b: Search All Unclaimed Gammas in Dataset B ---
             for idx, gamma_B in enumerate(list_B):
-                # Skip gammas in B that have already been matched to earlier gammas in A
-                if idx in matched_indices_B: 
+                if idx in matched_indices_B:
                     continue
                 
-                # Calculate statistical energy separation (Z-score = separation in sigma units)
                 z_energy = get_z_score(
                     gamma_A['energy'], gamma_A['energy_uncertainty'], 
                     gamma_B['energy'], gamma_B['energy_uncertainty']
                 )
                 
-                # --- Step 1c: Greedy Selection Logic ---
-                # Accept match only if within threshold (3 sigma default)
-                if z_energy <= Energy_Match_Threshold:
-                    # Among all acceptable matches, choose the one with smallest Z-score
-                    # Rationale: Closest energy match is most likely to be the same transition
-                    if z_energy < best_z_energy:
-                        best_z_energy = z_energy
-                        best_match_idx = idx
+                if z_energy <= Energy_Match_Threshold and z_energy < best_z_energy:
+                    best_z_energy = z_energy
+                    best_match_idx = idx
             
-            # === Step 2: Process Accepted Match ===
             if best_match_idx != -1:
-                # Claim this gamma in B (prevent it from matching other gammas in A)
-                # Claim this gamma in B (prevent it from matching other gammas in A)
                 gamma_B = list_B[best_match_idx]
                 matched_indices_B.add(best_match_idx)
                 
-                # --- Step 2a: Statistical Intensity Verification ---
-                # Compare intensities to determine overlap scoring strategy
+                # Intensity consistency check
                 z_intensity = get_z_score(
                     gamma_A['intensity'], gamma_A['intensity_uncertainty'], 
                     gamma_B['intensity'], gamma_B['intensity_uncertainty']
                 )
                 
-                # --- Step 2b: Intensity Overlap Logic ---
                 if z_intensity <= Intensity_Match_Threshold:
-                    # Case 1: Statistically Compatible Intensities (Z < 3 sigma)
-                    # Example: 80±10 vs 100±10 (difference within combined uncertainty)
-                    # Physics: Likely same transition with measurement fluctuations or swapped ranking
-                    # Strategy: Use AVERAGE as best estimate of true shared intensity
-                    # Result: High overlap score (~90-100) reflects strong compatibility
+                    # Compatible intensities (e.g., 80±10 vs 100): use average
+                    # Example: Pair 2 above: (80+100)/2 = 90
                     overlap = (gamma_A['intensity'] + gamma_B['intensity']) / 2.0
                 else:
-                    # Case 2: Inconsistent Intensities (Z > 3 sigma)
-                    # Example: 100±5 vs 5±1 (large disagreement, statistically significant)
-                    # Physics: Real intensity mismatch (possibly different branches or errors)
-                    # Strategy: Use MINIMUM as conservative estimate of undisputed signal
-                    # Result: Lower overlap score penalizes disagreement
+                    # Inconsistent intensities (e.g., 100±5 vs 5±1): use minimum
                     overlap = min(gamma_A['intensity'], gamma_B['intensity'])
                 
-                # Accumulate total matched intensity
-                # Accumulate total matched intensity
                 intersection_sum += overlap
 
-        # === Step 3: Calculate Subset-Robust Similarity Score ===
-        # Compute total intensities for normalization
+        # Subset-robust scoring: normalize by smaller dataset
+        # Example: intersection=182.5, min(230,185)=185 → score=182.5/185=0.986
         sum_A = sum(gamma['intensity'] for gamma in list_A)
         sum_B = sum(gamma['intensity'] for gamma in list_B)
         
-        # Guard: Prevent division by zero
-        if min(sum_A, sum_B) == 0: 
+        if min(sum_A, sum_B) == 0:
             return 0.0
         
-        # --- Subset-Robust Formula ---
-        # Traditional Bray-Curtis: score = 2×intersection / (sum_A + sum_B)
-        # Problem: Penalizes subset scenarios (3 gammas vs 20 gammas)
-        # 
-        # Solution: Normalize by MINIMUM total intensity instead
-        # Formula: score = intersection / min(sum_A, sum_B)
-        # 
-        # Example: Dataset A has 3 gammas (total intensity 180), Dataset B has 20 gammas (total 2000)
-        #   - If all 3 gammas in A match perfectly with 3 gammas in B: intersection=180
-        #   - Score = 180/180 = 1.0 (perfect match, A is complete subset of B)
-        #   - Traditional formula would give: 2×180/(180+2000) = 0.17 (wrongly penalizes)
-        # 
-        # Physics Rationale: Small dataset (partial observation) should score 1.0 if fully contained
         score = intersection_sum / min(sum_A, sum_B)
-        
-        # Cap at 1.0 (safety: average intensity logic may slightly exceed min sum due to noise)
         return min(score, 1.0)
-
-    # -------------------------------------------------------------------------
-    # Mode B: Binary Mode (Statistical Overlap Coefficient)
-    # Used when energies are known but intensities are missing/unknown.
-    # -------------------------------------------------------------------------
+    
     else:
+        # Binary mode: Energy-only matching (no intensity data)
+        # Example: When intensities unreported, count energy matches within 3σ
         matches_count = 0
         matched_indices_B = set()
         
@@ -603,7 +561,7 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
                     matched_indices_B.add(idx)
                     break
         
-        # Subset Logic: Match Count / Size of Smaller Dataset
+        # Subset-robust: match_count / smaller_dataset_size
         min_len = min(len(list_A), len(list_B))
         if min_len == 0: return 0.0
         
@@ -676,8 +634,8 @@ def extract_features(level_1, level_2):
     """
 
     energy_similarity = calculate_energy_similarity(
-        level_1.get('energy_value'), level_1.get('energy_uncertainty', 5.0),
-        level_2.get('energy_value'), level_2.get('energy_uncertainty', 5.0)
+        level_1['energy_value'], level_1['energy_uncertainty'],
+        level_2['energy_value'], level_2['energy_uncertainty']
     )
     
     spin_parity_list_1 = level_1.get('spin_parity_list', [])

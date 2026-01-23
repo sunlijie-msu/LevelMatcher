@@ -1,98 +1,164 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
-def plot_subset_robust_mechanics():
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
-    fig.suptitle('Visualizing "Subset-Robust Statistical Similarity"', fontsize=16, fontweight='bold', y=1.05)
+def plot_example_1_a_vs_b():
+    """Example 1: A vs B (Partial Subset Match)"""
+    fig, ax = plt.subplots(figsize=(10, 7))
+    
+    # Dataset A (Reference)
+    # 2000(100), 1400(80), 900(25), 600(5), 300(5)
+    A_vals = [100, 80, 25, 5, 5]
+    
+    # Dataset B (Subset candidate)
+    # Matches 2000->2005(85), 1400->1405(100). Others missing.
+    B_vals = [85, 100, 0, 0, 0]
+    
+    labels = ['γ1\n2000', 'γ2\n1400', 'γ3\n900', 'γ4\n600', 'γ5\n300']
+    
+    x = np.arange(len(labels))
+    width = 0.35
+    
+    # Plot Bars
+    ax.bar(x - width/2, A_vals, width, label='Dataset A (Complete)', color='#4472C4', alpha=0.9, edgecolor='black')
+    ax.bar(x + width/2, B_vals, width, label='Dataset B (Subset)', color='#ED7D31', alpha=0.9, edgecolor='black')
+    
+    # Matching Logic Visualization - Updated per user instructions
+    overlaps = [92.5, 90] # (100+85)/2, (80+100)/2
+    match_indices = [0, 1]
+    
+    for i, idx in enumerate(match_indices):
+        overlap = overlaps[i]
+        ax.plot([idx - width/2, idx + width/2], [overlap, overlap], 'g-', linewidth=4, zorder=10)
+        ax.text(idx, overlap + 5, f'{overlap:.1f}', ha='center', color='green', fontweight='bold', fontsize=12)
+        
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=11)
+    ax.set_ylabel('Normalized Intensity', fontsize=12)
+    ax.set_title(f'Example 1: A vs B (Subset Match)\nScore: {92.5+90:.1f} / min(215, 185) = 0.986', 
+                  fontsize=14, fontweight='bold', pad=15, color='#2F5597')
+    
+    ax.legend(loc='upper right')
+    ax.grid(axis='y', alpha=0.3)
+    ax.set_ylim(0, 125)
+    
+    # Annotation for subset
+    ax.annotate('Unmatched in B\n(Expected for subset)', xy=(2.5, 10), xytext=(2.5, 40),
+                 arrowprops=dict(facecolor='black', shrink=0.05, alpha=0.5),
+                 ha='center', fontsize=10, style='italic', bbox=dict(boxstyle="round", fc="w", alpha=0.8))
+    
+    plt.tight_layout()
+    plt.savefig('Example1_A_vs_B.png')
+    print("Saved Example1_A_vs_B.png")
+    plt.close()
 
-    # ==========================================
-    # PLOT 1: Statistical Intensity Logic (The "Z-Score Bridge")
-    # ==========================================
-    ax1 = axes[0]
-    
-    # Data: Two peaks that differ physically (80 vs 100) but agree statistically
-    # A: 80 +/- 10
-    # B: 100 +/- 10
-    # Z-Score = |100-80| / sqrt(10^2 + 10^2) = 20 / 14.1 = 1.41 (Consistent!)
-    
-    labels = ['Dataset A', 'Dataset B']
-    means = [80, 100]
-    errs = [10, 10]
-    
-    # Plot Error Bars
-    ax1.errorbar(x=[0, 1], y=means, yerr=errs, fmt='o', capsize=10, elinewidth=3, markeredgewidth=2, color='black', markersize=8, label='Measurement ± Uncertainty')
-    
-    # 1. Standard Min Approach (The gray box)
-    ax1.hlines(80, -0.5, 1.5, colors='gray', linestyles='--', label='Standard Min (80)')
-    ax1.fill_between([-0.5, 1.5], 0, 80, color='gray', alpha=0.2)
-    
-    # 2. Statistical Average Approach (The green box)
-    # Since Z < 2.0, the algorithm promotes the overlap to the Average (90)
-    avg_val = 90
-    ax1.hlines(avg_val, -0.5, 1.5, colors='green', linewidth=2, label='Statistical Match (Avg: 90)')
-    ax1.fill_between([-0.5, 1.5], 80, 90, color='green', alpha=0.3, hatch='//', label='Recovered Signal')
 
-    ax1.set_title("Logic 1: Statistical Intensity Consistency\n(80±10 vs 100±10)", fontweight='bold')
-    ax1.set_xlim(-0.5, 1.5)
-    ax1.set_ylim(0, 130)
-    ax1.set_xticks([0, 1])
-    ax1.set_xticklabels(labels)
-    ax1.set_ylabel('Gamma Intensity')
-    ax1.legend(loc='upper left')
+def plot_example_2_a_vs_c():
+    """Example 2: A vs C (Intensity Mismatch)"""
+    fig, ax = plt.subplots(figsize=(10, 7))
     
-    ax1.text(0.5, 85, "Code sees Z < 2.0\nTreats as Fluctuation\nUses Average (90)", 
-             ha='center', color='green', fontweight='bold', bbox=dict(facecolor='white', alpha=0.8))
+    # Only showing matched gammas of A in detail would be misleading? 
+    # User said "I said 5 gammas because dataset A has 5 gammas".
+    # So we must show all 5 gammas of A, and show C matched against the relevant ones.
+    
+    # Dataset A Full Context
+    labels = ['γ1\n2000', 'γ2\n1400', 'γ3\n900', 'γ4\n600', 'γ5\n300']
+    A_vals = [100, 80, 25, 5, 5]
+    
+    # Dataset C: Matches only γ3 (idx 2) and γ4 (idx 3)
+    # C values at relevant indices: [0, 0, 65, 100, 0]
+    C_vals = [0, 0, 65, 100, 0]
+    
+    x = np.arange(len(labels))
+    width = 0.35
+    
+    ax.bar(x - width/2, A_vals, width, label='Dataset A (Complete)', color='#4472C4', alpha=0.9, edgecolor='black')
+    ax.bar(x + width/2, C_vals, width, label='Dataset C', color='#A5A5A5', alpha=0.9, edgecolor='black')
+    
+    # Mismatch Logic Visualization
+    # Matched indices: 2 (900 vs 899) and 3 (600 vs 598)
+    match_indices = [2, 3]
+    overlaps = [25, 5] # min(25, 65), min(5, 100)
+    
+    for i, idx in enumerate(match_indices):
+        overlap = overlaps[i]
+        # Connector showing comparison
+        ax.plot([idx - width/2, idx + width/2], [overlap, overlap], 'r--', linewidth=4, zorder=10)
+        ax.text(idx, overlap + 5, f'{overlap}', ha='center', color='red', fontweight='bold', fontsize=12)
+        ax.text(idx, C_vals[idx] + 5, 'Intensity\nMismatch', ha='center', color='red', fontsize=9)
 
-    # ==========================================
-    # PLOT 2: Subset Normalization (The "Denominator" Fix)
-    # ==========================================
-    ax2 = axes[1]
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=11)
+    ax.set_ylabel('Normalized Intensity', fontsize=12)
+    ax.set_title(f'Example 2: A vs C (Intensity Mismatch)\nScore: {25+5}/165 = 0.182', 
+                  fontsize=14, fontweight='bold', pad=15, color='#C00000')
+    ax.set_ylim(0, 125)
+    ax.legend(loc='upper left')
+    ax.grid(axis='y', alpha=0.3)
     
-    # Scenario: "3 vs 20 Gammas"
-    # Dataset A (Small): Total Intensity = 150
-    # Dataset B (Large): Total Intensity = 1500 (Contains A + huge excess)
-    # Intersection = 150 (Perfect overlap on the ones A has)
+    plt.tight_layout()
+    plt.savefig('Example2_A_vs_C.png')
+    print("Saved Example2_A_vs_C.png")
+    plt.close()
+
+
+def plot_example_3_a_vs_d():
+    """Example 3: A vs D (Binary Mode - Energy Only)"""
+    fig, ax = plt.subplots(figsize=(10, 7))
     
-    bar_x = [0, 1]
-    bar_labels = ['Standard Bray-Curtis', 'Subset-Robust (Ours)']
+    # Dataset A Full Context
+    labels = ['γ1\n2000', 'γ2\n1400', 'γ3\n900', 'γ4\n600', 'γ5\n300']
     
-    # Math
-    intersect = 150
-    total_A = 150
-    total_B = 1500
+    # D Matches γ2 (1400) and γ3 (900)
+    # Binary match status: 1 if matched, 0 if not (relative to A's slots)
+    match_status = [0, 1, 1, 0, 0] # indices 1 (1400) and 2 (900) match
     
-    # Standard: Denominator = Sum(A) + Sum(B) = 1650
-    denom_standard = total_A + total_B
-    score_standard = (2 * intersect) / denom_standard # ~0.18
+    x = np.arange(len(labels))
     
-    # Robust: Denominator = 2 * Min(A, B) = 300
-    denom_robust = 2 * min(total_A, total_B)
-    score_robust = (2 * intersect) / denom_robust # 1.0
+    # Plot as specific status bars
+    # We color matched bars differently to highlight them within the context of A
+    colors = ['#E0E0E0' if s == 0 else '#70AD47' for s in match_status]
+    edgecolors = ['gray' if s == 0 else 'black' for s in match_status]
     
-    # Plotting the "Penalty" (Denominator size)
-    ax2.bar(0, denom_standard, color='red', alpha=0.3, label='Denominator (Penalty)')
-    ax2.bar(0, 2*intersect, color='green', label='Numerator (2 * Overlap)')
+    bars = ax.bar(x, match_status, 0.6, color=colors, edgecolor=edgecolors, label='Match Status')
     
-    ax2.bar(1, denom_robust, color='red', alpha=0.3)
-    ax2.bar(1, 2*intersect, color='green')
+    # Add checkmarks
+    for i, rect in enumerate(bars):
+        if match_status[i] == 1:
+            ax.text(rect.get_x() + rect.get_width()/2, 0.5, '✓ MATCH', 
+                    ha='center', va='center', color='white', fontweight='bold', fontsize=12)
+        else:
+             ax.text(rect.get_x() + rect.get_width()/2, 0.1, 'No Match', 
+                    ha='center', va='bottom', color='gray', fontsize=10)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, fontsize=11)
+    ax.set_ylabel('Binary Match Status', fontsize=12)
+    ax.set_title(f'Example 3: A vs D (Binary Mode)\nScore: 2 Matches / 2 Total = 1.00', 
+                  fontsize=14, fontweight='bold', pad=15, color='#548235')
     
-    ax2.set_title("Logic 2: Subset Normalization\n(Handling Incomplete Data)", fontweight='bold')
-    ax2.set_xticks(bar_x)
-    ax2.set_xticklabels(bar_labels)
-    ax2.set_ylabel('Score Components')
+    ax.set_ylim(0, 1.2)
+    ax.set_yticks([0, 1])
+    ax.set_yticklabels(['No', 'Yes'])
+    ax.grid(axis='y', alpha=0.3)
     
-    # Text Annotations
-    ax2.text(0, denom_standard + 50, f"Score: {score_standard:.2f}\n(Fail)", ha='center', color='red', fontweight='bold')
-    ax2.text(1, denom_robust + 50, f"Score: {score_robust:.1f}\n(Perfect Match)", ha='center', color='green', fontweight='bold')
+    # Legend manually constructed implies Green = Matched
+    from matplotlib.patches import Patch
+    legend_elements = [Patch(facecolor='#70AD47', edgecolor='black', label='Energy Match Found'),
+                       Patch(facecolor='#E0E0E0', edgecolor='gray', label='No Energy Match')]
+    ax.legend(handles=legend_elements, loc='upper right')
     
-    ax2.annotate('Huge excess in B\ncounts against A', xy=(0, 1000), xytext=(0.4, 1200),
-                 arrowprops=dict(facecolor='black', arrowstyle='->'))
-    
-    ax2.annotate('Excess ignored\n(Only Min Total used)', xy=(1, 350), xytext=(1.4, 800),
-                 arrowprops=dict(facecolor='black', arrowstyle='->'))
+    # Text box explaining binary mode
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    ax.text(0.5, 0.85, "No Intensity Data in D\nAlgorithm counts energy matches\nagainst Reference A", 
+             transform=ax.transAxes, fontsize=11, ha='center', bbox=props)
 
     plt.tight_layout()
-    plt.show()
+    plt.savefig('Example3_A_vs_D.png')
+    print("Saved Example3_A_vs_D.png")
+    plt.close()
 
 if __name__ == "__main__":
-    plot_subset_robust_mechanics()
+    plot_example_1_a_vs_b()
+    plot_example_2_a_vs_c()
+    plot_example_3_a_vs_d()

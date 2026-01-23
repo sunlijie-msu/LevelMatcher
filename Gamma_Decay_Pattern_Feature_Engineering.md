@@ -50,148 +50,32 @@ The shared intensity $I_{shared}$ is calculated conditionally:
 $$
 I_{shared} = 
 \begin{cases} 
-\frac{I_A + I_B}{2} & \text{if } Z_I \le 2.0 \quad (\text{Consistent: noise fluctuation}) \\
-\min(I_A, I_B) & \text{if } Z_I > 2.0 \quad (\text{Inconsistent: physical discrepancy})
+\frac{I_A + I_B}{2} & \text{if } Z_I \le 3.0 \quad (\text{Consistent: statistical fluctuation, averaging reduces error}) \\
+\min(I_A, I_B) & \text{if } Z_I > 3.0 \quad (\text{Inconsistent: physical discrepancy, penalize via minimum})
 \end{cases}
 $$
 
 ### Component 3: Subset-Robust Normalization
-To handle the "3 vs 20 gammas" case, we normalize by the **minimum** total intensity, representing the information content of the smaller dataset.
+To handle the "3 vs 20 gammas" case, we normalize by the **minimum** total intensity, representing the information content of the smaller dataset. This ensures that if a smaller dataset is a subset of a larger one, the similarity score can still reach 1.0.
 
 $$ S_{Robust} = \frac{\sum I_{shared}}{\min\left(\sum I_A, \sum I_B\right)} $$
 
-*   **Outcome:** If Dataset A is fully contained within Dataset B, $\sum I_{shared} \approx \sum I_A$. The score becomes $\frac{\sum I_A}{\sum I_A} = 1.0$.
+### Illustrative Examples
 
----
+#### Example 1: A vs B (Partial Subset Match)
+*   **Dataset A (Complete):** 5 gammas [2000, 1400, 900, 600, 300]. Total Intensity = 215.
+*   **Dataset B (Partial):** 2 gammas [2005, 1405]. Total Intensity = 185.
+*   **Outcome:** The two gammas in B match A's strongest lines within $Z < 3\sigma$. Intensities are consistent.
+*   **Score:** $\approx 0.986$ (High). The algorithm correctly identifies B as a likely partial observation of A.
 
-## 4. Python Implementation
+#### Example 2: A vs C (Intensity Mismatch)
+*   **Dataset A (Complete):** 5 gammas [2000, 1400, 900, 600, 300].
+*   **Dataset C (Candidate):** 2 gammas [899, 598] with high relative intensities [65, 100].
+*   **Outcome:** Energy matches are valid (A_900↔C_899, A_600↔C_598), but intensities diverge ($Z \gg 3\sigma$). The algorithm falls back to taking the minimum intensity, severely penalizing the score.
+*   **Score:** $\approx 0.182$ (Low). Correctly identifies that while energies align, the decay physics (branching ratios) do not match.
 
-```python
-import numpy as np
-
-# Default fallback uncertainties
-DEFAULT_ENERGY_UNC = 1.0
-DEFAULT_INTENSITY_REL_UNC = 0.10
-
-def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
-    """
-    Calculates gamma decay pattern similarity using Subset-Robust Statistical Compatibility.
-    
-    Logic:
-    1. Standardize inputs (normalize strongest gamma to 100.0).
-    2. Match energies using Z-scores (Z < 3.0).
-    3. Calculate shared intensity using statistical consistency (Z < 2.0 uses Average, else Min).
-    4. Normalize final score by the MINIMUM total intensity to allow perfect subset matching.
-    """
-    # Guard: Missing data
-    if not gamma_decays_1 or not gamma_decays_2:
-        return 0.5 
-
-    # --- Phase 1: Standardization ---
-    def process_spectrum(raw_decays):
-        clean_list = []
-        has_intensity = False
-        max_intensity = 0.0
-        
-        for g in raw_decays:
-            e = float(g.get('energy', 0))
-            if e <= 0: continue
-            
-            # Default Energy Uncertainty
-            dE = float(g.get('energy_uncertainty', 0))
-            if dE <= 0: dE = DEFAULT_ENERGY_UNC
-            
-            i = float(g.get('branching_ratio', 0))
-            dI = float(g.get('intensity_uncertainty', 0))
-            
-            if i > 0:
-                has_intensity = True
-                # Default Intensity Uncertainty (10%)
-                if dI <= 0: dI = max(0.5, i * DEFAULT_INTENSITY_REL_UNC)
-                if i > max_intensity: max_intensity = i
-            
-            clean_list.append({'E': e, 'dE': dE, 'I': i, 'dI': dI})
-            
-        # Normalize to Strongest = 100.0
-        if has_intensity and max_intensity > 0:
-            scale = 100.0 / max_intensity
-            for g in clean_list:
-                g['I'] *= scale
-                g['dI'] *= scale
-                
-        return clean_list, has_intensity
-
-    list_A, has_int_A = process_spectrum(gamma_decays_1)
-    list_B, has_int_B = process_spectrum(gamma_decays_2)
-    
-    if not list_A or not list_B: return 0.5
-
-    # --- Phase 2: Helper Math ---
-    def get_z_score(val1, err1, val2, err2):
-        sigma = np.sqrt(err1**2 + err2**2)
-        if sigma == 0: sigma = 1.0
-        return abs(val1 - val2) / sigma
-
-    Z_ENERGY_MATCH = 3.0        # 99.7% CI
-    Z_INTENSITY_CONSISTENT = 2.0 # 95% CI
-
-    # --- Phase 3: Intensity Mode ---
-    if has_int_A and has_int_B:
-        intersection_sum = 0.0
-        matched_indices_B = set()
-        
-        for gA in list_A:
-            best_match_idx = -1
-            best_z_energy = 999.0
-            
-            # Greedy Search by Energy Z-Score
-            for idx, gB in enumerate(list_B):
-                if idx in matched_indices_B: continue
-                
-                z_E = get_z_score(gA['E'], gA['dE'], gB['E'], gB['dE'])
-                
-                if z_E <= Z_ENERGY_MATCH:
-                    if z_E < best_z_energy:
-                        best_z_energy = z_E
-                        best_match_idx = idx
-            
-            if best_match_idx != -1:
-                gB = list_B[best_match_idx]
-                matched_indices_B.add(best_match_idx)
-                
-                # Statistical Intensity Logic
-                z_I = get_z_score(gA['I'], gA['dI'], gB['I'], gB['dI'])
-                
-                if z_I <= Z_INTENSITY_CONSISTENT:
-                    # Consistent: Use Average (Treat as statistical fluctuation)
-                    overlap = (gA['I'] + gB['I']) / 2.0
-                else:
-                    # Inconsistent: Use Minimum (Penalize discrepancy)
-                    overlap = min(gA['I'], gB['I'])
-                
-                intersection_sum += overlap
-
-        # Subset Normalization
-        sum_A = sum(g['I'] for g in list_A)
-        sum_B = sum(g['I'] for g in list_B)
-        
-        if min(sum_A, sum_B) == 0: return 0.0
-        return min(intersection_sum / min(sum_A, sum_B), 1.0)
-
-    # --- Phase 4: Binary Mode (Energies Only) ---
-    else:
-        matches = 0
-        matched_indices_B = set()
-        for gA in list_A:
-            for idx, gB in enumerate(list_B):
-                if idx in matched_indices_B: continue
-                z_E = get_z_score(gA['E'], gA['dE'], gB['E'], gB['dE'])
-                if z_E <= Z_ENERGY_MATCH:
-                    matches += 1
-                    matched_indices_B.add(idx)
-                    break
-        
-        min_len = min(len(list_A), len(list_B))
-        if min_len == 0: return 0.0
-        return float(matches) / float(min_len)
-```
+#### Example 3: A vs D (Binary Match - Energy Only)
+*   **Dataset A (Complete):** 5 gammas.
+*   **Dataset D (Candidate):** 2 gammas [902, 1400] with **NO** intensity data.
+*   **Outcome:** Algorithm detects missing intensities and switches to Binary Mode. It counts energy matches only.
+*   **Score:** 1.0 (2 matches out of 2 gammas in the smaller dataset).
