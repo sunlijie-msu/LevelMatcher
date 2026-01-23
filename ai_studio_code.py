@@ -18,7 +18,7 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
        are absent.
 
     Input Format: List of dicts
-    [{'energy': 1000.0, 'energy_uncertainty': 1.0, 'branching_ratio': 100.0, 'intensity_uncertainty': 5.0}, ...]
+    [{'energy': 1000.0, 'energy_uncertainty': 1.0, 'intensity': 100.0, 'intensity_uncertainty': 5.0}, ...]
     """
     
     # --- Guard Clause: Missing Data ---
@@ -43,7 +43,7 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
             if dE <= 0: dE = DEFAULT_ENERGY_UNC
             
             # 2. Extract Intensity & Uncertainty
-            i = float(g.get('branching_ratio', 0))
+            i = float(g.get('intensity', 0))
             dI = float(g.get('intensity_uncertainty', 0))
             
             if i > 0:

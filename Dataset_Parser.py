@@ -141,9 +141,9 @@ def parse_ensdf_line(line):
             "energy_val": energy_val,
             "energy_unc": unc_val,
             "energy_input": format_evaluator_input(energy_str, unc_str) if energy_str else None,
-            "branching_ratio": ri_val,
-            "bra_unc": dri_val,
-            "br_input": format_evaluator_input(ri_str, dri_str) if ri_str else None
+            "intensity": ri_val,
+            "intensity_unc": dri_val,
+            "intensity_input": format_evaluator_input(ri_str, dri_str) if ri_str else None
         }
         return "G", data
 
@@ -217,16 +217,16 @@ def convert_log_to_datasets(log_path):
                             "uncertainty": { "value": g_data["energy_unc"], "type": "symmetric" } if g_data["energy_unc"] > 0 else {"type": "unreported"}
                         },
                         "gammaIntensity": {
-                            "value": g_data["branching_ratio"],
-                            "uncertainty": { "value": g_data["bra_unc"], "type": "symmetric" } if g_data["bra_unc"] > 0 else {"type": "unreported"}
+                            "value": g_data["intensity"],
+                            "uncertainty": { "value": g_data["intensity_unc"], "type": "symmetric" } if g_data["intensity_unc"] > 0 else {"type": "unreported"}
                         },
                         "initialLevel": lvl_idx,
                         "finalLevel": final_idx
                     }
                     if g_data.get("energy_input"):
                         g_entry["energy"]["evaluatorInput"] = g_data["energy_input"]
-                    if g_data.get("br_input"):
-                        g_entry["gammaIntensity"]["evaluatorInput"] = g_data["br_input"]
+                    if g_data.get("intensity_input"):
+                        g_entry["gammaIntensity"]["evaluatorInput"] = g_data["intensity_input"]
                         
                     gammas_table.append(g_entry)
                     level_gammas.append(gamma_counter)
