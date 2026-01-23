@@ -623,11 +623,13 @@ def extract_features(level_1, level_2):
     5. Gamma_Decay_Pattern_Similarity (0-1):
        - Method: Subset-Robust Statistical Compatibility.
        - Logic: 
-         a) Energy Matching: Checks Z-score < 3.0 between gamma energies.
-         b) Intensity Verification: If intensities exist, checks consistency (Z < 2.0). 
-            Swapped intensities (e.g. 80 vs 100) are accepted if statistically consistent.
+         a) Energy Matching: Greedy one-to-one matching using Z-score <= 3.0.
+         b) Intensity Verification: 
+            *   If Z_intensity <= 3.0 (Consistent): Uses Average intensity (statistical fluctuation assumption).
+            *   If Z_intensity > 3.0 (Inconsistent): Uses Minimum intensity (penalize discrepancy).
          c) Subset Handling: Divides match sum by the *smaller* dataset's total intensity.
-            Allows a small set of gammas (subset) to perfectly match a larger set.
+            Allows a small set of gammas (subset B) to perfectly match a larger set (complete A).
+         d) Binary Mode: If intensity data missing, falls back to energy-only match counting.
        - Guard: Uses Scoring_Config['General']['Neutral_Score'] (typically 0.5) when gamma data missing.
        - Rationale: Robustly handles "observed subset" vs "complete dataset" scenarios.
     
@@ -728,16 +730,17 @@ def generate_synthetic_training_data():
     Feature Correlation Physics Rationale:
     - If two levels have IDENTICAL quantum numbers (firm Jπ match) but disagreeing energies,
       the energy mismatch may be due to calibration error, not genuine mismatch.
-    - This is especially true for isolated levels (no nearby states with same Jπ).
-    - XGBoost learns this interaction: when Spin_Sim=1.0 AND Parity_Sim=1.0, the model
-      assigns higher probability even with moderate Energy_Sim (e.g., 0.4-0.7).
+    - Similarly, if two levels exhibit IDENTICAL gamma decay patterns (Fingerprint match),
+      they are likely the same physical state despite energy value offsets.
+    - XGBoost learns this interaction: when (Spin+Parity is Perfect) OR (Gamma is Perfect),
+      the model assigns higher probability even with moderate Energy_Sim (e.g., 0.4-0.7).
     """
     training_points = []
     
     # 1. Gather all possible discrete scores from Config
     spin_scores = list(Scoring_Config['Spin'].values()) + [Scoring_Config['General']['Neutral_Score']]
     parity_scores = list(Scoring_Config['Parity'].values()) + [Scoring_Config['General']['Neutral_Score']]
-    gamma_scores = [0.0, 0.3, Scoring_Config['General']['Neutral_Score'], 0.7, 1.0]  # Range: no match to perfect match
+    gamma_scores = [0.0, 0.3, Scoring_Config['General']['Neutral_Score'], 0.7, 0.95, 1.0]  # Added 0.95 for rescue threshold
     
     # 2. Feature Correlation Configuration
     correlation_enabled = Scoring_Config['Feature_Correlation']['Enabled']
@@ -765,15 +768,17 @@ def generate_synthetic_training_data():
         gamma_factor = value_map(gamma_similarity)
 
         # Feature Correlation: Physics Rescue
-        # If spin AND parity are both essentially perfect (firm matches),
-        # relax the dependency on energy similarity by boosting it.
-        # Physics rationale: Perfect quantum number agreement suggests the same level
-        # even if energy calibration differs slightly between experiments.
+        # Condition 1: Perfect Quantum Numbers (Spin=1.0 AND Parity=1.0)
+        # Condition 2: Strong Gamma Decay Fingerprint (Gamma >= 0.95)
+        # Either condition implies rigorous physical identity, justifying a rescue of mediocre energy scores.
+        # Physics rationale: Perfect internal structure agreement trumps calibration shifts.
         effective_energy = energy_similarity
         if correlation_enabled:
-            if spin_similarity >= correlation_threshold and parity_similarity >= correlation_threshold:
+            is_quantum_match = (spin_similarity >= correlation_threshold and parity_similarity >= correlation_threshold)
+            is_gamma_match = (gamma_similarity >= 0.95)
+
+            if is_quantum_match or is_gamma_match:
                 # Apply rescue: e → e^exponent (e.g., sqrt transforms 0.4→0.63, 0.6→0.77)
-                # This reduces the penalty for mediocre energy when physics is perfect.
                 effective_energy = energy_similarity ** rescue_exponent
 
         # PROBABILITY FORMULA:
@@ -803,33 +808,39 @@ def generate_synthetic_training_data():
 
     # 5. Feature Correlation Teaching Set (Critical for learning the interaction)
     # Explicitly oversample the region where energy is mediocre but physics is perfect.
-    # This teaches XGBoost to split on Spin/Parity first, then apply different energy slopes.
+    # This teaches XGBoost to split on Spin/Parity/Gamma first, then apply different energy slopes.
     perfect_spin = Scoring_Config['Spin']['Match_Firm']
     perfect_parity = Scoring_Config['Parity']['Match_Firm']
     imperfect_spin = Scoring_Config['Spin']['Match_Strong']  # e.g., 0.8 (tentative match)
     imperfect_parity = Scoring_Config['Parity']['Match_Strong']  # e.g., 0.8 (tentative match)
+    neutral_score = Scoring_Config['General']['Neutral_Score']
     
     # Mediocre energy range where correlation effect is most visible
     mediocre_energy_values = [0.3, 0.4, 0.5, 0.6, 0.7]
     
     for energy in mediocre_energy_values:
-        # Case A: Perfect Physics → Label should be BOOSTED (rescued)
-        # Model learns: [mediocre energy, perfect spin, perfect parity] → high probability
-        label_boosted = calculate_label(energy, perfect_spin, perfect_parity, 1.0, 0.5)
-        training_points.append(([energy, perfect_spin, perfect_parity, 1.0, 0.5], label_boosted))
+        # Case A: Perfect Quantum Numbers -> Label should be BOOSTED (rescued)
+        # Model learns: [mediocre energy, perfect spin, perfect parity] -> high probability
+        label_boosted_q = calculate_label(energy, perfect_spin, perfect_parity, 1.0, neutral_score)
+        training_points.append(([energy, perfect_spin, perfect_parity, 1.0, neutral_score], label_boosted_q))
         
-        # Case B: Imperfect Physics → Label should be STANDARD (no rescue)
-        # Model learns: [mediocre energy, imperfect physics] → standard (lower) probability
-        # This CONTRAST forces the tree to split on Spin/Parity condition
-        label_standard = calculate_label(energy, imperfect_spin, imperfect_parity, 1.0, 0.5)
-        training_points.append(([energy, imperfect_spin, imperfect_parity, 1.0, 0.5], label_standard))
+        # Case B: Perfect Gamma Fingerprint -> Label should be BOOSTED (rescued)
+        # Model learns: [mediocre energy, unknown spin, unknown parity, Match Gamma] -> high probability
+        label_boosted_g = calculate_label(energy, neutral_score, neutral_score, 1.0, 1.0)
+        training_points.append(([energy, neutral_score, neutral_score, 1.0, 1.0], label_boosted_g))
+
+        # Case C: Imperfect Physics -> Label should be STANDARD (no rescue)
+        # Model learns: [mediocre energy, imperfect physics] -> standard (lower) probability
+        # This CONTRAST forces the tree to split on Physics/Gamma condition
+        label_standard = calculate_label(energy, imperfect_spin, imperfect_parity, 1.0, neutral_score)
+        training_points.append(([energy, imperfect_spin, imperfect_parity, 1.0, neutral_score], label_standard))
         
-        # Case C: Mixed Physics (one perfect, one imperfect) → No rescue
-        # Ensures rescue only triggers when BOTH spin AND parity are perfect
-        label_mixed_1 = calculate_label(energy, perfect_spin, imperfect_parity, 1.0, 0.5)
-        training_points.append(([energy, perfect_spin, imperfect_parity, 1.0, 0.5], label_mixed_1))
-        label_mixed_2 = calculate_label(energy, imperfect_spin, perfect_parity, 1.0, 0.5)
-        training_points.append(([energy, imperfect_spin, perfect_parity, 1.0, 0.5], label_mixed_2))
+        # Case D: Mixed Physics (one perfect, one imperfect) -> No rescue
+        # Ensures rescue only triggers when BOTH spin AND parity are perfect (unless Gamma saves it)
+        label_mixed_1 = calculate_label(energy, perfect_spin, imperfect_parity, 1.0, neutral_score)
+        training_points.append(([energy, perfect_spin, imperfect_parity, 1.0, neutral_score], label_mixed_1))
+        label_mixed_2 = calculate_label(energy, imperfect_spin, perfect_parity, 1.0, neutral_score)
+        training_points.append(([energy, imperfect_spin, perfect_parity, 1.0, neutral_score], label_mixed_2))
 
     # 6. Random Sampling (Fill gaps and prevent overfitting)
     np.random.seed(42)
