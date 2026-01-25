@@ -3,39 +3,45 @@ import numpy as np
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 from Feature_Engineer import extract_features, generate_synthetic_training_data, load_levels_from_json
+from Level_Clusterer import perform_clustering_and_output
 import warnings
 
 """
-Engine for Nuclear Level Matching
+# High-level Structure and Workflow Explanation:
 ======================================
 
-# High-level Structure and Workflow Explanation:
--------------------------
+Workflow Steps (5-Step Pipeline):
 
-1. **Data Loading & Standardization** (`load_levels_from_json`):
-   - Parse ENSDF JSON (datasets A, B, C) into flat records: energy_value, energy_uncertainty, spin_parity_list, spin_parity_string, dataset_code, level_id.
+Step 1: Synthetic Training Data Generation
+  Input: Physics rules and configuration from Feature_Engineer.py
+  Output: 580+ synthetic labeled examples covering physics scenarios
+  Function: generate_synthetic_training_data()
 
-2. **Physics-Informed Feature Space** (from Feature_Engineer):
-   - Compute [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Pattern_Similarity].
-   - All features are monotonic increasing: higher value strictly indicates better match likelihood.
+Step 2: Model Training (XGBoost + LightGBM)
+  Input: Training features and labels from Step 1
+  Process: Train two independent models with monotonic constraints (Physics Prior)
+    - XGBoost: Baseline model
+    - LightGBM: Validation model with heavier regularization
+  Output: Trained binary logistic regressors
 
-3. **Model Training** (XGBoost and LightGBM with monotone constraints):
-   - Train binary logistic regressor on synthetic physics-labeled pairs from Feature_Engineer.
-   - Monotone constraints: all five features constrained positive to preserve physics priors.
-   - Feature Correlation: Model learns that perfect spin+parity can "rescue" mediocre energy similarity.
-   - It takes 10-20 seconds to train both models.
-   - XGBoost: Standard robust performance.
-   - LightGBM: Independent test for comparison.
-     * Configuration: Heavily regularized (L1/L2, restricted depth) to prevent overfitting on small datasets.
-     * Behavior: Observed to favor Gamma patterns more strongly than XGBoost (e.g., A_2000 vs B_2006).
+Step 3: Data Loading & Standardization
+  Input: ENSDF JSON files (datasets A, B, C) in data/raw/
+  Output: Standardized DataFrame with energy, uncertainty, spin-parity, and unique IDs
+  Function: load_levels_from_json()
 
-4. **Pairwise Inference** (cross-dataset only):
-   - Enumerate all level pairs across datasets, extract features, predict match probability pair-by-pair.
-   - Keep pairs above pairwise_output_threshold (default 0.1%) and write Output_Level_Pairwise_Inference.txt.
+Step 4: Pairwise Inference
+  Input: Standardized levels (Step 3) and trained models (Step 2)
+  Process: 
+    - Generate all cross-dataset pairs
+    - Extract feature vectors (Feature_Engineer.extract_features)
+    - Predict match probability
+  Output: List of level pairs with probability > threshold
 
-5. **Graph Clustering (rule-based, no ML)**:
-   - Greedy merge clusters in probability order with dataset-uniqueness and all-to-all compatibility checks (threshold clustering_merge_threshold=0.15).
-   - Support multi-cluster membership for ambiguous levels; output clusters to Output_Clustering_Results.txt with anchor and member probabilities.
+Step 5: Graph-Based Clustering
+  Input: Level pairs from Step 4
+  Process: Greedy merge algorithm enforcing dataset-uniqueness
+  Output: Clusters with anchors and members
+  Result: Final reconciled level scheme
 """
 
 # Configuration Parameters
@@ -47,31 +53,9 @@ feature_names = ['Energy_Similarity', 'Spin_Similarity', 'Parity_Similarity',
                  'Specificity', 'Gamma_Decay_Pattern_Similarity']
 
 # ==========================================
-# 1. Test Data Ingestion (From JSON files)
+# Helper Function: Graph Clustering
 # ==========================================
-levels = load_levels_from_json(['A', 'B', 'C'])
-
-dataframe = pd.DataFrame(levels)
-# Generate unique level IDs for tracking (e.g., A_1000)
-dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int(row['energy_value'])}", axis=1)
-
-# ==========================================
-# 2. Model Training (Physics-Informed XGBoost + LightGBM Ensemble)
-# ==========================================
-# Feature Vector: [Energy_Similarity, Spin_Similarity, Parity_Similarity, Specificity, Gamma_Decay_Pattern_Similarity]
-# All Features Monotonic Increasing (higher value → higher match probability):
-# 1. Energy_Similarity (+1): Gaussian kernel exp(-0.1×z²) where z=ΔE/σ_combined. Perfect overlap (z=0)→1.0, far apart (z>5)→~0.0
-# 2. Spin_Similarity (+1): Best-case compatibility across spin options. Firm match→1.0, tentative match→0.9, adjacent mismatch→0.05-0.2, incompatible→0.0
-# 3. Parity_Similarity (+1): Best-case compatibility across parity options. Firm match→1.0, tentative match→0.9, opposite parity→0.0-0.1
-# 4. Specificity (+1): Ambiguity penalty = 1/sqrt(multiplicity). Single Jπ→1.0, double options→0.71, triple options→0.58, high ambiguity→0.33
-# 5. Gamma_Decay_Pattern_Similarity (+1): Cosine similarity of Gaussian-broadened spectra. Perfect match→1.0, no overlap→0.0, missing data→0.5 (neutral)
-#
-# Note: Certainty features removed (redundant - tentativeness already encoded in similarity scores via 1.0 vs 0.9 penalty)
-
-# ==========================================
-# 4. Graph Clustering Function (Refactored for Independent Execution)
-# ==========================================
-def perform_clustering_and_output(matching_level_pairs, model_instance, output_filename, model_name):
+def perform_clustering_and_output_obsolete(matching_level_pairs, model_instance, output_filename, model_name):
     """
     Executes greedy graph clustering and writes results to file.
     Refactored to allow independent execution for different models (XGB vs LGBM).
@@ -79,21 +63,20 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
     """
     
     # ==========================================
-    # 4. Graph Clustering with Overlap Support
+    # Logic: Greedy Cluster Merging
     # ==========================================
-    # Algorithm: Greedy cluster merging based on match probability ranking
-    # Key Constraints:
-    #   - Dataset Uniqueness: Each cluster contains at most one level per dataset
-    #   - Mutual Consistency: All cluster members must be pairwise compatible
-    #   - Ambiguity Resolution: Levels with poor resolution (large uncertainty) can belong to multiple clusters when they are compatible with multiple well-resolved levels
-    # This section uses NO ML, only rule-based graph algorithms for logical cluster merging
+# Algorithm: Greedy cluster merging based on match probability ranking
+# Key Constraints:
+#   1. Dataset Uniqueness: Each cluster contains at most one level per dataset (no duplicate sources)
+#   2. Mutual Consistency: All cluster members must be pairwise compatible (all pairs > clustering_merge_threshold)
+#   3. Ambiguity Support: Poorly resolved levels can belong to multiple clusters when compatible with multiple anchors
     
     print(f"\n--- Starting Clustering for {model_name} ---")
 
-    # Step 1 - Initialize singleton clusters and lookup table
-    # Note: dataframe is accessed from global scope
-    level_lookup = {row['level_id']: row for _, row in dataframe.iterrows()}
-    initial_clusters = [{row['dataset_code']: row['level_id']} for _, row in dataframe.iterrows()]
+    # Initialize singleton clusters and lookup table
+    # Note: Using level_dataframe passed as argument
+    level_lookup = {row['level_id']: row for _, row in level_dataframe.iterrows()}
+    initial_clusters = [{row['dataset_code']: row['level_id']} for _, row in level_dataframe.iterrows()]
     
     # Track which clusters each level belongs to (one level can be in multiple clusters)
     id_to_clusters = {}
@@ -103,7 +86,7 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
         member_id = list(cluster.values())[0]
         id_to_clusters[member_id] = [cluster]
 
-    # Step 2 - Extract strong candidate pairs for merging
+    # Extract strong candidate pairs for merging
     # Only level pairs exceeding clustering_merge_threshold qualify for cluster operations
     valid_pairs = set()
     for matching_level_pair in matching_level_pairs:
@@ -111,7 +94,7 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
             valid_pairs.add((matching_level_pair['ID1'], matching_level_pair['ID2']))
             valid_pairs.add((matching_level_pair['ID2'], matching_level_pair['ID1']))
 
-    # Step 3 - Greedy cluster merging
+    # Greedy cluster merging
     # Process candidates in descending probability order, attempting merges or multi-cluster assignment for ambiguous levels
     for matching_level_pair in matching_level_pairs:
         if matching_level_pair['probability'] < clustering_merge_threshold:
@@ -219,7 +202,7 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
                 id_to_clusters[id_1].append(new_cluster)
                 id_to_clusters[id_2].append(new_cluster)
 
-    # Step 4 - Extract unique active clusters (remove duplicates)
+    # Extract unique active clusters (remove duplicates)
     unique_clusters = []
     seen = set()
     for cluster_list in id_to_clusters.values():
@@ -229,7 +212,7 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
                 unique_clusters.append(cluster)
                 seen.add(cluster_id)
     
-    # Step 5 - Sort clusters by average energy for consistent output
+    # Sort clusters by average energy for consistent output
     def calculate_cluster_average_energy(cluster):
         energies = [level_lookup[member_id]['energy_value'] for member_id in cluster.values()]
         return sum(energies) / len(energies)
@@ -299,6 +282,13 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
 
 
 if __name__ == "__main__":
+    # ==========================================
+    # Main Execution Pipeline
+    # ==========================================
+
+    # ==========================================
+    # Step 1: Synthetic Training Data Generation
+    # ==========================================
     # Get training data from physics parser
     training_features, training_labels = generate_synthetic_training_data()
     
@@ -307,6 +297,11 @@ if __name__ == "__main__":
 
     # Train XGBoost regressor with monotonic constraints enforcing physics rules
     # All five features designed as higher value → better match probability
+    # ==========================================
+    # Step 2: Model Training (XGBoost & LightGBM)
+    # ==========================================
+    
+    # 2a: Train XGBoost (Primary Model)
     print("Training XGBoost Model...")
     level_matcher_model_xgb = XGBRegressor(objective='binary:logistic',
                                        # Learning Objective Function: Training Loss + Regularization.
@@ -332,13 +327,13 @@ if __name__ == "__main__":
                                        random_state=42)
                                        # Random number seed for reproducibility.
     
-    # Essential Step 1: Train model on synthetic training data
+    # Train model on synthetic training data
     level_matcher_model_xgb.fit(training_dataframe, training_labels)
 
-    # Initialize LightGBM Regressor (Ensemble component)
+    # 2b: Train LightGBM (Validation Model)
     print("Training LightGBM Model...")
-    # Note: 'objective="binary"' in LightGBM is equivalent to 'binary:logistic' in XGBoost (outputs probability).
-    # We apply strong regularization to prevent overconfidence (100%/0% outputs) on small datasets.
+    # Note: 'objective="binary"' in LightGBM is equivalent to 'binary:logistic' in XGBoost (outputs probability 0-1).
+    # Heavy regularization prevents extreme confidence (100%/0%) and overfitting on small datasets.
     # Configuration Logic:
     # 1. reg_alpha=1.0 (L1), reg_lambda=10.0 (L2): Penalize extreme weights to ensure soft probability outputs (e.g. 99.5% instead of 100%).
     # 2. num_leaves=7, max_depth=5: Constrain model complexity to prevent memorization of synthetic samples.
@@ -360,9 +355,17 @@ if __name__ == "__main__":
     level_matcher_model_lgbm.fit(training_dataframe, training_labels)
 
     # ==========================================
-    # 3. Pairwise Inference
+    # Step 3: Data Loading & Standardization
     # ==========================================
-    # Extract match probabilities for all cross-dataset level pairs using the trained XGBoost model
+    print("Loading Level Data...")
+    levels = load_levels_from_json(['A', 'B', 'C'])
+    dataframe = pd.DataFrame(levels)
+    dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int(row['energy_value'])}", axis=1)
+
+    # ==========================================
+    # Step 4: Pairwise Inference
+    # ==========================================
+    # Predict match probabilities for all cross-dataset level pairs using trained models
     matching_level_pairs_xgb = []
     matching_level_pairs_lgbm = []
     all_pairs_display = []
@@ -379,10 +382,10 @@ if __name__ == "__main__":
             if level_1['dataset_code'] == level_2['dataset_code']:
                 continue
 
-            # Extract the input features for this level pair
+            # Extract the input features for each level pair
             feature_vector = extract_features(level_1, level_2)
             
-            # Essential Step 2: Use the trained Ensemble models to predict match probability for this input feature vector
+            # Prediction: Use the trained Ensemble models to predict match probability for this input feature vector
             # Convert to DataFrame with explicit feature names
             feature_dataframe = pd.DataFrame([feature_vector], columns=feature_names)
             xb_prob = level_matcher_model_xgb.predict(feature_dataframe)[0]
@@ -444,11 +447,9 @@ if __name__ == "__main__":
     print(f"\n[INFO] Pairwise Inference Complete: {len(all_pairs_display)} level pairs (>{threshold_percent:.1f}%) written to 'outputs/pairwise/Output_Level_Pairwise_Inference.txt'")
 
     # ==========================================
-    # 5. Execute Independent Clustering
+    # Step 5: Graph-Based Clustering
     # ==========================================
     
-    # Run clustering for XGBoost (Primary)
-    perform_clustering_and_output(matching_level_pairs_xgb, level_matcher_model_xgb, "outputs/clustering/Output_Clustering_Results_XGB.txt", "XGBoost")
-    
-    # Run clustering for LightGBM (Comparison)
-    perform_clustering_and_output(matching_level_pairs_lgbm, level_matcher_model_lgbm, "outputs/clustering/Output_Clustering_Results_LightGBM.txt", "LightGBM")
+    # Execute clustering independently for each model (XGBoost primary, LightGBM validation)
+    perform_clustering_and_output(matching_level_pairs_xgb, level_matcher_model_xgb, "outputs/clustering/Output_Clustering_Results_XGB.txt", "XGBoost", dataframe)
+    perform_clustering_and_output(matching_level_pairs_lgbm, level_matcher_model_lgbm, "outputs/clustering/Output_Clustering_Results_LightGBM.txt", "LightGBM", dataframe)
