@@ -17,16 +17,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # Tunable layout parameters (matching Combined_Visualizer.py)
-clustering_box_pad = 1.0                # Box padding around text labels
-clustering_min_distance = 500           # Minimum vertical spacing between cluster rows
-clustering_fig_height_multiplier = 1.0  # Height scaling factor
-clustering_fig_width_inches = 10.0      # Overall figure width in inches
+clustering_box_padding = 1.0                # Box padding around text labels
+clustering_minimum_distance = 500           # Minimum vertical spacing between cluster rows
+clustering_figure_height_multiplier = 1.0  # Height scaling factor
+clustering_figure_width_inches = 10.0      # Overall figure width in inches
 clustering_x_spacing = 0.45             # Horizontal distance between dataset columns
-clustering_x_margin = 0.3               # Extra blank space padding on left/right
+clustering_x_axis_margin = 0.3               # Extra blank space padding on left/right
 
-def spread_text_positions(energies, min_distance=500):
+def spread_text_positions(energies, minimum_distance=500):
     """
-    Adjusts text positions to ensure they are at least min_distance apart vertically.
+    Adjusts text positions to ensure they are at least minimum_distance apart vertically.
     Uses iterative relaxation to push apart overlapping labels.
     """
     if not energies:
@@ -40,8 +40,8 @@ def spread_text_positions(energies, min_distance=500):
         moved = False
         for i in range(number_of_positions - 1):
             distance = positions[i + 1] - positions[i]
-            if distance < min_distance:
-                overlap = min_distance - distance
+            if distance < minimum_distance:
+                overlap = minimum_distance - distance
                 positions[i] -= overlap / 2
                 positions[i + 1] += overlap / 2
                 moved = True
@@ -100,29 +100,29 @@ def parse_clustering_results(clustering_file_path):
                 uncertainty_part = line.split('±')[1].split(' keV')[0]
                 uncertainty = float(uncertainty_part)
                 
-                # Extract Jπ value
+                # Extract spin-parity value
                 if 'Jπ=' in line:
-                    jpi_part = line.split('Jπ=')[1]
+                    spin_parity_part = line.split('Jπ=')[1]
                     # Split on '(' to get Jπ before the anchor/probability marker
-                    jpi = jpi_part.split('(')[0].strip().rstrip(',')
+                    spin_parity = spin_parity_part.split('(')[0].strip().rstrip(',')
                 else:
-                    jpi = 'N/A'
+                    spin_parity = 'N/A'
                 
                 # Extract probability or anchor marker
                 is_anchor = '(Anchor)' in line
                 match_probability = None
                 
-                if not is_anchor and 'Match Prob:' in line:
-                    # Extract percentage: "Match Prob: 76.9%)"
-                    prob_str = line.split('Match Prob:')[1].strip().rstrip(')')
-                    match_probability = float(prob_str.rstrip('%')) / 100.0
+                if not is_anchor and 'Match Probability:' in line:
+                    # Extract percentage: "Match Probability: 76.9%)"
+                    probability_string = line.split('Match Probability:')[1].strip().rstrip(')')
+                    match_probability = float(probability_string.rstrip('%')) / 100.0
                 
                 # Store member information
                 current_cluster['members'].append({
                     'dataset': dataset_code,
                     'energy': energy,
                     'uncertainty': uncertainty,
-                    'jpi': jpi,
+                    'spin_parity': spin_parity,
                     'is_anchor': is_anchor,
                     'match_probability': match_probability
                 })
@@ -159,7 +159,7 @@ def plot_single_configuration(axis, clusters, config_name):
     
     # Y-Position Calculation: use anchor energies as base, then spread to prevent overlap
     anchor_energies = [c.get('anchor_energy', 0) for c in clusters]
-    y_positions = spread_text_positions(anchor_energies, min_distance=clustering_min_distance)
+    y_positions = spread_text_positions(anchor_energies, minimum_distance=clustering_minimum_distance)
     
     if len(y_positions) > 0:
         y_max_limit = max(y_positions) + 500
@@ -180,21 +180,21 @@ def plot_single_configuration(axis, clusters, config_name):
             x_pos = x_positions[ds]
             
             # Text Content: Format matching Combined_Visualizer
-            # 'Energy(Unc)', 'Jpi', 'Prob', 'ClusterID'
-            e_str = f"{member['energy']:.0f}({int(member['uncertainty'])})"
-            jpi_str = member['jpi']
+            # 'Energy(Unc)', 'Jpi', 'Probability', 'ClusterID'
+            energy_string = f"{member['energy']:.0f}({int(member['uncertainty'])})"
+            spin_parity_string = member['spin_parity']
             
             if member['is_anchor']:
-                prob_str = "Anchor"
+                probability_string = "Anchor"
             elif member.get('match_probability') is not None:
-                prob_str = f"{member['match_probability']:.1%}"
+                probability_string = f"{member['match_probability']:.1%}"
             else:
-                prob_str = "N/A"
+                probability_string = "N/A"
             
             # Combine into block - 2 lines for wider, shorter box
             text_block = (
-                f"C{cluster_id} | {e_str}\n"
-                f"{jpi_str} | {prob_str}"
+                f"C{cluster_id} | {energy_string}\n"
+                f"{spin_parity_string} | {probability_string}"
             )
             
             axis.text(x_pos, y_pos, text_block,

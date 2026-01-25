@@ -25,7 +25,7 @@ Level Matcher identifies corresponding nuclear energy levels across different te
 - Regularization: Heavy (reg_alpha=1.0, reg_lambda=10.0) + shallow trees
 - Behavior: Constrained feature weighting; heavy regularization amplifies gamma-pattern importance when training data shows strong gamma-energy correlations
 - Purpose: Validation tool - reveals when gamma patterns dominate predictions
-- Example: A_2000↔B_2006 yields XGB 19.4% vs LGBM 99.5% when gamma patterns perfectly align despite 6 keV energy mismatch
+- Example: A_2000↔B_2006 yields XGBoost 19.4% vs LightGBM 99.5% when gamma patterns perfectly align despite 6 keV energy mismatch
 
 ### Feature Engineering (5D Vector)
 

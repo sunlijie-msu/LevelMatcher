@@ -115,7 +115,7 @@ clustering_merge_threshold = 0.15
 def train_and_validate_model(config):
     """
     Train model with given configuration and compute validation metrics.
-    Returns trained model and MSE validation score.
+    Returns trained model and Mean Squared Error validation score.
     """
     print(f"\n{'='*60}")
     print(f"Testing Configuration: {config['name']}")
@@ -134,7 +134,7 @@ def train_and_validate_model(config):
     # Train model with current configuration
     model = XGBRegressor(
         objective='binary:logistic',
-        monotone_constraints='(1, 1, 1, 1, 1)',  # CRITICAL: Never remove physics constraint (5D feature vector)
+        monotone_constraints='(1, 1, 1, 1, 1)',  # Energy, Spin, Parity, Specificity, Gamma
         random_state=42,
         n_estimators=config['n_estimators'],
         max_depth=config['max_depth'],
@@ -148,12 +148,12 @@ def train_and_validate_model(config):
     validation_predictions = model.predict(validation_features)
     
     # Note: training_labels are probabilities (0.0-1.0), not binary classes
-    # MSE is appropriate for regression, skip log_loss for continuous targets
-    mse = mean_squared_error(validation_labels, validation_predictions)
+    # Mean Squared Error is appropriate for regression
+    mean_squared_error_value = mean_squared_error(validation_labels, validation_predictions)
     
-    print(f"  Validation MSE: {mse:.4f}")
+    print(f"  Validation Mean Squared Error: {mean_squared_error_value:.4f}")
     
-    return model, mse
+    return model, mean_squared_error_value
 
 
 def run_inference_and_clustering(model, config_name):
@@ -164,18 +164,21 @@ def run_inference_and_clustering(model, config_name):
     print(f"\n  Running inference and clustering for: {config_name}")
     
     # Load real test datasets
-    levels = parse_json_datasets(['A', 'B', 'C'])
-    dataframe = pd.DataFrame(levels)
-    dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int(row['energy_value'])}", axis=1)
+    all_levels = parse_json_datasets([
+        'data/raw/test_dataset_A.json',
+        'data/raw/test_dataset_B.json',
+        'data/raw/test_dataset_C.json'
+    ])
+    dataframe = pd.DataFrame(all_levels)
     
     # Pairwise inference
     matching_level_pairs = []
-    rows_list = list(dataframe.iterrows())
+    level_list = list(dataframe.iterrows())
     
-    for i in range(len(rows_list)):
-        for j in range(i + 1, len(rows_list)):
-            _, level_1 = rows_list[i]
-            _, level_2 = rows_list[j]
+    for index_1 in range(len(level_list)):
+        for index_2 in range(index_1 + 1, len(level_list)):
+            _, level_1 = level_list[index_1]
+            _, level_2 = level_list[index_2]
             
             if level_1['dataset_code'] == level_2['dataset_code']:
                 continue
@@ -185,10 +188,10 @@ def run_inference_and_clustering(model, config_name):
             
             if match_probability > pairwise_output_threshold:
                 matching_level_pairs.append({
-                    'ID1': level_1['level_id'],
-                    'ID2': level_2['level_id'],
-                    'dataset_1': level_1['dataset_code'],
-                    'dataset_2': level_2['dataset_code'],
+                    'level_id_1': level_1['level_id'],
+                    'level_id_2': level_2['level_id'],
+                    'dataset_code_1': level_1['dataset_code'],
+                    'dataset_code_2': level_2['dataset_code'],
                     'probability': match_probability,
                     'features': feature_vector
                 })
@@ -199,25 +202,25 @@ def run_inference_and_clustering(model, config_name):
     level_lookup = {row['level_id']: row for _, row in dataframe.iterrows()}
     initial_clusters = [{row['dataset_code']: row['level_id']} for _, row in dataframe.iterrows()]
     
-    id_to_clusters = {}
+    level_id_to_clusters = {}
     for cluster in initial_clusters:
         member_id = list(cluster.values())[0]
-        id_to_clusters[member_id] = [cluster]
+        level_id_to_clusters[member_id] = [cluster]
     
     valid_pairs = set()
     for matching_level_pair in matching_level_pairs:
         if matching_level_pair['probability'] >= clustering_merge_threshold:
-            valid_pairs.add((matching_level_pair['ID1'], matching_level_pair['ID2']))
-            valid_pairs.add((matching_level_pair['ID2'], matching_level_pair['ID1']))
+            valid_pairs.add((matching_level_pair['level_id_1'], matching_level_pair['level_id_2']))
+            valid_pairs.add((matching_level_pair['level_id_2'], matching_level_pair['level_id_1']))
     
-    # Greedy merging (same logic as Level_Matcher.py)
+    # Greedy merging (same logic as Level_Clusterer.py)
     for matching_level_pair in matching_level_pairs:
         if matching_level_pair['probability'] < clustering_merge_threshold:
             break
         
-        id_1, id_2 = matching_level_pair['ID1'], matching_level_pair['ID2']
-        cluster_list_1 = list(id_to_clusters[id_1])
-        cluster_list_2 = list(id_to_clusters[id_2])
+        level_id_1, level_id_2 = matching_level_pair['level_id_1'], matching_level_pair['level_id_2']
+        cluster_list_1 = list(level_id_to_clusters[level_id_1])
+        cluster_list_2 = list(level_id_to_clusters[level_id_2])
         pair_processed = False
         
         for cluster_1 in cluster_list_1:
@@ -230,20 +233,20 @@ def run_inference_and_clustering(model, config_name):
                 datasets_2 = set(cluster_2.keys())
                 
                 if not datasets_1.isdisjoint(datasets_2):
-                    if matching_level_pair['dataset_1'] not in datasets_2:
-                        if all((id_1, member_id) in valid_pairs for member_id in cluster_2.values()):
-                            if id_1 not in cluster_2.values():
-                                cluster_2[matching_level_pair['dataset_1']] = id_1
-                                if cluster_2 not in id_to_clusters[id_1]:
-                                    id_to_clusters[id_1].append(cluster_2)
+                    if matching_level_pair['dataset_code_1'] not in datasets_2:
+                        if all((level_id_1, member_id) in valid_pairs for member_id in cluster_2.values()):
+                            if level_id_1 not in cluster_2.values():
+                                cluster_2[matching_level_pair['dataset_code_1']] = level_id_1
+                                if cluster_2 not in level_id_to_clusters[level_id_1]:
+                                    level_id_to_clusters[level_id_1].append(cluster_2)
                                 pair_processed = True
                     
-                    if matching_level_pair['dataset_2'] not in datasets_1:
-                        if all((id_2, member_id) in valid_pairs for member_id in cluster_1.values()):
-                            if id_2 not in cluster_1.values():
-                                cluster_1[matching_level_pair['dataset_2']] = id_2
-                                if cluster_1 not in id_to_clusters[id_2]:
-                                    id_to_clusters[id_2].append(cluster_1)
+                    if matching_level_pair['dataset_code_2'] not in datasets_1:
+                        if all((level_id_2, member_id) in valid_pairs for member_id in cluster_1.values()):
+                            if level_id_2 not in cluster_1.values():
+                                cluster_1[matching_level_pair['dataset_code_2']] = level_id_2
+                                if cluster_1 not in level_id_to_clusters[level_id_2]:
+                                    level_id_to_clusters[level_id_2].append(cluster_1)
                                 pair_processed = True
                     continue
                 
@@ -259,42 +262,42 @@ def run_inference_and_clustering(model, config_name):
                 if consistent:
                     cluster_1.update(cluster_2)
                     for member_id in cluster_2.values():
-                        if cluster_2 in id_to_clusters[member_id]:
-                            id_to_clusters[member_id].remove(cluster_2)
-                        if cluster_1 not in id_to_clusters[member_id]:
-                            id_to_clusters[member_id].append(cluster_1)
+                        if cluster_2 in level_id_to_clusters[member_id]:
+                            level_id_to_clusters[member_id].remove(cluster_2)
+                        if cluster_1 not in level_id_to_clusters[member_id]:
+                            level_id_to_clusters[member_id].append(cluster_1)
                     pair_processed = True
         
         if not pair_processed:
-            for cluster in id_to_clusters[id_1]:
-                if len(cluster) == 1 and matching_level_pair['dataset_2'] not in cluster:
-                    cluster[matching_level_pair['dataset_2']] = id_2
-                    if cluster not in id_to_clusters[id_2]:
-                        id_to_clusters[id_2].append(cluster)
+            for cluster in level_id_to_clusters[level_id_1]:
+                if len(cluster) == 1 and matching_level_pair['dataset_code_2'] not in cluster:
+                    cluster[matching_level_pair['dataset_code_2']] = level_id_2
+                    if cluster not in level_id_to_clusters[level_id_2]:
+                        level_id_to_clusters[level_id_2].append(cluster)
                     pair_processed = True
                     break
             
             if not pair_processed:
-                for cluster in id_to_clusters[id_2]:
-                    if len(cluster) == 1 and matching_level_pair['dataset_1'] not in cluster:
-                        cluster[matching_level_pair['dataset_1']] = id_1
-                        if cluster not in id_to_clusters[id_1]:
-                            id_to_clusters[id_1].append(cluster)
+                for cluster in level_id_to_clusters[level_id_2]:
+                    if len(cluster) == 1 and matching_level_pair['dataset_code_1'] not in cluster:
+                        cluster[matching_level_pair['dataset_code_1']] = level_id_1
+                        if cluster not in level_id_to_clusters[level_id_1]:
+                            level_id_to_clusters[level_id_1].append(cluster)
                         pair_processed = True
                         break
             
             if not pair_processed:
                 new_cluster = {
-                    matching_level_pair['dataset_1']: id_1,
-                    matching_level_pair['dataset_2']: id_2
+                    matching_level_pair['dataset_code_1']: level_id_1,
+                    matching_level_pair['dataset_code_2']: level_id_2
                 }
-                id_to_clusters[id_1].append(new_cluster)
-                id_to_clusters[id_2].append(new_cluster)
+                level_id_to_clusters[level_id_1].append(new_cluster)
+                level_id_to_clusters[level_id_2].append(new_cluster)
     
     # Extract unique clusters
     unique_clusters = []
     seen = set()
-    for cluster_list in id_to_clusters.values():
+    for cluster_list in level_id_to_clusters.values():
         for cluster in cluster_list:
             cluster_id = id(cluster)
             if cluster_id not in seen:
@@ -357,11 +360,11 @@ def save_clustering_results(config_name, clustering_results, model):
                 anchor_data = clustering_results['level_lookup'][anchor_id]
                 anchor_energy = anchor_data['energy_value']
                 anchor_uncertainty = anchor_data.get('energy_uncertainty', 0)
-                anchor_jpi = anchor_data.get('spin_parity_string', 'N/A')
-                if anchor_jpi == "unknown": anchor_jpi = "N/A"
+                anchor_spin_parity = anchor_data.get('spin_parity_string', 'N/A')
+                if anchor_spin_parity == "unknown": anchor_spin_parity = "N/A"
                 
                 output_file.write(f"\nCluster {i+1}:\n")
-                output_file.write(f"  Anchor: {anchor_id} | E={anchor_energy:.1f}±{anchor_uncertainty:.1f} keV | Jπ={anchor_jpi}\n")
+                output_file.write(f"  Anchor: {anchor_id} | E={anchor_energy:.1f}±{anchor_uncertainty:.1f} keV | Jπ={anchor_spin_parity}\n")
                 output_file.write(f"  Members:\n")
                 
                 for dataset_code in sorted(cluster.keys()):
@@ -369,16 +372,16 @@ def save_clustering_results(config_name, clustering_results, model):
                     member_data = clustering_results['level_lookup'][member_id]
                     energy = member_data['energy_value']
                     uncertainty = member_data.get('energy_uncertainty', 0)
-                    jpi = member_data.get('spin_parity_string', 'N/A')
-                    if jpi == "unknown": jpi = "N/A"
+                    spin_parity = member_data.get('spin_parity_string', 'N/A')
+                    if spin_parity == "unknown": spin_parity = "N/A"
                     
                     if member_id == anchor_id:
-                        output_file.write(f"    [{dataset_code}] {member_id}: E={energy:.1f}±{uncertainty:.1f} keV, Jπ={jpi} (Anchor)\n")
+                        output_file.write(f"    [{dataset_code}] {member_id}: E={energy:.1f}±{uncertainty:.1f} keV, Jπ={spin_parity} (Anchor)\n")
                     else:
                         # Calculate match probability relative to anchor
                         input_vector = extract_features(member_data, anchor_data)
                         probability = model.predict([input_vector])[0]
-                        output_file.write(f"    [{dataset_code}] {member_id}: E={energy:.1f}±{uncertainty:.1f} keV, Jπ={jpi} (Match Prob: {probability:.1%})\n")
+                        output_file.write(f"    [{dataset_code}] {member_id}: E={energy:.1f}±{uncertainty:.1f} keV, Jπ={spin_parity} (Match Probability: {probability:.1%})\n")
     
     print(f"    Saved detailed results to: {filename}")
 
@@ -394,13 +397,13 @@ def save_pairwise_results(config_name, matching_level_pairs):
         output_file.write(f"=== PAIRWISE INFERENCE RESULTS: {config_name} ===\n")
         output_file.write(f"Total Level Pairs: {len(matching_level_pairs)}\n\n")
         
-        for matching_level_pair in matching_level_pairs:
-            energy_sim, spin_sim, parity_sim, specificity, gamma_sim = matching_level_pair['features']
+        for matching_pair in matching_level_pairs:
+            energy_similarity, spin_similarity, parity_similarity, specificity, gamma_similarity = matching_pair['features']
             output_file.write(
-                f"{matching_level_pair['ID1']} <-> {matching_level_pair['ID2']} | "
-                f"Probability: {matching_level_pair['probability']:.1%}\n"
-                f"  Features: Energy_Sim={energy_sim:.2f}, Spin_Sim={spin_sim:.2f}, "
-                f"Parity_Sim={parity_sim:.2f}, Specificity={specificity:.2f}, Gamma_Sim={gamma_sim:.2f}\n\n"
+                f"{matching_pair['level_id_1']} <-> {matching_pair['level_id_2']} | "
+                f"Probability: {matching_pair['probability']:.1%}\n"
+                f"  Features: Energy_Similarity={energy_similarity:.2f}, Spin_Similarity={spin_similarity:.2f}, "
+                f"Parity_Similarity={parity_similarity:.2f}, Specificity={specificity:.2f}, Gamma_Similarity={gamma_similarity:.2f}\n\n"
             )
     
     print(f"    Saved pairwise results to: {filename}")
@@ -414,7 +417,7 @@ if __name__ == "__main__":
     print("HYPERPARAMETER TUNING FOR NUCLEAR LEVEL MATCHER")
     print("="*60)
     print("\nStrategy:")
-    print("  1. Validate on synthetic data split (MSE regression metric)")
+    print("  1. Validate on synthetic data split (Mean Squared Error regression metric)")
     print("  2. Run full inference + clustering on real datasets A, B, C")
     print("  3. Compare clustering results with your expert knowledge")
     print("  4. Select best configuration based on metrics + expert validation")
@@ -423,7 +426,7 @@ if __name__ == "__main__":
     
     for config in parameter_configurations:
         # Train and validate on synthetic data
-        model, mse = train_and_validate_model(config)
+        model, mean_squared_error_value = train_and_validate_model(config)
         
         # Run inference and clustering on real datasets
         clustering_results = run_inference_and_clustering(model, config['name'])
@@ -437,7 +440,7 @@ if __name__ == "__main__":
         # Store summary results with expanded metrics
         results_summary.append({
             'name': config['name'],
-            'mse': mse,
+            'mean_squared_error': mean_squared_error_value,
             'total_clusters': clustering_results['total_clusters'],
             'multi_member_clusters': clustering_results['multi_member_clusters'],
             'average_cluster_size': clustering_results['average_cluster_size'],
@@ -448,6 +451,7 @@ if __name__ == "__main__":
             'medium_prob_count': clustering_results['medium_prob_count'],
             'low_prob_count': clustering_results['low_prob_count']
         })
+
     
     # Print expanded comparison table
     print("\n" + "="*100)

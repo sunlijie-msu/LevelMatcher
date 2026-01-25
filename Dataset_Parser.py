@@ -91,35 +91,35 @@ def infer_uncertainty_from_precision(value_str):
         # Integer: precision to nearest 10
         return 5.0
 
-def parse_jpi(jpi_str):
+def parse_spin_parity(spin_parity_string):
     """
-    Parses Jπ string into structured format.
+    Parses Spin-Parity string into structured format.
     Handles ranges "1:3", tentative "(1)-", and lists "1+,2+".
     """
-    if not jpi_str or jpi_str.lower() in ['unknown', 'none']: 
+    if not spin_parity_string or spin_parity_string.lower() in ['unknown', 'none']: 
         return []
 
-    clean_str = jpi_str.strip().rstrip('.')
+    clean_string = spin_parity_string.strip().rstrip('.')
 
     # 1. Range support (e.g. 1:3)
-    if ':' in clean_str and all(c.isdigit() or c.isspace() or c == ':' for c in clean_str):
+    if ':' in clean_string and all(c.isdigit() or c.isspace() or c == ':' for c in clean_string):
         try:
-            start_s, end_s = map(int, clean_str.split(':'))
+            start_spin, end_spin = map(int, clean_string.split(':'))
             return [{
-                "twoTimesSpin": s * 2,
-                "isTentativeSpin": False,
+                "two_times_spin": s * 2,
+                "is_tentative_spin": False,
                 "parity": None,
-                "isTentativeParity": False
-            } for s in range(start_s, end_s + 1)]
+                "is_tentative_parity": False
+            } for s in range(start_spin, end_spin + 1)]
         except ValueError: pass
 
     # 2. List parsing
     # Handle global parentheses like (1,2)+
-    is_global_tentative = clean_str.startswith('(') and clean_str.endswith(')') and ',' in clean_str
+    is_global_tentative = clean_string.startswith('(') and clean_string.endswith(')') and ',' in clean_string
     if is_global_tentative: 
-        clean_str = clean_str[1:-1]
+        clean_string = clean_string[1:-1]
 
-    parts = [p.strip() for p in clean_str.split(',')]
+    parts = [p.strip() for p in clean_string.split(',')]
     results = []
 
     for part in parts:
@@ -127,7 +127,7 @@ def parse_jpi(jpi_str):
         
         # Heuristic parsing for "3/2+" or "(5/2-)" or "1(+)"
         # Extract parity
-        parity = '+' if '+' in part else '-' if '-' in part else None
+        parity_value = '+' if '+' in part else '-' if '-' in part else None
         
         # Check tentativeness (local parens)
         is_local_tentative = '(' in part or ')' in part
@@ -138,13 +138,13 @@ def parse_jpi(jpi_str):
         
         try:
             spin_value = float(eval(spin_raw))
-            two_spin = int(round(spin_value * 2))
+            two_times_spin_value = int(round(spin_value * 2))
             
             results.append({
-                "twoTimesSpin": two_spin,
-                "isTentativeSpin": is_tentative,
-                "parity": parity,
-                "isTentativeParity": is_tentative if parity else False
+                "two_times_spin": two_times_spin_value,
+                "is_tentative_spin": is_tentative,
+                "parity": parity_value,
+                "is_tentative_parity": is_tentative if parity_value else False
             })
         except: continue
         
@@ -186,71 +186,71 @@ def parse_ensdf_line(line):
     if record_type not in ['L', 'G']:
         return None, None
         
-    energy_str = line[9:19].strip()
-    unc_str = line[19:21].strip()
+    energy_string = line[9:19].strip()
+    uncertainty_string = line[19:21].strip()
     
-    if not energy_str:
+    if not energy_string:
         return None, None
         
-    energy_val = float(energy_str)
+    energy_value = float(energy_string)
     
     # Calculate uncertainty: explicit if provided, otherwise infer from precision
-    if unc_str:
-        unc_val = calculate_absolute_uncertainty(energy_str, unc_str)
-    elif energy_val == 0.0:
+    if uncertainty_string:
+        uncertainty_value = calculate_absolute_uncertainty(energy_string, uncertainty_string)
+    elif energy_value == 0.0:
         # Ground state (0.0 keV) is the absolute reference => 0 uncertainty
-        unc_val = 0.0
+        uncertainty_value = 0.0
     else:
-        unc_val = infer_uncertainty_from_precision(energy_str)
+        uncertainty_value = infer_uncertainty_from_precision(energy_string)
     
     if record_type == 'L':
-        jpi_raw = line[22:39].strip()
+        spin_parity_raw = line[22:39].strip()
         data = {
             "energy": {
                 "unit": "keV",
-                "value": energy_val,
+                "value": energy_value,
                 "uncertainty": { 
-                    "value": unc_val, 
-                    "type": "symmetric" if unc_str else "inferred"
+                    "value": uncertainty_value, 
+                    "type": "symmetric" if uncertainty_string else "inferred"
                 }
             },
-            "isStable": False,
+            "is_stable": False,
             "gamma_decays": []
         }
-        if energy_str:
-            data["energy"]["evaluatorInput"] = format_evaluator_input(energy_str, unc_str)
+        if energy_string:
+            data["energy"]["evaluator_input"] = format_evaluator_input(energy_string, uncertainty_string)
             
-        jpi_values = parse_jpi(jpi_raw)
-        if jpi_values or jpi_raw:
-            data["spinParity"] = {}
-            if jpi_values:
-                data["spinParity"]["values"] = jpi_values
-            if jpi_raw:
-                data["spinParity"]["evaluatorInput"] = jpi_raw
+        spin_parity_values = parse_spin_parity(spin_parity_raw)
+        if spin_parity_values or spin_parity_raw:
+            data["spin_parity"] = {}
+            if spin_parity_values:
+                data["spin_parity"]["values"] = spin_parity_values
+            if spin_parity_raw:
+                data["spin_parity"]["evaluator_input"] = spin_parity_raw
                 
         return "L", data
     
     elif record_type == 'G':
-        ri_str = line[22:29].strip()
-        dri_str = line[29:31].strip()
+        relative_intensity_string = line[22:29].strip()
+        delta_relative_intensity_string = line[29:31].strip()
         
-        ri_val = float(ri_str) if ri_str else 0.0
+        relative_intensity_value = float(relative_intensity_string) if relative_intensity_string else 0.0
         
         # Infer intensity uncertainty if not explicitly provided
-        if dri_str:
-            dri_val = calculate_absolute_uncertainty(ri_str, dri_str)
-        elif ri_val > 0:
-            dri_val = infer_uncertainty_from_precision(ri_str)
+        if delta_relative_intensity_string:
+            intensity_uncertainty_value = calculate_absolute_uncertainty(relative_intensity_string, delta_relative_intensity_string)
+        elif relative_intensity_value > 0:
+            intensity_uncertainty_value = infer_uncertainty_from_precision(relative_intensity_string)
         else:
-            dri_val = 0.0
+            intensity_uncertainty_value = 0.0
         
         data = {
-            "energy_val": energy_val,
-            "energy_unc": unc_val,
-            "energy_input": format_evaluator_input(energy_str, unc_str) if energy_str else None,
-            "intensity": ri_val,
-            "intensity_unc": dri_val,
-            "intensity_input": format_evaluator_input(ri_str, dri_str) if ri_str else None
+            "energy_value": energy_value,
+            "energy_uncertainty": uncertainty_value,
+            "energy_input_string": format_evaluator_input(energy_string, uncertainty_string) if energy_string else None,
+            "relative_intensity_value": relative_intensity_value,
+            "intensity_uncertainty_value": intensity_uncertainty_value,
+            "intensity_input_string": format_evaluator_input(relative_intensity_string, delta_relative_intensity_string) if relative_intensity_string else None
         }
         return "G", data
 
@@ -265,8 +265,8 @@ def convert_log_to_datasets(log_path):
         lines = f.readlines()
 
     datasets = {}
-    current_ds = None
-    last_level = None
+    current_dataset_id = None
+    last_level_data = None
     
     for line in lines:
         raw_line = line # Keep for slicing
@@ -276,84 +276,83 @@ def convert_log_to_datasets(log_path):
         if line.startswith("# Dataset"):
             parts = line.split("Dataset")
             if len(parts) > 1:
-                current_ds = parts[1].split(":")[0].strip()
-                datasets[current_ds] = []
-                last_level = None
-                print(f"Processing Dataset {current_ds}...")
+                current_dataset_id = parts[1].split(":")[0].strip()
+                datasets[current_dataset_id] = []
+                last_level_data = None
+                print(f"Processing Dataset {current_dataset_id}...")
             continue
             
-        rec_type, rec_data = parse_ensdf_line(raw_line)
+        record_type, record_data = parse_ensdf_line(raw_line)
         
-        if rec_type == "L" and current_ds is not None:
-            datasets[current_ds].append(rec_data)
-            last_level = rec_data
-        elif rec_type == "G" and last_level is not None:
-            last_level["gamma_decays"].append(rec_data)
+        if record_type == "L" and current_dataset_id is not None:
+            datasets[current_dataset_id].append(record_data)
+            last_level_data = record_data
+        elif record_type == "G" and last_level_data is not None:
+            last_level_data["gamma_decays"].append(record_data)
 
-    # Output JSONs
-    for code, levels in datasets.items():
-        gammas_table = []
+    # Output JSON Files
+    for dataset_code, level_list in datasets.items():
+        gammas_table_list = []
         gamma_counter = 0
         
-        for lvl_idx, level in enumerate(levels):
-            if "gamma_decays" in level:
-                has_gammas = len(level["gamma_decays"]) > 0
-                level_gammas = []
-                initial_E = level["energy"]["value"]
+        for level_index, level_item in enumerate(level_list):
+            if "gamma_decays" in level_item:
+                level_gamma_indices = []
+                initial_level_energy = level_item["energy"]["value"]
                 
-                for g_data in level["gamma_decays"]:
-                    g_E = g_data["energy_val"]
-                    final_E_target = initial_E - g_E
+                for gamma_data in level_item["gamma_decays"]:
+                    gamma_energy_value = gamma_data["energy_value"]
+                    final_energy_target = initial_level_energy - gamma_energy_value
                     
                     # Match Final Level
-                    best_match = 0
-                    min_diff = 1e9
-                    for c_idx, cand in enumerate(levels):
-                        diff = abs(cand["energy"]["value"] - final_E_target)
-                        if diff < min_diff:
-                            min_diff = diff
-                            best_match = c_idx
+                    best_match_index = 0
+                    minimum_difference = 1e9
+                    for candidate_index, candidate_level in enumerate(level_list):
+                        difference = abs(candidate_level["energy"]["value"] - final_energy_target)
+                        if difference < minimum_difference:
+                            minimum_difference = difference
+                            best_match_index = candidate_index
                             
-                    final_idx = best_match if min_diff <= 50.0 else 0
+                    final_level_index = best_match_index if minimum_difference <= 50.0 else 0
                     
                     # Structuring Gamma Entry
-                    g_entry = {
+                    gamma_entry = {
                         "energy": {
                             "unit": "keV",
-                            "value": g_E,
-                            "uncertainty": { "value": g_data["energy_unc"], "type": "symmetric" } if g_data["energy_unc"] > 0 else {"type": "unreported"}
+                            "value": gamma_energy_value,
+                            "uncertainty": { "value": gamma_data["energy_uncertainty"], "type": "symmetric" } if gamma_data["energy_uncertainty"] > 0 else {"type": "unreported"}
                         },
-                        "gammaIntensity": {
-                            "value": g_data["intensity"],
-                            "uncertainty": { "value": g_data["intensity_unc"], "type": "symmetric" } if g_data["intensity_unc"] > 0 else {"type": "unreported"}
+                        "gamma_intensity": {
+                            "value": gamma_data["relative_intensity_value"],
+                            "uncertainty": { "value": gamma_data["intensity_uncertainty_value"], "type": "symmetric" } if gamma_data["intensity_uncertainty_value"] > 0 else {"type": "unreported"}
                         },
-                        "initialLevel": lvl_idx,
-                        "finalLevel": final_idx
+                        "initial_level_index": level_index,
+                        "final_level_index": final_level_index
                     }
-                    if g_data.get("energy_input"):
-                        g_entry["energy"]["evaluatorInput"] = g_data["energy_input"]
-                    if g_data.get("intensity_input"):
-                        g_entry["gammaIntensity"]["evaluatorInput"] = g_data["intensity_input"]
+                    if gamma_data.get("energy_input_string"):
+                        gamma_entry["energy"]["evaluator_input"] = gamma_data["energy_input_string"]
+                    if gamma_data.get("intensity_input_string"):
+                        gamma_entry["gamma_intensity"]["evaluator_input"] = gamma_data["intensity_input_string"]
                         
-                    gammas_table.append(g_entry)
-                    level_gammas.append(gamma_counter)
+                    gammas_table_list.append(gamma_entry)
+                    level_gamma_indices.append(gamma_counter)
                     gamma_counter += 1
                 
-                if level_gammas:
-                    level["gammas"] = level_gammas
-                del level["gamma_decays"]
+                if level_gamma_indices:
+                    level_item["gammas"] = level_gamma_indices
+                del level_item["gamma_decays"]
         
-        output = { "levelsTable": { "levels": levels } }
-        if gammas_table:
-            output["gammasTable"] = { "gammas": gammas_table }
+        output_data_structure = { "levels_table": { "levels": level_list } }
+        if gammas_table_list:
+            output_data_structure["gammas_table"] = { "gammas": gammas_table_list }
             
         # Robustly determine output directory
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        output_path = os.path.join(base_dir, 'data', 'raw', f"test_dataset_{code}.json")
+        output_path = os.path.join(base_dir, 'data', 'raw', f"test_dataset_{dataset_code}.json")
             
         with open(output_path, 'w', encoding='utf-8') as f:
-            json.dump(output, f, indent=4)
-        print(f"Dataset {code} saved to {output_path}")
+            json.dump(output_data_structure, f, indent=4)
+        print(f"Dataset {dataset_code} saved to {output_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

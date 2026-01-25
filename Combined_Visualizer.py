@@ -43,12 +43,12 @@ import os
 import re
 
 # Tunable clustering layout knobs for quick manual adjustments
-clustering_box_pad = 1.0                # Box padding; increase for wider/taller boxes
-clustering_min_distance = 500           # Minimum vertical spacing between rows
-clustering_fig_height_multiplier = 1.0  # Height scaling; raise to add vertical breathing room
-clustering_fig_width_inches = 10.0      # Overall figure width in inches; shrink to reduce horizontal scale
+clustering_box_padding = 1.0                # Box padding; increase for wider/taller boxes
+clustering_minimum_distance = 500           # Minimum vertical spacing between rows
+clustering_figure_height_multiplier = 1.0  # Height scaling; raise to add vertical breathing room
+clustering_figure_width_inches = 10.0      # Overall figure width in inches; shrink to reduce horizontal scale
 clustering_x_spacing = 0.45             # Horizontal distance between dataset columns (reduce for tighter columns)
-clustering_x_margin = 0.3               # Extra blank space padding on left/right of the outer columns
+clustering_x_axis_margin = 0.3               # Extra blank space padding on left/right of the outer columns
 
 # ============================================================================
 # Font Configuration
@@ -72,9 +72,9 @@ Font_Config = {
 # SHARED UTILITY FUNCTIONS
 # ============================================================================
 
-def spread_text_positions(energies, min_distance=250):
+def spread_text_positions(energies, minimum_distance=250):
     """
-    Adjusts text positions to ensure they are at least min_distance apart vertically.
+    Adjusts text positions to ensure they are at least minimum_distance apart vertically.
     Collision resolution algorithm using iterative relaxation.
     """
     if not energies:
@@ -88,10 +88,10 @@ def spread_text_positions(energies, min_distance=250):
         changed = False
         for index in range(number_of_positions - 1):
             distance = positions[index + 1] - positions[index]
-            if distance < min_distance:
+            if distance < minimum_distance:
                 # Overlap detected: push levels apart
                 center = (positions[index + 1] + positions[index]) / 2.0
-                overlap = min_distance - distance
+                overlap = minimum_distance - distance
                 positions[index] -= overlap / 2.0
                 positions[index + 1] += overlap / 2.0
                 changed = True
@@ -150,20 +150,20 @@ def plot_level_schemes():
             
             # Spin/Parity
             spin_parity_string = ""
-            if isinstance(level.get('spinParity'), dict):
-                spin_parity_string = level.get('spinParity', {}).get('evaluatorInput', '')
+            if isinstance(level.get('spin_parity'), dict):
+                spin_parity_string = level.get('spin_parity', {}).get('evaluator_input', '')
             
             # Format level label for the reader (e.g. 600(1))
-            # The JSON property 'evaluatorInput' uses NNDC space-separated format (e.g. 600 1)
+            # The JSON property 'evaluator_input' uses NNDC space-separated format (e.g. 600 1)
             label_left = ""
             if isinstance(level.get('energy'), dict):
-                eval_input = level['energy'].get('evaluatorInput', '')
-                if ' ' in eval_input:
+                evaluator_input = level['energy'].get('evaluator_input', '')
+                if ' ' in evaluator_input:
                     # Convert NNDC "Value Uncertainty" to scientific "Value(Uncertainty)" for the plot
-                    value_part, uncertainty_part = eval_input.split(' ', 1)
+                    value_part, uncertainty_part = evaluator_input.split(' ', 1)
                     label_left = f"{value_part}({uncertainty_part})"
                 else:
-                    label_left = eval_input
+                    label_left = evaluator_input
             else:
                 uncertainty_string = f"({int(uncertainty)})" if uncertainty is not None else ""
                 label_left = f"{int(energy_value)}{uncertainty_string}"
@@ -237,9 +237,9 @@ def plot_level_schemes():
             # Collect all gammas with their positions for global arrow placement
             all_gamma_data = []
             
-            for gamma_idx, gamma in enumerate(gammas_table):
-                initial_level_index = gamma.get('initialLevel')
-                final_level_index = gamma.get('finalLevel')
+            for gamma_index, gamma in enumerate(gammas_table):
+                initial_level_index = gamma.get('initial_level_index')
+                final_level_index = gamma.get('final_level_index')
                 
                 # Validate indices
                 if initial_level_index is None or final_level_index is None:
@@ -255,10 +255,10 @@ def plot_level_schemes():
                 
                 # Get gamma properties
                 gamma_energy = gamma.get('energy', {}).get('value', 0)
-                gamma_intensity = gamma.get('gammaIntensity', {}).get('value', 100)
+                gamma_intensity = gamma.get('gamma_intensity', {}).get('value', 100)
                 
                 all_gamma_data.append({
-                    'gamma_idx': gamma_idx,
+                    'gamma_index': gamma_index,
                     'initial_level_index': initial_level_index,
                     'final_level_index': final_level_index,
                     'initial_energy': initial_energy,
@@ -359,7 +359,7 @@ def parse_clustering_results(clustering_file_path):
                 current_cluster['anchor_id'] = anchor_match.group(1)
                 current_cluster['anchor_energy'] = float(anchor_match.group(2))
                 current_cluster['anchor_uncertainty'] = float(anchor_match.group(3))
-                current_cluster['anchor_jpi'] = anchor_match.group(4)
+                current_cluster['anchor_spin_parity'] = anchor_match.group(4)
                 continue
             
             # Match member line
@@ -369,13 +369,13 @@ def parse_clustering_results(clustering_file_path):
                 level_id = member_match.group(2)
                 energy = float(member_match.group(3))
                 uncertainty = float(member_match.group(4))
-                spin_parity = member_match.group(5).strip()
+                spin_parity_string = member_match.group(5).strip()
                 status_info = member_match.group(6).strip()
                 
                 is_anchor = status_info == "Anchor"
                 match_probability = None
                 if not is_anchor:
-                    probability_match = re.search(r'Match Prob:\s+([\d.]+)%', status_info)
+                    probability_match = re.search(r'Match Probability:\s+([\d.]+)%', status_info)
                     if probability_match:
                         match_probability = float(probability_match.group(1)) / 100.0
                 
@@ -384,7 +384,7 @@ def parse_clustering_results(clustering_file_path):
                     'level_id': level_id,
                     'energy': energy,
                     'uncertainty': uncertainty,
-                    'spin_parity': spin_parity,
+                    'spin_parity': spin_parity_string,
                     'is_anchor': is_anchor,
                     'match_probability': match_probability
                 })
@@ -524,8 +524,8 @@ if __name__ == "__main__":
     
     # Generate Clustering Results (XGBoost) - Baseline
     plot_clustering_results(
-        input_path='outputs/clustering/Output_Clustering_Results_XGB.txt', 
-        output_path='outputs/figures/Output_Cluster_Scheme_XGB.png', 
+        input_path='outputs/clustering/Output_Clustering_Results_XGBoost.txt', 
+        output_path='outputs/figures/Output_Cluster_Scheme_XGBoost.png', 
         title_suffix='(XGBoost / Energy-Dominant)'
     )
     

@@ -19,7 +19,7 @@ Workflow Diagram:
    v                                  v
 [Step 2: Model Training] <---- [Synthetic Labels]
    |
-   | (Models Ready: XGB & LGBM)
+   | (Models Ready: XGBoost & LightGBM)
    v
 [Step 3: Test Data Ingestion] --> [Data Standardization (A, B, C)]
    |
@@ -103,7 +103,7 @@ if __name__ == "__main__":
     
     # 2a: Train XGBoost (Primary Model)
     print("Training XGBoost Model...")
-    level_matcher_model_xgb = XGBRegressor(objective='binary:logistic',
+    model_xgboost = XGBRegressor(objective='binary:logistic',
                                        # Learning Objective Function: Training Loss + Regularization.
                                        # The loss function computes the difference between the true y value and the predicted y value.
                                        # The regularization term discourages overly complex trees.
@@ -128,18 +128,18 @@ if __name__ == "__main__":
                                        # Random number seed for reproducibility.
     
     # Train model on synthetic training data
-    level_matcher_model_xgb.fit(training_dataframe, training_labels)
+    model_xgboost.fit(training_dataframe, training_labels)
 
     # 2b: Train LightGBM (Secondary Model)
     print("Training LightGBM Model...")
     # Note: 'objective="binary"' in LightGBM is equivalent to 'binary:logistic' in XGBoost (outputs probability 0-1).
     # Heavy regularization prevents extreme confidence (100%/0%) and overfitting on small datasets.
     # Configuration Logic:
-    # 1. reg_alpha=1.0 (L1), reg_lambda=10.0 (L2): Penalize extreme weights to ensure soft probability outputs (e.g. 99.5% instead of 100%).
+    # 1. reg_alpha=1.0 (L1 regularization), reg_lambda=10.0 (L2 regularization): Penalize extreme weights to ensure soft probability outputs (e.g. 99.5% instead of 100%).
     # 2. num_leaves=7, max_depth=5: Constrain model complexity to prevent memorization of synthetic samples.
     # 3. min_child_samples=20: Force generalization by requiring more data per leaf.
-    # Observation: This configuration causes LGBM to weight perfect Gamma Patterns higher than XGBoost (e.g., A_2000<->B_2006 case).
-    level_matcher_model_lgbm = LGBMRegressor(objective='binary',
+    # Observation: This configuration causes LightGBM to weight perfect Gamma Patterns higher than XGBoost (e.g., A_2000<->B_2006 case).
+    model_lightgbm = LGBMRegressor(objective='binary',
                                              monotone_constraints="1,1,1,1,1",  # Increasing constraints
                                              n_estimators=500,
                                              max_depth=5,
@@ -152,7 +152,7 @@ if __name__ == "__main__":
                                              random_state=42)
     
     # Train LightGBM model
-    level_matcher_model_lgbm.fit(training_dataframe, training_labels)
+    model_lightgbm.fit(training_dataframe, training_labels)
 
     # ==========================================
     # Step 3: Test Data Ingestion
@@ -168,17 +168,17 @@ if __name__ == "__main__":
     # Step 4: Pairwise Inference
     # ==========================================
     # Predict match probabilities for all cross-dataset level pairs using trained models
-    matching_level_pairs_xgb = []
-    matching_level_pairs_lgbm = []
-    all_pairs_display = []
+    matching_level_pairs_xgboost = []
+    matching_level_pairs_lightgbm = []
+    all_pairwise_results_for_display = []
 
-    rows_list = list(dataframe.iterrows())
+    level_dataframe_rows_list = list(dataframe.iterrows())
     
     print("\nRunning Pairwise Inference (XGBoost & LightGBM)...")
-    for i in range(len(rows_list)):
-        for j in range(i + 1, len(rows_list)):
-            _, level_1 = rows_list[i]
-            _, level_2 = rows_list[j]
+    for i in range(len(level_dataframe_rows_list)):
+        for j in range(i + 1, len(level_dataframe_rows_list)):
+            _, level_1 = level_dataframe_rows_list[i]
+            _, level_2 = level_dataframe_rows_list[j]
             
             # Skip same-dataset pairs (only match across different datasets)
             if level_1['dataset_code'] == level_2['dataset_code']:
@@ -190,68 +190,68 @@ if __name__ == "__main__":
             # Prediction: Use the trained models to predict match probability for this input feature vector
             # Convert to DataFrame with explicit feature names
             feature_dataframe = pd.DataFrame([feature_vector], columns=feature_names)
-            xb_prob = level_matcher_model_xgb.predict(feature_dataframe)[0]
-            lgbm_prob = level_matcher_model_lgbm.predict(feature_dataframe)[0]
+            xgboost_probability = model_xgboost.predict(feature_dataframe)[0]
+            lightgbm_probability = model_lightgbm.predict(feature_dataframe)[0]
             
             # Separate logic: Each model is independent.
             
             # Record level pairs above output threshold (Dual Report)
-            if xb_prob > pairwise_output_threshold or lgbm_prob > pairwise_output_threshold:
-                 all_pairs_display.append({
-                    'id1': level_1['level_id'], 'id2': level_2['level_id'],
-                    'd1': level_1['dataset_code'], 'd2': level_2['dataset_code'],
-                    'p_xgb': xb_prob, 'p_lgbm': lgbm_prob,
+            if xgboost_probability > pairwise_output_threshold or lightgbm_probability > pairwise_output_threshold:
+                 all_pairwise_results_for_display.append({
+                    'level_1_id': level_1['level_id'], 'level_2_id': level_2['level_id'],
+                    'dataset_code_1': level_1['dataset_code'], 'dataset_code_2': level_2['dataset_code'],
+                    'xgboost_probability': xgboost_probability, 'lightgbm_probability': lightgbm_probability,
                     'features': feature_vector
                 })
 
             # Prepare separate lists for clustering
-            if xb_prob > pairwise_output_threshold:
-                matching_level_pairs_xgb.append({
-                    'ID1': level_1['level_id'],
-                    'ID2': level_2['level_id'],
-                    'dataset_1': level_1['dataset_code'],
-                    'dataset_2': level_2['dataset_code'],
-                    'probability': xb_prob,
+            if xgboost_probability > pairwise_output_threshold:
+                matching_level_pairs_xgboost.append({
+                    'level_1_id': level_1['level_id'],
+                    'level_2_id': level_2['level_id'],
+                    'dataset_code_1': level_1['dataset_code'],
+                    'dataset_code_2': level_2['dataset_code'],
+                    'probability': xgboost_probability,
                     'features': feature_vector
                 })
             
-            if lgbm_prob > pairwise_output_threshold:
-                matching_level_pairs_lgbm.append({
-                    'ID1': level_1['level_id'],
-                    'ID2': level_2['level_id'],
-                    'dataset_1': level_1['dataset_code'],
-                    'dataset_2': level_2['dataset_code'],
-                    'probability': lgbm_prob,
+            if lightgbm_probability > pairwise_output_threshold:
+                matching_level_pairs_lightgbm.append({
+                    'level_1_id': level_1['level_id'],
+                    'level_2_id': level_2['level_id'],
+                    'dataset_code_1': level_1['dataset_code'],
+                    'dataset_code_2': level_2['dataset_code'],
+                    'probability': lightgbm_probability,
                     'features': feature_vector
                 })
 
     # Sort by probability descending (using max of both for the combined list)
-    all_pairs_display.sort(key=lambda x: max(x['p_xgb'], x['p_lgbm']), reverse=True)
-    matching_level_pairs_xgb.sort(key=lambda x: x['probability'], reverse=True)
-    matching_level_pairs_lgbm.sort(key=lambda x: x['probability'], reverse=True)
+    all_pairwise_results_for_display.sort(key=lambda x: max(x['xgboost_probability'], x['lightgbm_probability']), reverse=True)
+    matching_level_pairs_xgboost.sort(key=lambda x: x['probability'], reverse=True)
+    matching_level_pairs_lightgbm.sort(key=lambda x: x['probability'], reverse=True)
 
     # Write pairwise inference results to file (Side-by-Side Comparison)
     threshold_percent = pairwise_output_threshold * 100
     with open('outputs/pairwise/Output_Level_Pairwise_Inference.txt', 'w', encoding='utf-8') as output_file:
         output_file.write(f"=== PAIRWISE INFERENCE RESULTS (>{threshold_percent:.1f}%) ===\n")
         output_file.write(f"Model Comparison: XGBoost vs LightGBM\n")
-        output_file.write(f"Total Level Pairs Found: {len(all_pairs_display)}\n\n")
+        output_file.write(f"Total Level Pairs Found: {len(all_pairwise_results_for_display)}\n\n")
         
-        for item in all_pairs_display:
-            energy_sim, spin_sim, parity_sim, specificity, gamma_pattern_sim = item['features']
+        for item in all_pairwise_results_for_display:
+            energy_similarity, spin_similarity, parity_similarity, specificity, gamma_decay_pattern_similarity = item['features']
             output_file.write(
-                f"{item['id1']} <-> {item['id2']} | "
-                f"XGB: {item['p_xgb']:.1%} | LGBM: {item['p_lgbm']:.1%}\n"
-                f"  Features: Energy_Sim={energy_sim:.2f}, Spin_Sim={spin_sim:.2f}, "
-                f"Parity_Sim={parity_sim:.2f}, Specificity={specificity:.2f}, Gamma_Pattern_Sim={gamma_pattern_sim:.2f}\n\n"
+                f"{item['level_1_id']} <-> {item['level_2_id']} | "
+                f"XGBoost: {item['xgboost_probability']:.1%} | LightGBM: {item['lightgbm_probability']:.1%}\n"
+                f"  Features: Energy_Similarity={energy_similarity:.2f}, Spin_Similarity={spin_similarity:.2f}, "
+                f"Parity_Similarity={parity_similarity:.2f}, Specificity={specificity:.2f}, Gamma_Pattern_Similarity={gamma_decay_pattern_similarity:.2f}\n\n"
             )
     
-    print(f"\n[INFO] Pairwise Inference Complete: {len(all_pairs_display)} level pairs (>{threshold_percent:.1f}%) written to 'outputs/pairwise/Output_Level_Pairwise_Inference.txt'")
+    print(f"\n[INFO] Pairwise Inference Complete: {len(all_pairwise_results_for_display)} level pairs (>{threshold_percent:.1f}%) written to 'outputs/pairwise/Output_Level_Pairwise_Inference.txt'")
 
     # ==========================================
     # Step 5: Graph-Based Clustering
     # ==========================================
     
     # Execute clustering independently for each model (XGBoost primary, LightGBM secondary for comparison only)
-    perform_clustering_and_output(matching_level_pairs_xgb, level_matcher_model_xgb, "outputs/clustering/Output_Clustering_Results_XGB.txt", "XGBoost", dataframe)
-    perform_clustering_and_output(matching_level_pairs_lgbm, level_matcher_model_lgbm, "outputs/clustering/Output_Clustering_Results_LightGBM.txt", "LightGBM", dataframe)
+    perform_clustering_and_output(matching_level_pairs_xgboost, model_xgboost, "outputs/clustering/Output_Clustering_Results_XGBoost.txt", "XGBoost", dataframe)
+    perform_clustering_and_output(matching_level_pairs_lightgbm, model_lightgbm, "outputs/clustering/Output_Clustering_Results_LightGBM.txt", "LightGBM", dataframe)
