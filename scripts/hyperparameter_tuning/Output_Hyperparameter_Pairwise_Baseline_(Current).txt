@@ -1,0 +1,69 @@
+=== PAIRWISE INFERENCE RESULTS: Baseline (Current) ===
+Total Level Pairs: 22
+
+A_0 <-> B_0 | Probability: 96.2%
+  Features: Energy_Sim=1.00, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00, Gamma_Sim=0.50
+
+A_0 <-> C_0 | Probability: 96.2%
+  Features: Energy_Sim=1.00, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00, Gamma_Sim=0.50
+
+B_0 <-> C_0 | Probability: 96.2%
+  Features: Energy_Sim=1.00, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00, Gamma_Sim=0.50
+
+A_3005 <-> B_3000 | Probability: 78.5%
+  Features: Energy_Sim=0.61, Spin_Sim=1.00, Parity_Sim=1.00, Specificity=1.00, Gamma_Sim=0.50
+
+A_3005 <-> C_3005 | Probability: 76.8%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Sim=0.50
+
+A_600 <-> C_601 | Probability: 76.8%
+  Features: Energy_Sim=0.99, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Sim=0.50
+
+A_3000 <-> C_3005 | Probability: 76.8%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Sim=0.50
+
+B_3000 <-> C_3005 | Probability: 76.8%
+  Features: Energy_Sim=1.00, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Sim=0.50
+
+B_603 <-> C_601 | Probability: 75.6%
+  Features: Energy_Sim=0.98, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Sim=0.50
+
+A_600 <-> B_603 | Probability: 69.1%
+  Features: Energy_Sim=0.91, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Sim=0.50
+
+A_4005 <-> B_4000 | Probability: 47.4%
+  Features: Energy_Sim=0.61, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=1.00, Gamma_Sim=0.50
+
+A_4000 <-> C_4003 | Probability: 43.6%
+  Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Sim=0.50
+
+A_4005 <-> C_4003 | Probability: 43.6%
+  Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Sim=0.50
+
+B_4000 <-> C_4003 | Probability: 43.6%
+  Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Sim=0.50
+
+B_5000 <-> C_5003 | Probability: 43.6%
+  Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.58, Gamma_Sim=0.50
+
+A_2005 <-> C_2000 | Probability: 41.6%
+  Features: Energy_Sim=0.29, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Sim=1.00
+
+A_5000 <-> C_5003 | Probability: 30.6%
+  Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.33, Gamma_Sim=0.50
+
+A_5005 <-> C_5003 | Probability: 30.6%
+  Features: Energy_Sim=1.00, Spin_Sim=0.80, Parity_Sim=0.50, Specificity=0.33, Gamma_Sim=0.50
+
+A_5005 <-> B_5000 | Probability: 25.5%
+  Features: Energy_Sim=0.61, Spin_Sim=0.80, Parity_Sim=0.80, Specificity=0.58, Gamma_Sim=0.50
+
+A_2000 <-> B_2006 | Probability: 21.6%
+  Features: Energy_Sim=0.17, Spin_Sim=0.50, Parity_Sim=0.50, Specificity=1.00, Gamma_Sim=1.00
+
+A_4000 <-> B_4000 | Probability: 8.4%
+  Features: Energy_Sim=1.00, Spin_Sim=0.20, Parity_Sim=0.05, Specificity=1.00, Gamma_Sim=0.50
+
+A_5000 <-> B_5000 | Probability: 6.2%
+  Features: Energy_Sim=1.00, Spin_Sim=0.20, Parity_Sim=0.05, Specificity=0.58, Gamma_Sim=0.50
+

@@ -58,11 +58,21 @@ Major libraries implementing Gradient Boosting.
 
 | Package | NaN Handling | Growth Strategy | Best Data Scale | Weakness for Physics | Verdict |
 |---------|--------------|-----------------|-----------------|----------------------|---------|
-| Scikit-learn GradientBoosting (Legacy) | Fails (Crashes) | Level-wise | Small | Requires imputation (bias risk); slow; lacks regularization. | Reject |
-| LightGBM (Microsoft, 2017) | Native (Safe) | Leaf-wise | Huge (>100k) | "Greedy" growth overfits small data; creates unbalanced trees. | Reject |
-| Scikit-learn HistGradientBoosting (2019) | Native (Safe) | Leaf-wise | Medium/Large | Less tunable regularization than XGBoost; defaults to greedy growth. | Acceptable |
-| XGBoost (Chen and Guestrin, 2016) | Native (Safe) | Level-wise | Any | Minimal. Level-wise growth and L1/L2 regularization ideal for stability. | Best |
-| CatBoost (Yandex, 2017) | Native (Safe) | Symmetric | Medium/Large | Slower training for pure numerical tasks; heavier dependency. | Alternative |
+| Scikit-learn GradientBoosting | Fails (Crashes) | Level-wise | Small | Requires imputation (bias risk); slow; lacks regularization. | Reject |
+| LightGBM | Native (Safe) | Leaf-wise | Huge (>100k) | "Greedy" growth overfits small data; creates unbalanced trees. | Reject |
+| Scikit-learn HistGradientBoosting | Native (Safe) | Leaf-wise | Medium/Large | Less tunable regularization than XGBoost; defaults to greedy growth. | Acceptable |
+| XGBoost | Native (Safe) | Level-wise | Any | Minimal. Level-wise growth and L1/L2 regularization ideal for stability. | Best |
+| CatBoost | Native (Safe) | Symmetric | Medium/Large | Slower training for pure numerical tasks; heavier dependency. | Alternative |
+
+
+Guolin Ke et al., LightGBM: A Highly Efficient Gradient Boosting Decision Tree,
+Advances in Neural Information Processing Systems 30, 3149 (2017).
+https://proceedings.neurips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html
+
+Tianqi Chen and Carlos Guestrin, XGBoost: A Scalable Tree Boosting System
+Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 785 (2016).
+https://doi.org/10.1145/2939672.2939785
+
 
 #### Growth Strategies
 
@@ -115,7 +125,9 @@ Model training quality is assessed through the following metrics:
 | Metric | Formula | Purpose | Target Range |
 |--------|---------|---------|-------------|
 | **RMSE** | $\sqrt{\frac{1}{n}\sum(y_{pred} - y_{true})^2}$ | Measures average prediction error (penalizes outliers) | <0.05 excellent, >0.3 poor |
-| **MAE** | $\frac{1}{n}\sum|y_{pred} - y_{true}|$ | Average absolute deviation (robust metric) | <0.02 excellent, >0.2 poor |
+| **MAE** | $\frac{1}{n}\sum\|y_{pred} - y_{true}\|$ | Average absolute deviation (robust metric) | <0.02 excellent, >0.2 poor |
+| **LogLoss** | $-\frac{1}{n}\sum[y_{true} \log(y_{pred}) + (1-y_{true}) \log(1-y_{pred})]$ | Binary cross-entropy (primary calibration metric) | <0.3 excellent, >1.0 poor |
+| **Feature Importance (Gain)** | $\sum_{splits} \Delta Loss$ | Average loss reduction per feature across all splits | Higher = more influential |
 | **Iteration Count** | Training rounds before early stopping | Model complexity indicator | <70% of max = good generalization |
 
 **Interpreting Results**:
@@ -124,17 +136,32 @@ Model training quality is assessed through the following metrics:
 XGBoost Training Complete (stopped at iteration 540/1000)
   Train RMSE: 0.0181 | Validation RMSE: 0.0192
   Train MAE:  0.0084 | Validation MAE:  0.0089
+  Train LogLoss: 0.2015 | Validation LogLoss: 0.1986
 ```
 
 **Analysis**:
-- Train/Validation gap (0.0011) is minimal → No overfitting
+- Train/Validation gap (0.0011 RMSE, 0.0005 MAE) is minimal → No overfitting
 - Validation RMSE (0.0192) is excellent → Strong generalization
+- Validation LogLoss (0.1986) < Training LogLoss (0.2015) → Exceptional generalization (rare but ideal)
 - Stopped at 54% of max iterations → Optimal complexity without memorization
 
 **Red Flags**:
 - Large train/validation gap (>0.05): Model overfitting training noise
 - High validation RMSE (>0.3): Poor feature engineering or excessive regularization
+- High LogLoss (>1.0): Poor probability calibration or class imbalance issues
 - Stopping at iteration 1: Regularization too aggressive (LightGBM example: RMSE 0.4958)
+
+**LogLoss Deep Dive**: Binary cross-entropy measures how well predicted probabilities match true labels. Unlike RMSE which treats all errors equally, LogLoss severely penalizes confident wrong predictions (e.g., predicting 99% when truth is 0%). Lower LogLoss indicates better-calibrated probabilities, essential for ranking match candidates reliably. Implementation uses manual computation with prediction clipping to [1e-15, 1-1e-15] to avoid log(0) numerical errors.
+
+**Feature Importance Deep Dive**: XGBoost's Gain metric measures total loss reduction when a feature is used for splits across all trees. Higher Gain means the feature provides more discriminative power. For nuclear data matching, expected hierarchy: Spin_Similarity (highest Gain) > Parity_Similarity > Energy_Similarity > Gamma_Decay_Pattern_Similarity > Specificity (lowest Gain), reflecting physics constraints where quantum numbers are more definitive than energies.
+
+**Automated Visualization**: The `Training_Metrics_Visualizer.py` module generates comprehensive diagnostic plots:
+- 5-panel layout: RMSE comparison, MAE comparison, LogLoss comparison, Feature Importance (Gain), Overfitting Gap Analysis
+- Color-coded quality indicators (green/yellow/red thresholds)
+- Iteration count annotations showing convergence efficiency
+- Reference lines for excellent (<0.05 RMSE, <0.3 LogLoss) and poor (>0.3 RMSE, >1.0 LogLoss) performance
+- Feature Importance horizontal bar chart with Gain values sorted descending
+- Output: `outputs/figures/Training_Metrics_Diagnostic.png` (300 DPI publication quality)
 
 ### Feature Engineering
 

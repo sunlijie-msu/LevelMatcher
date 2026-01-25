@@ -5,12 +5,6 @@ __pycache__/
 *.so
 .Python
 
-# Generated Output Files Only
-outputs/
-Output_*.txt
-Output_*.png
-Input_*.png
-
 # IDE
 .vscode/
 .idea/
@@ -21,6 +15,3 @@ Input_*.png
 # OS
 .DS_Store
 Thumbs.db
-
-# Temporary Files
-.github/temp/

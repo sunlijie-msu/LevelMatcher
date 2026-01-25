@@ -34,6 +34,8 @@ The training pipeline reports the following metrics to assess model quality:
 |--------|------------|----------------|
 | **RMSE** | Root Mean Squared Error | Average prediction error magnitude (penalizes large errors heavily) |
 | **MAE** | Mean Absolute Error | Average absolute deviation (robust to outliers) |
+| **LogLoss** | Binary Cross-Entropy | Primary calibration metric for probability predictions (lower is better) |
+| **Feature Importance (Gain)** | Average loss reduction per feature | Reveals which features drive model decisions |
 | **Early Stopping Iteration** | Training round when validation stopped improving | Indicates optimal model complexity |
 
 **Typical Output Example**:
@@ -41,18 +43,31 @@ The training pipeline reports the following metrics to assess model quality:
 XGBoost Training Complete (stopped at iteration 540)
   Train RMSE: 0.0181 | Validation RMSE: 0.0192
   Train MAE:  0.0084 | Validation MAE:  0.0089
+  Train LogLoss: 0.2015 | Validation LogLoss: 0.1986
 ```
 
 **Quality Indicators**:
 - **Low RMSE (<0.05)**: Model accurately predicts match probabilities
 - **Small Train/Validation Gap (<0.01)**: No overfitting detected
+- **Low LogLoss (<0.3)**: Well-calibrated probability predictions
 - **Early Stopping Before Max Iterations**: Model converged without memorizing training data
 - **High RMSE (>0.3)**: Poor fit; consider adjusting regularization or feature engineering
+- **Validation LogLoss < Training LogLoss**: Excellent generalization (rare but ideal scenario)
 
 **Why These Metrics Matter**: 
-- RMSE directly measures probability prediction accuracy (target: 0-1 range)
-- Validation metrics reveal if the model generalizes beyond training examples
-- Train/validation gap detects overfitting (model memorizing noise instead of learning physics)
+- **RMSE** directly measures probability prediction accuracy (target: 0-1 range)
+- **MAE** provides robust error measurement less sensitive to outliers
+- **LogLoss** measures calibration quality (critical for binary classification with probabilities)
+- **Feature Importance** reveals physics-driven feature hierarchy (e.g., Spin_Similarity > Energy_Similarity)
+- **Validation metrics** reveal if the model generalizes beyond training examples
+- **Train/Validation Gap** detects overfitting (model memorizing noise instead of learning physics)
+
+**Visualization**: The pipeline automatically generates a 5-panel diagnostic plot (`outputs/figures/Training_Metrics_Diagnostic.png`) showing:
+1. **RMSE Comparison**: Training vs validation RMSE for both models with quality thresholds
+2. **MAE Comparison**: Training vs validation MAE for both models with quality thresholds
+3. **LogLoss Comparison**: Binary cross-entropy loss showing calibration quality
+4. **Feature Importance (Gain)**: Horizontal bar chart revealing feature contribution hierarchy for XGBoost
+5. **Overfitting Analysis**: Train/validation gap with color coding (green=excellent, yellow=acceptable, red=overfitting) and iteration count percentages
 
 ## Key Features
 
