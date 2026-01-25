@@ -1,4 +1,6 @@
-"""Combined Level Scheme and Clustering Visualizer
+"""
+Combined Level Scheme and Clustering Visualizer
+======================================
 
 # High-level Structure and Workflow Explanation:
 ======================================
@@ -21,18 +23,21 @@ Workflow Diagram:
 [Step 3: Rendering] --> [Draw Levels (True Energy)]
    |                              |
    v                              v
-[Align Clusters (Y-Axis)] --> [Connect Labels]
+[Align Clusters (Vertical Axis)] --> [Connect Labels]
    |
    v
 [End: Output Scheme Images]
 
-Explanation of Code Structure
-1) Parse clustering results into clusters and members.
-2) Build per-dataset level lists and apply collision resolution for energy/Jπ text labels.
-3) Compute a single global y-position per cluster (collision-resolved using cluster anchor energies).
-4) Draw level bars at true energies (no vertical bar offsets).
-5) Place cluster/probability labels at the cluster y-position for vertical alignment across datasets,
-   and draw a short connector if the label y differs from the bar energy.
+Numbered Technical Steps:
+1. **Data Ingestion**: Parses standardized JSON level data and Machine Learning clustering output logs.
+2. **Collision Resolution**: Applies iterative relaxation to spread overlapping energy and Spin-Parity labels.
+3. **Geometry Calculation**: Computes vertical alignment indices for clusters to ensure horizontal consensus visibility.
+4. **Rendering**: Uses Matplotlib to generate high-fidelity physical level schemes with gamma transition arrows.
+
+Architecture:
+- `spread_text_positions`: Iterative relaxation algorithm for label spacing.
+- `plot_level_schemes`: Main rendering engine for input datasets.
+- `plot_clustering_results`: Visualization engine for reconciled physical levels.
 """
 
 import matplotlib.pyplot as plt
@@ -43,12 +48,12 @@ import os
 import re
 
 # Tunable clustering layout knobs for quick manual adjustments
-clustering_box_pad = 1.0                # Box padding; increase for wider/taller boxes
-clustering_min_distance = 500           # Minimum vertical spacing between rows
-clustering_fig_height_multiplier = 1.0  # Height scaling; raise to add vertical breathing room
-clustering_fig_width_inches = 10.0      # Overall figure width in inches; shrink to reduce horizontal scale
+clustering_box_padding = 1.0                # Box padding; increase for wider/taller boxes
+clustering_minimum_distance = 500           # Minimum vertical spacing between rows
+clustering_figure_height_multiplier = 1.0  # Height scaling; raise to add vertical breathing room
+clustering_figure_width_inches = 10.0      # Overall figure width in inches; shrink to reduce horizontal scale
 clustering_x_spacing = 0.45             # Horizontal distance between dataset columns (reduce for tighter columns)
-clustering_x_margin = 0.3               # Extra blank space padding on left/right of the outer columns
+clustering_x_axis_margin = 0.3               # Extra blank space padding on left/right of the outer columns
 
 # ============================================================================
 # Font Configuration
@@ -72,9 +77,9 @@ Font_Config = {
 # SHARED UTILITY FUNCTIONS
 # ============================================================================
 
-def spread_text_positions(energies, min_distance=250):
+def spread_text_positions(energies, minimum_distance=250):
     """
-    Adjusts text positions to ensure they are at least min_distance apart vertically.
+    Adjusts text positions to ensure they are at least minimum_distance apart vertically.
     Collision resolution algorithm using iterative relaxation.
     """
     if not energies:
@@ -88,10 +93,10 @@ def spread_text_positions(energies, min_distance=250):
         changed = False
         for index in range(number_of_positions - 1):
             distance = positions[index + 1] - positions[index]
-            if distance < min_distance:
+            if distance < minimum_distance:
                 # Overlap detected: push levels apart
                 center = (positions[index + 1] + positions[index]) / 2.0
-                overlap = min_distance - distance
+                overlap = minimum_distance - distance
                 positions[index] -= overlap / 2.0
                 positions[index + 1] += overlap / 2.0
                 changed = True
@@ -157,13 +162,13 @@ def plot_level_schemes():
             # The JSON property 'evaluatorInput' uses NNDC space-separated format (e.g. 600 1)
             label_left = ""
             if isinstance(level.get('energy'), dict):
-                eval_input = level['energy'].get('evaluatorInput', '')
-                if ' ' in eval_input:
+                evaluator_input = level['energy'].get('evaluatorInput', '')
+                if ' ' in evaluator_input:
                     # Convert NNDC "Value Uncertainty" to scientific "Value(Uncertainty)" for the plot
-                    value_part, uncertainty_part = eval_input.split(' ', 1)
+                    value_part, uncertainty_part = evaluator_input.split(' ', 1)
                     label_left = f"{value_part}({uncertainty_part})"
                 else:
-                    label_left = eval_input
+                    label_left = evaluator_input
             else:
                 uncertainty_string = f"({int(uncertainty)})" if uncertainty is not None else ""
                 label_left = f"{int(energy_value)}{uncertainty_string}"
@@ -184,7 +189,7 @@ def plot_level_schemes():
         
         # Calculate text positions with collision resolution
         energies = [x['energy'] for x in levels_data]
-        text_y_positions = spread_text_positions(energies, min_distance=250)
+        text_y_positions = spread_text_positions(energies, minimum_distance=250)
         
         # Calculate vertical offsets for level bars when too close (within 150 keV)
         bar_offsets = [0.0] * len(energies)
@@ -237,7 +242,7 @@ def plot_level_schemes():
             # Collect all gammas with their positions for global arrow placement
             all_gamma_data = []
             
-            for gamma_idx, gamma in enumerate(gammas_table):
+            for gamma_index, gamma in enumerate(gammas_table):
                 initial_level_index = gamma.get('initialLevel')
                 final_level_index = gamma.get('finalLevel')
                 
@@ -258,7 +263,7 @@ def plot_level_schemes():
                 gamma_intensity = gamma.get('gammaIntensity', {}).get('value', 100)
                 
                 all_gamma_data.append({
-                    'gamma_idx': gamma_idx,
+                    'gamma_index': gamma_index,
                     'initial_level_index': initial_level_index,
                     'final_level_index': final_level_index,
                     'initial_energy': initial_energy,
@@ -354,28 +359,28 @@ def parse_clustering_results(clustering_file_path):
                 continue
             
             # Match anchor line
-            anchor_match = re.match(r'^Anchor:\s+(\S+)\s+\|\s+E=([\d.]+)±([\d.]+)\s+keV\s+\|\s+Jπ=(.+)$', line)
+            anchor_match = re.match(r'^Anchor:\s+(\S+)\s+\|\s+E=([\d.]+)±([\d.]+)\s+keV\s+\|\s+Spin-Parity=(.+)$', line)
             if anchor_match and current_cluster is not None:
                 current_cluster['anchor_id'] = anchor_match.group(1)
                 current_cluster['anchor_energy'] = float(anchor_match.group(2))
                 current_cluster['anchor_uncertainty'] = float(anchor_match.group(3))
-                current_cluster['anchor_jpi'] = anchor_match.group(4)
+                current_cluster['anchor_spin_parity'] = anchor_match.group(4)
                 continue
             
             # Match member line
-            member_match = re.match(r'^\[(\w+)\]\s+(\S+):\s+E=([\d.]+)±([\d.]+)\s+keV,\s+Jπ=(.+?)\s+\((.+)\)$', line)
+            member_match = re.match(r'^\[(\w+)\]\s+(\S+):\s+E=([\d.]+)±([\d.]+)\s+keV,\s+Spin-Parity=(.+?)\s+\((.+)\)$', line)
             if member_match and current_cluster is not None:
                 dataset_name = member_match.group(1)
                 level_id = member_match.group(2)
                 energy = float(member_match.group(3))
                 uncertainty = float(member_match.group(4))
-                spin_parity = member_match.group(5).strip()
+                spin_parity_string = member_match.group(5).strip()
                 status_info = member_match.group(6).strip()
                 
                 is_anchor = status_info == "Anchor"
                 match_probability = None
                 if not is_anchor:
-                    probability_match = re.search(r'Match Prob:\s+([\d.]+)%', status_info)
+                    probability_match = re.search(r'Match Probability:\s+([\d.]+)%', status_info)
                     if probability_match:
                         match_probability = float(probability_match.group(1)) / 100.0
                 
@@ -384,7 +389,7 @@ def parse_clustering_results(clustering_file_path):
                     'level_id': level_id,
                     'energy': energy,
                     'uncertainty': uncertainty,
-                    'spin_parity': spin_parity,
+                    'spin_parity': spin_parity_string,
                     'is_anchor': is_anchor,
                     'match_probability': match_probability
                 })
@@ -422,8 +427,8 @@ def plot_clustering_results(input_path='Output_Clustering_Results.txt', output_p
     datasets = sorted(list(unique_datasets))
     
     # Calculate figure size based on density (tunable multiplier)
-    fig_height = max(8, len(clusters) * clustering_fig_height_multiplier)
-    figure, axis = plt.subplots(figsize=(clustering_fig_width_inches, fig_height))
+    fig_height = max(8, len(clusters) * clustering_figure_height_multiplier)
+    figure, axis = plt.subplots(figsize=(clustering_figure_width_inches, fig_height))
     
     # X-axis positions (tunable spacing)
     x_positions = {ds: index * clustering_x_spacing for index, ds in enumerate(datasets)}
@@ -431,12 +436,12 @@ def plot_clustering_results(input_path='Output_Clustering_Results.txt', output_p
     # Y-Position Calculation
     # Use anchor energies as base, then spread them to prevent text overlap
     anchor_energies = [c.get('anchor_energy', 0) for c in clusters]
-    y_positions = spread_text_positions(anchor_energies, min_distance=clustering_min_distance)
+    y_positions = spread_text_positions(anchor_energies, minimum_distance=clustering_minimum_distance)
     
     if len(y_positions) > 0:
-        y_max_limit = y_positions[-1] + 300
+        y_maximum_limit = y_positions[-1] + 300
     else: 
-        y_max_limit = 1000
+        y_maximum_limit = 1000
 
     # Plot Text for each cluster
     for index, cluster in enumerate(clusters):
@@ -451,7 +456,7 @@ def plot_clustering_results(input_path='Output_Clustering_Results.txt', output_p
             x_position = x_positions[dataset_code]
             
             # Text Content
-            # Format: 'Energy(Unc)', 'Jpi', 'Prob', 'ClusterID'
+            # Format: 'Energy(Uncertainty)', 'Spin-Parity', 'Probability', 'ClusterID'
             energy_string = f"{member['energy']:.0f}({int(member['uncertainty'])})"
             spin_parity_string = member['spin_parity']
             
@@ -471,12 +476,12 @@ def plot_clustering_results(input_path='Output_Clustering_Results.txt', output_p
             axis.text(x_position, y_position, text_block, 
                      ha='center', va='center', 
                      fontsize=Font_Config['cluster_text'], family='Times New Roman',
-                     bbox=dict(boxstyle=f"round,pad={clustering_box_pad}", facecolor="white", edgecolor="gray", alpha=0.9))
+                     bbox=dict(boxstyle=f"round,pad={clustering_box_padding}", facecolor="white", edgecolor="gray", alpha=0.9))
 
     # Determine Y-Axis Limits
-    axis.set_ylim(-200, y_max_limit)
-    right_limit = (len(datasets) - 1) * clustering_x_spacing + clustering_x_margin
-    left_limit = -clustering_x_margin
+    axis.set_ylim(-200, y_maximum_limit)
+    right_limit = (len(datasets) - 1) * clustering_x_spacing + clustering_x_axis_margin
+    left_limit = -clustering_x_axis_margin
     axis.set_xlim(left_limit, right_limit)
     
     # X-Axis Labels
@@ -524,8 +529,8 @@ if __name__ == "__main__":
     
     # Generate Clustering Results (XGBoost) - Baseline
     plot_clustering_results(
-        input_path='outputs/clustering/Output_Clustering_Results_XGB.txt', 
-        output_path='outputs/figures/Output_Cluster_Scheme_XGB.png', 
+        input_path='outputs/clustering/Output_Clustering_Results_XGBoost.txt', 
+        output_path='outputs/figures/Output_Cluster_Scheme_XGBoost.png', 
         title_suffix='(XGBoost / Energy-Dominant)'
     )
     

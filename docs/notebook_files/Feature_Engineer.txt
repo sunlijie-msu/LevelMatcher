@@ -102,18 +102,18 @@ Scoring_Config = {
     'Feature_Correlation': {
         # Controls how perfect spin/parity matching can "rescue" mediocre energy similarity.
         # Physics rationale: If two levels have identical quantum numbers (Jπ) and are isolated
-        # (no nearby levels with same Jπ), energy disagreement may be due to measurement error
+        # (no nearby levels with same Spin-Parity), energy disagreement may be due to measurement error
         # or calibration issues rather than genuine mismatch.
         #
-        # When Enabled: If spin_sim >= Threshold AND parity_sim >= Threshold,
-        # the effective energy similarity is boosted: effective_e = e^Rescue_Exponent
-        # Example: Rescue_Exponent=0.5 (sqrt) transforms e=0.4→0.63, e=0.6→0.77
+        # When Enabled: If spin_similarity >= Threshold AND parity_similarity >= Threshold,
+        # the effective energy similarity is boosted: effective_energy = energy^Rescue_Exponent
+        # Example: Rescue_Exponent=0.5 (sqrt) transforms energy=0.4→0.63, energy=0.6→0.77
         'Enabled': True,
         'Threshold': 0.85,        # Minimum spin/parity similarity to trigger rescue (firm matches only)
-        'Rescue_Exponent': 0.5    # Exponent for energy boost: e → e^exponent (0.5 = sqrt, 0.7 = gentler)
+        'Rescue_Exponent': 0.5    # Exponent for energy boost: energy → energy^exponent (0.5 = square root, 0.7 = gentler)
     },
     'General': {
-        # Score used when data is missing (e.g. unknown). Performe **Manual Imputation**. XGBoost receives a concrete number of 0.5, not a `NaN`, so it treats it like any other feature value.
+        # Score used when data is missing (e.g. unknown). Perform **Manual Imputation**. Machine Learning models receive a concrete number of 0.5, not a missing value, so it treats it like any other feature value.
         'Neutral_Score': 0.5
     }
 }
@@ -153,27 +153,26 @@ def parse_json_datasets(dataset_codes):
             with open(filename, 'r', encoding='utf-8') as f:
                 data = json.load(f)
                 
-                # Format: New ENSDF JSON schema (levelsTable -> levels, gammasTable -> gammas)
+                # Format: New ENSDF JSON schema (levels_table -> levels, gammas_table -> gammas)
                 if isinstance(data, dict) and 'levelsTable' in data:
                     raw_levels = data['levelsTable'].get('levels', [])
-                    gammas_table = data.get('gammasTable', {}).get('gammas', [])
+                    gammas_table_list = data.get('gammasTable', {}).get('gammas', [])
                     
-                    for level_index, item in enumerate(raw_levels):
-                        energy_value = item.get('energy', {}).get('value')
-                        energy_uncertainty = item.get('energy', {}).get('uncertainty', {}).get('value', 5.0)
-                        energy_evaluator_input = item.get('energy', {}).get('evaluatorInput')
-                        spin_parity_list = item.get('spinParity', {}).get('values', [])
-                        spin_parity_string = item.get('spinParity', {}).get('evaluatorInput')
+                    for level_index, level_item in enumerate(raw_levels):
+                        energy_value = level_item.get('energy', {}).get('value')
+                        energy_uncertainty = level_item.get('energy', {}).get('uncertainty', {}).get('value', 5.0)
+                        spin_parity_list = level_item.get('spinParity', {}).get('values', [])
+                        spin_parity_string = level_item.get('spinParity', {}).get('evaluatorInput')
                         
-                        # Extract gamma decays for this level from gammasTable
+                        # Extract gamma decays for this level from gammas_table_list
                         gamma_decays = []
-                        if 'gammas' in item and gammas_table:
-                            # Level has gamma indices pointing to gammasTable
-                            for gamma_index in item['gammas']:
-                                if 0 <= gamma_index < len(gammas_table):
-                                    gamma = gammas_table[gamma_index]
-                                    gamma_energy = gamma['energy']
-                                    gamma_intensity = gamma.get('gammaIntensity', {})
+                        if 'gammas' in level_item and gammas_table_list:
+                            # Level has gamma indices pointing to gammas_table_list
+                            for gamma_index in level_item['gammas']:
+                                if 0 <= gamma_index < len(gammas_table_list):
+                                    gamma_entry = gammas_table_list[gamma_index]
+                                    gamma_energy = gamma_entry['energy']
+                                    gamma_intensity = gamma_entry.get('gammaIntensity', {})
                                     
                                     gamma_decays.append({
                                         'energy': gamma_energy['value'],
@@ -194,7 +193,7 @@ def parse_json_datasets(dataset_codes):
                             })
     return levels
 
-def get_z_score(value_1, uncertainty_1, value_2, uncertainty_2):
+def calculate_z_score(value_1, uncertainty_1, value_2, uncertainty_2):
     """Calculates statistical separation (Z-score in sigma units)."""
     combined_uncertainty = np.sqrt(uncertainty_1**2 + uncertainty_2**2)
     if combined_uncertainty == 0:
@@ -209,7 +208,7 @@ def calculate_energy_similarity(energy_1, energy_uncertainty_1, energy_2, energy
     # Example: Level A (E=1000±5 keV) vs Level B (E=1010±3 keV)
     #   ΔE=10 keV, σ_c=√(25+9)=5.83 keV, z=1.72 → similarity=exp(-0.1×1.72²)=0.744 (74.4%)
     #
-    # Energy similarity decay with increasing energy separation (z in sigma units):
+    # Energy similarity decay with increasing energy separation (z_score in sigma units):
     # Sigma_Scale=0.1 (loose):   1σ→90.5%, 2σ→67.0%, 3σ→40.7%, 4σ→20.2%, 5σ→8.2%
     #   Lenient: tolerates large separations
     # Sigma_Scale=0.2 (moderate): 1σ→81.9%, 2σ→44.9%, 3σ→16.5%, 4σ→4.1%, 5σ→0.7%
@@ -221,7 +220,7 @@ def calculate_energy_similarity(energy_1, energy_uncertainty_1, energy_2, energy
     """
     if energy_1 is None or energy_2 is None:
         return 0.0
-    z_score = get_z_score(energy_1, energy_uncertainty_1, energy_2, energy_uncertainty_2)
+    z_score = calculate_z_score(energy_1, energy_uncertainty_1, energy_2, energy_uncertainty_2)
     return np.exp(-Scoring_Config['Energy']['Sigma_Scale'] * z_score**2)
 
 
@@ -257,7 +256,7 @@ def calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2):
 
     # Extract spin values (J) from both levels
     # Input: twoTimesSpin (2J stored as integer in JSON, e.g., 3 means J=3/2)
-    # Output: list of (J, is_tentative) tuples
+    # Output: list of (J, isTentative) tuples
     spins_1 = [
         (state['twoTimesSpin'] / 2.0, state['isTentativeSpin'])
         for state in spin_parity_list_1 if state.get('twoTimesSpin') is not None
@@ -273,12 +272,12 @@ def calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2):
 
     # Optimistic matching: Compare all spin pairs and keep the best (maximum) similarity score
     # If ANY spin combination matches, accept two levels match compatibility
-    max_similarity_score = 0.0
+    maximum_similarity_score = 0.0
     
-    for j1, spin1_is_tentative in spins_1:
-        for j2, spin2_is_tentative in spins_2:
+    for spin_1, spin1_is_tentative in spins_1:
+        for spin_2, spin2_is_tentative in spins_2:
             # Calculate spin difference ΔJ and determine if both measurements are firm
-            spin_difference = abs(j1 - j2)
+            spin_difference = abs(spin_1 - spin_2)
             both_firm = (not spin1_is_tentative) and (not spin2_is_tentative)
             
             # Apply scoring rules based on ΔJ and firmness
@@ -305,10 +304,10 @@ def calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2):
                 pair_similarity = Scoring_Config['Spin']['Mismatch_Firm']
 
             # Keep the best score across all spin pairs
-            if pair_similarity > max_similarity_score:
-                max_similarity_score = pair_similarity
+            if pair_similarity > maximum_similarity_score:
+                maximum_similarity_score = pair_similarity
     
-    return max_similarity_score
+    return maximum_similarity_score
 
 def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
     """
@@ -346,7 +345,7 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
 
     # Extract parity values (+/-) from both levels
     # Input: parity ('+' or '-' string in JSON)
-    # Output: list of (parity, is_tentative) tuples
+    # Output: list of (parity, isTentative) tuples
     parities_1 = [
         (state['parity'], state['isTentativeParity'])
         for state in spin_parity_list_1 if state.get('parity') is not None
@@ -362,12 +361,12 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
 
     # Optimistic matching: Compare all parity pairs and keep the best (maximum) similarity score
     # If ANY parity combination matches, accept two levels match compatibility
-    max_parity_similarity_score = 0.0
+    maximum_parity_similarity_score = 0.0
     
-    for p1, is_tentative_1 in parities_1:
-        for p2, is_tentative_2 in parities_2:
+    for parity_1, is_tentative_1 in parities_1:
+        for parity_2, is_tentative_2 in parities_2:
             # Determine if parities match and if both measurements are firm
-            parities_match = (p1 == p2)
+            parities_match = (parity_1 == parity_2)
             both_firm = (not is_tentative_1) and (not is_tentative_2)
             
             # Apply scoring rules based on match/mismatch and firmness
@@ -388,10 +387,10 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
                     pair_similarity = Scoring_Config['Parity']['Mismatch_Weak']
             
             # Keep the best score across all parity pairs
-            if pair_similarity > max_parity_similarity_score:
-                max_parity_similarity_score = pair_similarity
+            if pair_similarity > maximum_parity_similarity_score:
+                maximum_parity_similarity_score = pair_similarity
                 
-    return max_parity_similarity_score
+    return maximum_parity_similarity_score
 
 
 def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
@@ -460,7 +459,7 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
     def normalize_gamma_intensities(raw_decays):
         clean_list = []
         has_intensity = False
-        max_intensity = 0.0
+        maximum_intensity = 0.0
         
         for gamma in raw_decays:
             energy_value = float(gamma['energy'])
@@ -473,7 +472,8 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
             
             if intensity_value > 0:
                 has_intensity = True
-                if intensity_value > max_intensity: max_intensity = intensity_value
+                if intensity_value > maximum_intensity:
+                    maximum_intensity = intensity_value
             
             clean_list.append({
                 'energy': energy_value, 
@@ -483,111 +483,111 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
             })
             
         # Normalize strongest gamma to 100.0 (scales uncertainties proportionally)
-        if has_intensity and max_intensity > 0:
-            scale = 100.0 / max_intensity
+        if has_intensity and maximum_intensity > 0:
+            scale = 100.0 / maximum_intensity
             for gamma in clean_list:
                 gamma['intensity'] *= scale
                 gamma['intensity_uncertainty'] *= scale
                 
         return clean_list, has_intensity
 
-    list_A, has_int_A = normalize_gamma_intensities(gamma_decays_1)
-    list_B, has_int_B = normalize_gamma_intensities(gamma_decays_2)
+    gamma_list_1, has_intensity_1 = normalize_gamma_intensities(gamma_decays_1)
+    gamma_list_2, has_intensity_2 = normalize_gamma_intensities(gamma_decays_2)
     
-    if not list_A or not list_B:
+    if not gamma_list_1 or not gamma_list_2:
         return Scoring_Config['General']['Neutral_Score']
 
     # =========================================================================
-    # Phase 2: Greedy Energy Matching (3σ Threshold)
+    # Phase 2: Greedy Energy Matching (3.0 Sigma Threshold)
     # =========================================================================
-    Energy_Match_Threshold = 3.0
-    Intensity_Match_Threshold = 3.0
+    energy_match_threshold = 3.0
+    intensity_match_threshold = 3.0
 
     # =========================================================================
-    # Phase 3: Intensity Mode (Uses BR data) vs Binary Mode (Energy only)
+    # Phase 3: Intensity Mode (Uses branching ratio data) vs Binary Mode (Energy only)
     # =========================================================================
     
-    if has_int_A and has_int_B:
-        # Example: Dataset A=[100, 80±10, 15, 35], Dataset B=[85±10, 100]
-        # Goal: Match each gamma in A to best energy match in B (one-to-one)
+    if has_intensity_1 and has_intensity_2:
+        # Example: Dataset 1=[100, 80±10, 15, 35], Dataset 2=[85±10, 100]
+        # Goal: Match each gamma in 1 to best energy match in 2 (one-to-one)
         
         intersection_sum = 0.0
-        matched_indices_B = set()
+        matched_indices_2 = set()
         
-        for gamma_A in list_A:
-            # Find best energy match in B (smallest Z-score within 3σ)
-            best_match_idx = -1
-            best_z_energy = 999.0
+        for gamma_1 in gamma_list_1:
+            # Find best energy match in 2 (smallest Z-score within 3.0 sigma)
+            best_match_index = -1
+            best_z_score_energy = 999.0
             
-            for idx, gamma_B in enumerate(list_B):
-                if idx in matched_indices_B:
+            for index, gamma_2 in enumerate(gamma_list_2):
+                if index in matched_indices_2:
                     continue
                 
-                z_energy = get_z_score(
-                    gamma_A['energy'], gamma_A['energy_uncertainty'], 
-                    gamma_B['energy'], gamma_B['energy_uncertainty']
+                z_score_energy = calculate_z_score(
+                    gamma_1['energy'], gamma_1['energy_uncertainty'], 
+                    gamma_2['energy'], gamma_2['energy_uncertainty']
                 )
                 
-                if z_energy <= Energy_Match_Threshold and z_energy < best_z_energy:
-                    best_z_energy = z_energy
-                    best_match_idx = idx
+                if z_score_energy <= energy_match_threshold and z_score_energy < best_z_score_energy:
+                    best_z_score_energy = z_score_energy
+                    best_match_index = index
             
-            if best_match_idx != -1:
-                gamma_B = list_B[best_match_idx]
-                matched_indices_B.add(best_match_idx)
+            if best_match_index != -1:
+                gamma_2 = gamma_list_2[best_match_index]
+                matched_indices_2.add(best_match_index)
                 
                 # Intensity consistency check
-                z_intensity = get_z_score(
-                    gamma_A['intensity'], gamma_A['intensity_uncertainty'], 
-                    gamma_B['intensity'], gamma_B['intensity_uncertainty']
+                z_score_intensity = calculate_z_score(
+                    gamma_1['intensity'], gamma_1['intensity_uncertainty'], 
+                    gamma_2['intensity'], gamma_2['intensity_uncertainty']
                 )
                 
-                if z_intensity <= Intensity_Match_Threshold:
+                if z_score_intensity <= intensity_match_threshold:
                     # Compatible intensities (e.g., 80±10 vs 100): use average
                     # Example: Pair 2 above: (80+100)/2 = 90
-                    overlap = (gamma_A['intensity'] + gamma_B['intensity']) / 2.0
+                    overlap = (gamma_1['intensity'] + gamma_2['intensity']) / 2.0
                 else:
                     # Inconsistent intensities (e.g., 100±5 vs 5±1): use minimum
-                    overlap = min(gamma_A['intensity'], gamma_B['intensity'])
+                    overlap = min(gamma_1['intensity'], gamma_2['intensity'])
                 
                 intersection_sum += overlap
 
         # Subset-robust scoring: normalize by smaller dataset
         # Example: intersection=182.5, min(230,185)=185 → score=182.5/185=0.986
-        sum_A = sum(gamma['intensity'] for gamma in list_A)
-        sum_B = sum(gamma['intensity'] for gamma in list_B)
+        intensity_sum_1 = sum(gamma['intensity'] for gamma in gamma_list_1)
+        intensity_sum_2 = sum(gamma['intensity'] for gamma in gamma_list_2)
         
-        if min(sum_A, sum_B) == 0:
+        if min(intensity_sum_1, intensity_sum_2) == 0:
             return 0.0
         
-        score = intersection_sum / min(sum_A, sum_B)
-        return min(score, 1.0)
+        similarity_score = intersection_sum / min(intensity_sum_1, intensity_sum_2)
+        return min(similarity_score, 1.0)
     
     else:
         # Binary mode: Energy-only matching (no intensity data)
-        # Example: When intensities unreported, count energy matches within 3σ
+        # Example: When intensities unreported, count energy matches within 3.0 sigma
         matches_count = 0
-        matched_indices_B = set()
+        matched_indices_2 = set()
         
-        for gamma_A in list_A:
-            for idx, gamma_B in enumerate(list_B):
-                if idx in matched_indices_B: continue
+        for gamma_1 in gamma_list_1:
+            for index, gamma_2 in enumerate(gamma_list_2):
+                if index in matched_indices_2: continue
                 
-                z_energy = get_z_score(
-                    gamma_A['energy'], gamma_A['energy_uncertainty'], 
-                    gamma_B['energy'], gamma_B['energy_uncertainty']
+                z_score_energy = calculate_z_score(
+                    gamma_1['energy'], gamma_1['energy_uncertainty'], 
+                    gamma_2['energy'], gamma_2['energy_uncertainty']
                 )
                 
-                if z_energy <= Energy_Match_Threshold:
+                if z_score_energy <= energy_match_threshold:
                     matches_count += 1
-                    matched_indices_B.add(idx)
+                    matched_indices_2.add(index)
                     break
         
-        # Subset-robust: match_count / smaller_dataset_size
-        min_len = min(len(list_A), len(list_B))
-        if min_len == 0: return 0.0
+        # Subset-robust: matches_count / smaller_dataset_size
+        minimum_length = min(len(gamma_list_1), len(gamma_list_2))
+        if minimum_length == 0: return 0.0
         
-        return float(matches_count) / float(min_len)
+        return float(matches_count) / float(minimum_length)
 
 
 def extract_features(level_1, level_2):
@@ -755,7 +755,7 @@ def generate_synthetic_training_data():
     - Similarly, if two levels exhibit IDENTICAL gamma decay patterns (Fingerprint match),
       they are likely the same physical state despite energy value offsets.
     - XGBoost learns this interaction: when (Spin+Parity is Perfect) OR (Gamma is Perfect),
-      the model assigns higher probability even with moderate Energy_Sim (e.g., 0.4-0.7).
+      the model assigns higher probability even with moderate energy_similarity (e.g., 0.4-0.7).
     """
     training_points = []
     
@@ -780,14 +780,14 @@ def generate_synthetic_training_data():
         # ADJUSTMENT FOR NEUTRAL/TENTATIVE:
         # Map raw scores to "Confidence Factors" to prevent multiplicative decay from killing good matches.
         # If Score is Neutral (0.5), treat it as "No Info" -> Factor ~0.85 (slight penalty vs perfect).
-        def value_map(value):
+        def calculate_confidence_factor(value):
             if value == Scoring_Config['General']['Neutral_Score']:
                 return 0.85
             return value
 
-        spin_factor = value_map(spin_similarity)
-        parity_factor = value_map(parity_similarity)
-        gamma_factor = value_map(gamma_similarity)
+        spin_factor = calculate_confidence_factor(spin_similarity)
+        parity_factor = calculate_confidence_factor(parity_similarity)
+        gamma_factor = calculate_confidence_factor(gamma_similarity)
 
         # Feature Correlation: Physics Rescue
         # Condition 1: Perfect Quantum Numbers (Spin/Parity >= Threshold)
@@ -804,7 +804,7 @@ def generate_synthetic_training_data():
             is_gamma_match = (gamma_similarity >= correlation_threshold)
 
             if is_quantum_match or is_gamma_match:
-                 # Apply rescue: e → e^exponent (e.g., sqrt transforms 0.04→0.2, 0.4→0.63)
+                 # Apply rescue: energy → energy^exponent (e.g., sqrt transforms 0.04→0.2, 0.4→0.63)
                  effective_energy = energy_similarity ** rescue_exponent
 
         # PROBABILITY FORMULA:
@@ -849,18 +849,18 @@ def generate_synthetic_training_data():
     for energy in mediocre_energy_values:
         # Case A: Perfect Quantum Numbers -> Label should be BOOSTED (rescued)
         # Model learns: [mediocre energy, perfect spin, perfect parity] -> high probability
-        label_boosted_q = calculate_label(energy, perfect_spin, perfect_parity, 1.0, neutral_score)
-        training_points.append(([energy, perfect_spin, perfect_parity, 1.0, neutral_score], label_boosted_q))
+        label_boosted_quantum_numbers = calculate_label(energy, perfect_spin, perfect_parity, 1.0, neutral_score)
+        training_points.append(([energy, perfect_spin, perfect_parity, 1.0, neutral_score], label_boosted_quantum_numbers))
         
         # Case B: Perfect Gamma Fingerprint -> Label should be BOOSTED (rescued)
         # Model learns: [mediocre energy, unknown spin, unknown parity, Match Gamma] -> high probability
         # Teach both Perfect (1.0) and Threshold (0.85) cases
-        label_boosted_g = calculate_label(energy, neutral_score, neutral_score, 1.0, 1.0)
-        training_points.append(([energy, neutral_score, neutral_score, 1.0, 1.0], label_boosted_g))
+        label_boosted_gamma = calculate_label(energy, neutral_score, neutral_score, 1.0, 1.0)
+        training_points.append(([energy, neutral_score, neutral_score, 1.0, 1.0], label_boosted_gamma))
         
         # Explicitly teach the threshold value (0.85) to ensure the cut-off is learned
-        label_boosted_g_threshold = calculate_label(energy, neutral_score, neutral_score, 1.0, rescue_threshold)
-        training_points.append(([energy, neutral_score, neutral_score, 1.0, rescue_threshold], label_boosted_g_threshold))
+        label_boosted_gamma_threshold = calculate_label(energy, neutral_score, neutral_score, 1.0, rescue_threshold)
+        training_points.append(([energy, neutral_score, neutral_score, 1.0, rescue_threshold], label_boosted_gamma_threshold))
 
         # Case C: Imperfect Physics -> Label should be STANDARD (no rescue)
         # Model learns: [mediocre energy, imperfect physics] -> standard (lower) probability
