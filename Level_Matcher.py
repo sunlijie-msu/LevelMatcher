@@ -388,7 +388,7 @@ if __name__ == "__main__":
             xb_prob = level_matcher_model_xgb.predict(feature_dataframe)[0]
             lgbm_prob = level_matcher_model_lgbm.predict(feature_dataframe)[0]
             
-            # Separate logic: No averaging. Each model is independent.
+            # Separate logic: Each model is independent.
             
             # Record level pairs above output threshold (Dual Report)
             if xb_prob > pairwise_output_threshold or lgbm_prob > pairwise_output_threshold:
