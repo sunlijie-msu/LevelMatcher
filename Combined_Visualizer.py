@@ -1,8 +1,30 @@
 """Combined Level Scheme and Clustering Visualizer
 
-This script generates two visualizations:
-1. Input_Level_Scheme.png: Input datasets showing all levels.
-2. Output_Cluster_Scheme.png: Output clustering results with cluster and probability labels.
+# High-level Structure and Workflow Explanation:
+======================================
+
+Workflow Diagram:
+[Start]
+   |
+   v
+[Input: JSON Levels & Clustering Results]
+   |
+   v
+[Step 1: Data Parsing] --> [Clusters & Members]
+   |
+   v
+[Step 2: Geometry Engine] --> [Collision Resolution]
+   |                                  |
+   |                                  v
+   |                  [Iterative Label Spreading (Relaxation)]
+   v
+[Step 3: Rendering] --> [Draw Levels (True Energy)]
+   |                              |
+   v                              v
+[Align Clusters (Y-Axis)] --> [Connect Labels]
+   |
+   v
+[End: Output Scheme Images]
 
 Explanation of Code Structure
 1) Parse clustering results into clusters and members.

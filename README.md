@@ -4,7 +4,7 @@ A physics-informed nuclear level matching system developed by the FRIB Nuclear D
 
 ## Overview
 
-Level Matcher identifies corresponding nuclear energy levels across different experimental datasets by combining:
+Level Matcher identifies corresponding nuclear energy levels across different test datasets by combining:
 - **Physics-Informed Feature Engineering**: Five-dimensional feature vectors encoding nuclear physics constraints
 - **Dual-Model Comparison**: XGBoost (flexible baseline) + LightGBM (regularization-constrained validation)
 - **Graph-Based Clustering**: Deterministic algorithm enforcing dataset uniqueness and mutual consistency

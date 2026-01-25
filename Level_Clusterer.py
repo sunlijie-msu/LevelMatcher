@@ -19,7 +19,7 @@ Workflow Diagram:
                   |  For each candidate pair (Node A, Node B):   |
                   |  1. Check existing clusters for A & B        |
                   |  2. If disjoint -> Check Compatibility       |
-                  |     (Must actally match ALL members)         |
+                  |     (Must actually match ALL members)         |
                   |  3. Merge Clusters or Add to Singleton       |
                   |     (Enforce Dataset Uniqueness Constraint)  |
                   +----------------------------------------------+

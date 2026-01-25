@@ -2,12 +2,28 @@
 Feature Engineering For Nuclear Level Matching
 ======================================
 
-# High-level Structure and Workflow Explanation:
+# High-level Structure and Module Architecture:
 -------------------------
 
-1. **Data Standardization** (`load_levels_from_json`):
+Functional Architecture:
+                                   [Scoring Config & Physics Rules]
+                                                 |
+                                                 v
+[Data Ingestion]                      [Similarity Kernels]
+(parse_json_datasets)                 (Energy, Spin, Parity, Gamma)
+       |                                         |
+       v                                         v
+[Standardized Levels] --------+----> [Feature Extraction] ----> [5D Feature Vector]
+                              |      (extract_features)
+                              |
+                              +----> [Synthetic Generator] ----> [Training Data]
+                                     (generate_synthetic_    (Features + Labels)
+                                      training_data)
+
+Technical Components:
+1. **Data Ingestion** (`parse_json_datasets`):
    - Parses NNDC JSON schema with nested uncertainty structure.
-   - Extracts: dataset_code, level_id, energy_value, energy_uncertainty, spin_parity_list, spin_parity_string.
+   - Extracts: Level properties (Energy, Jπ) and Gamma Decay fingerprints.
    - Attaches gamma_decays list with energy/intensity and their uncertainties.
    - **Uncertainty Handling**: Dataset_Parser.py infers uncertainties from precision during ENSDF parsing.
      JSON contains either explicit uncertainties (type="symmetric") or inferred (type="inferred").
@@ -102,7 +118,7 @@ Scoring_Config = {
     }
 }
 
-def load_levels_from_json(dataset_codes):
+def parse_json_datasets(dataset_codes):
     """
     Parses JSON files (modern schema) for the given dataset codes and returns a list of standardized level dictionaries.
     Input files: test_dataset_{code}.json

@@ -2,7 +2,21 @@
 Dataset Parser for Nuclear Level Matcher
 =========================================
 
-Strategy:
+# High-level Structure and Workflow Explanation:
+======================================
+
+Workflow Diagram:
+[Start] -> [Raw ENSDF Strings] -> [Parser Engine] -> [Structured Output]
+                                     |
+                                     v
+                             [Inference Rules]
+                            /        |        \
+      [Uncertainties (Precision)] [Jπ Lists]  [Gamma Decays]
+                            \        |        /
+                             v       v       v
+                     [Standardized JSON Schema (Levels/Gammas)]
+
+Technical Steps:
 1. Parse raw ENSDF-style strings for energies, uncertainties, spins, and parities.
 2. Infer uncertainties from precision (significant figures) where explicit values are missing.
 3. Standardize data into a consistent JSON schema for the pipeline.

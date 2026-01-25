@@ -5,6 +5,8 @@
 - **Simplicity First:** Avoid creating new functions or classes for simple logic. Keep the logic inline and use clear comments to explain complex lines.
 
 - **Update Documentation:** Include a high-level strategy explanation at the top of each script. Valid code changes must be immediately reflected in the "Explanation of Code Structure" header or relevant docstrings. Never leave comments outdated. Comments should use professional terminology consistently, with numbered headers explaining each step, architecture, logic, and workflow.
+  - **Requirement:** Every code file must begin with a "High-level Structure and Workflow Explanation" header that is accurate, well-structured (consistent spacing/capitalization), and professionally written.
+  - **Visual Aid:** This header must include a workflow diagram or flowchart (using ASCII/text) with arrows clearly indicating the flow of data or logic steps.
 
 - **Clean Codebase:** Regularly remove redundant, obsolete, or spaghetti scripts to prevent confusion. Maintain a focused file structure where only active, necessary files exist.
 
