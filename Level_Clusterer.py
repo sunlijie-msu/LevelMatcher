@@ -2,44 +2,31 @@ import pandas as pd
 from Feature_Engineer import extract_features
 
 """
-# High-level Structure and Workflow Explanation:
+# High-level Structure and Module Architecture:
 ======================================
 
 Module Purpose:
-This module implements the Graph-Based Clustering algorithm used to reconcile matched level pairs into coherent physical levels. It operates independently of the training/inference pipeline, taking probability-weighted edges and grouping them into clusters.
+This module implements a Constrained Graph Partitioning algorithm to reconcile matched level pairs into coherent physical levels.
 
-Workflow Diagram:
-[Input: Matched Pairs (List)] --> [Filter: Probability > 15%] --> [Sort: Descending Probability]
-                                         |
-                                         v
-                                  [Greedy Merging Loop]
-                                         |
-                                         v
-                  +----------------------------------------------+
-                  |  For each candidate pair (Node A, Node B):   |
-                  |  1. Check existing clusters for A & B        |
-                  |  2. If disjoint -> Check Compatibility       |
-                  |     (Must actually match ALL members)         |
-                  |  3. Merge Clusters or Add to Singleton       |
-                  |     (Enforce Dataset Uniqueness Constraint)  |
-                  +----------------------------------------------+
-                                         |
-                                         v
-           [Post-Processing: Sort Clusters by Energy] --> [Output: Clustering Report]
+ALGORITHM CLASSIFICATION & COMPARISON:
+--------------------------------------
+This module is NOT traditional unsupervised ML clustering (e.g., discovering communities in raw data). It is a deterministic, rule-based partitioning engine.
 
-Technical Steps:
-1. **initialization**: Create a singleton cluster for every level in the dataset.
-2. **Filtering**: Select only level pairs with match probability > clustering_merge_threshold (15%).
-3. **Greedy Merging**: Iterate through pairs from highest to lowest probability.
-   - Algorithm: Agglomerative clustering with domain-specific constraints.
-   - Constraint 1 (Dataset Uniqueness): A cluster cannot contain two levels from the same dataset (e.g., two 'A' levels).
-   - Constraint 2 (Mutual Consistency): To merge two clusters, every member of Cluster 1 must be compatible with every member of Cluster 2.
-4. **Result Formatting**: Identify "Anchor" levels (lowest uncertainty) and format output for human review.
+| Aspect | Unsupervised Graph Clustering (Standard ML) | Constrained Graph Partitioning (This Module) |
+| :--- | :--- | :--- |
+| **Logic** | Discovers hidden patterns/densities. | Reconciles known identities with hard rules. |
+| **Learning Type** | Unsupervised (no labels). | Deterministic (rules + supervised predictions). |
+| **Edge Weights** | Topological proximity or similarity. | ML-Predicted Probabilities (XGBoost/LightGBM). |
+| **Constraints** | Usually none (soft clusters). | **Hard Physics Constraints** (Dataset Uniqueness). |
+| **Structure** | Overlapping or fuzzy groups. | **Clique-Based** (Mutual Consistency required). |
+| **Optimization** | Maximizes Modularity / Minimizes Cut. | Enforces Physical Validity & Clique Integrity. |
+| **Examples** | Louvain, DBSCAN, Spectral Clustering. | This custom Clique Partitioning Engine. |
 """
 
 def perform_clustering_and_output(matching_level_pairs, model_instance, output_filename, model_name, level_dataframe):
     """
-    Executes greedy graph clustering and writes results to file.
+    Executes constrained graph partitioning and writes results to file.
+    Algorithm: Deterministic rule-based partitioning using supervised predictions (NOT unsupervised clustering).
     Refactored to allow independent execution for different models (XGB vs LGBM).
     Preserves all original logic and educational comments.
     """
@@ -52,13 +39,17 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
     clustering_merge_threshold = 0.15  # Minimum probability for cluster merging (15%)
 
     # ==========================================
-    # Logic: Greedy Cluster Merging
+    # Logic: Greedy Constrained Partitioning
     # ==========================================
-    # Algorithm: Greedy cluster merging based on match probability ranking
+    # Algorithm: Greedy partition merging based on supervised match probability ranking (NOT unsupervised clustering)
+    # Classification: Constrained Agglomerative Partitioning with domain-specific hard constraints
     # Key Constraints:
     #   1. Dataset Uniqueness: Each cluster contains at most one level per dataset (no duplicate sources)
-    #   2. Mutual Consistency: All cluster members must be pairwise compatible (all pairs > clustering_merge_threshold)
-    #   3. Ambiguity Support: Poorly resolved levels can belong to multiple clusters when compatible with multiple anchors
+    #   2. Mutual Consistency (Clique Structure): All cluster members must be pairwise compatible (all pairs > clustering_merge_threshold).
+    #      This prevents "chain" merges where A-B (strong) and B-C (strong) but A-C (weak < threshold).
+    #      Before merging two clusters, code verifies EVERY member in Cluster 1 matches EVERY member in Cluster 2 (lines 130-145).
+    #   3. Multi-Cluster Membership: Unresolved levels (large uncertainty) can belong to multiple distinct clusters simultaneously,
+    #      representing doublet/triplet cases where low-resolution data matches multiple high-resolution resolved states.
     
     print(f"\n--- Starting Clustering for {model_name} ---")
 
@@ -136,7 +127,10 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
                     continue  # Move to next cluster pair
 
                 # Scenario B: No dataset overlap (can potentially merge)
-                # Verify all-to-all compatibility before merging
+                # Verify all-to-all compatibility before merging (Critical: prevents chain-of-weak-matches)
+                # Example: If A matches B (80%), B matches C (80%), but A-C (10%) fails threshold,
+                # this loop will detect (A, C) not in valid_pairs and reject the merge.
+                # This enforces clique structure: every member must match every other member above threshold.
                 consistent = True
                 for member_1 in cluster_1.values():
                     for member_2 in cluster_2.values():

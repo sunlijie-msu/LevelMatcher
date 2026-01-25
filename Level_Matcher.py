@@ -58,7 +58,7 @@ Step 4: Pairwise Inference
   Process: 
     - Generate all cross-dataset pairs
     - Extract feature vectors (Feature_Engineer.extract_features)
-    - Predict match probability
+    - Predict match probability (Inference)
   Output: List of level pairs with probability > threshold
 
 Step 5: Graph-Based Clustering
