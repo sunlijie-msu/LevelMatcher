@@ -2,6 +2,28 @@
 Hyperparameter Tuning for Nuclear Level Matcher
 ================================================
 
+# High-level Structure and Workflow Explanation:
+======================================
+
+Workflow Diagram:
+[Start]
+   |
+   v
+[Synthetic Data Gen] --> [Split: Train / Validation (80/20)]
+   |
+   v
+[Test Loop: Iterate Configs]
+   |
+   |--> [Train Model (XGBoost)] --> [Validate MSE]
+   |
+   |--> [Ingest Test Data] --> [Pairwise Inference] --> [Clustering]
+   |
+   v
+[Compute Metrics] --> [MSE, Probability Spread, Confidence Separation]
+   |
+   v
+[Select Best Config] --> [End]
+
 Strategy:
 1. Split synthetic training data for validation (holdout method)
 2. Train multiple model configurations
@@ -34,7 +56,7 @@ if project_root not in sys.path:
 from xgboost import XGBRegressor
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
-from Feature_Engineer import extract_features, generate_synthetic_training_data, load_levels_from_json
+from Feature_Engineer import extract_features, generate_synthetic_training_data, parse_json_datasets
 
 # ==========================================
 # Configuration: Parameter Grid
@@ -112,7 +134,7 @@ def train_and_validate_model(config):
     # Train model with current configuration
     model = XGBRegressor(
         objective='binary:logistic',
-        monotone_constraints='(1, 1, 1, 1)',  # CRITICAL: Never remove physics constraint
+        monotone_constraints='(1, 1, 1, 1, 1)',  # CRITICAL: Never remove physics constraint (5D feature vector)
         random_state=42,
         n_estimators=config['n_estimators'],
         max_depth=config['max_depth'],
@@ -142,7 +164,7 @@ def run_inference_and_clustering(model, config_name):
     print(f"\n  Running inference and clustering for: {config_name}")
     
     # Load real test datasets
-    levels = load_levels_from_json(['A', 'B', 'C'])
+    levels = parse_json_datasets(['A', 'B', 'C'])
     dataframe = pd.DataFrame(levels)
     dataframe['level_id'] = dataframe.apply(lambda row: f"{row['dataset_code']}_{int(row['energy_value'])}", axis=1)
     
