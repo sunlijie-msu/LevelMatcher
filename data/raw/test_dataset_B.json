@@ -1,5 +1,5 @@
 {
-    "levels_table": {
+    "levelsTable": {
         "levels": [
             {
                 "energy": {
@@ -9,19 +9,19 @@
                         "value": 0.0,
                         "type": "inferred"
                     },
-                    "evaluator_input": "0"
+                    "evaluatorInput": "0"
                 },
-                "is_stable": false,
-                "spin_parity": {
+                "isStable": false,
+                "spinParity": {
                     "values": [
                         {
-                            "two_times_spin": 0,
-                            "is_tentative_spin": false,
+                            "twoTimesSpin": 0,
+                            "isTentativeSpin": false,
                             "parity": "+",
-                            "is_tentative_parity": false
+                            "isTentativeParity": false
                         }
                     ],
-                    "evaluator_input": "0+"
+                    "evaluatorInput": "0+"
                 }
             },
             {
@@ -32,9 +32,9 @@
                         "value": 3.0,
                         "type": "symmetric"
                     },
-                    "evaluator_input": "603 3"
+                    "evaluatorInput": "603 3"
                 },
-                "is_stable": false
+                "isStable": false
             },
             {
                 "energy": {
@@ -44,9 +44,9 @@
                         "value": 1.0,
                         "type": "symmetric"
                     },
-                    "evaluator_input": "2006 1"
+                    "evaluatorInput": "2006 1"
                 },
-                "is_stable": false,
+                "isStable": false,
                 "gammas": [
                     0,
                     1
@@ -60,19 +60,19 @@
                         "value": 2.0,
                         "type": "symmetric"
                     },
-                    "evaluator_input": "3000 2"
+                    "evaluatorInput": "3000 2"
                 },
-                "is_stable": false,
-                "spin_parity": {
+                "isStable": false,
+                "spinParity": {
                     "values": [
                         {
-                            "two_times_spin": 2,
-                            "is_tentative_spin": false,
+                            "twoTimesSpin": 2,
+                            "isTentativeSpin": false,
                             "parity": "-",
-                            "is_tentative_parity": false
+                            "isTentativeParity": false
                         }
                     ],
-                    "evaluator_input": "1-"
+                    "evaluatorInput": "1-"
                 }
             },
             {
@@ -83,19 +83,19 @@
                         "value": 2.0,
                         "type": "symmetric"
                     },
-                    "evaluator_input": "4000 2"
+                    "evaluatorInput": "4000 2"
                 },
-                "is_stable": false,
-                "spin_parity": {
+                "isStable": false,
+                "spinParity": {
                     "values": [
                         {
-                            "two_times_spin": 4,
-                            "is_tentative_spin": true,
+                            "twoTimesSpin": 4,
+                            "isTentativeSpin": true,
                             "parity": "+",
-                            "is_tentative_parity": true
+                            "isTentativeParity": true
                         }
                     ],
-                    "evaluator_input": "2(+)"
+                    "evaluatorInput": "2(+)"
                 }
             },
             {
@@ -106,24 +106,24 @@
                         "value": 2.0,
                         "type": "symmetric"
                     },
-                    "evaluator_input": "5000 2"
+                    "evaluatorInput": "5000 2"
                 },
-                "is_stable": false,
-                "spin_parity": {
+                "isStable": false,
+                "spinParity": {
                     "values": [
                         {
-                            "two_times_spin": 8,
-                            "is_tentative_spin": true,
+                            "twoTimesSpin": 8,
+                            "isTentativeSpin": true,
                             "parity": "-",
-                            "is_tentative_parity": true
+                            "isTentativeParity": true
                         }
                     ],
-                    "evaluator_input": "(4-)"
+                    "evaluatorInput": "(4-)"
                 }
             }
         ]
     },
-    "gammas_table": {
+    "gammasTable": {
         "gammas": [
             {
                 "energy": {
@@ -133,18 +133,18 @@
                         "value": 2.0,
                         "type": "symmetric"
                     },
-                    "evaluator_input": "1403 2"
+                    "evaluatorInput": "1403 2"
                 },
-                "gamma_intensity": {
+                "gammaIntensity": {
                     "value": 100.0,
                     "uncertainty": {
                         "value": 5.0,
                         "type": "symmetric"
                     },
-                    "evaluator_input": "100"
+                    "evaluatorInput": "100"
                 },
-                "initial_level_index": 2,
-                "final_level_index": 1
+                "initialLevel": 2,
+                "finalLevel": 1
             },
             {
                 "energy": {
@@ -154,18 +154,18 @@
                         "value": 2.0,
                         "type": "symmetric"
                     },
-                    "evaluator_input": "2006 2"
+                    "evaluatorInput": "2006 2"
                 },
-                "gamma_intensity": {
+                "gammaIntensity": {
                     "value": 18.0,
                     "uncertainty": {
                         "value": 3.0,
                         "type": "symmetric"
                     },
-                    "evaluator_input": "18 3"
+                    "evaluatorInput": "18 3"
                 },
-                "initial_level_index": 2,
-                "final_level_index": 0
+                "initialLevel": 2,
+                "finalLevel": 0
             }
         ]
     }

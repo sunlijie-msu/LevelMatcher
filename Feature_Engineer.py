@@ -102,7 +102,7 @@ Scoring_Config = {
     'Feature_Correlation': {
         # Controls how perfect spin/parity matching can "rescue" mediocre energy similarity.
         # Physics rationale: If two levels have identical quantum numbers (Jπ) and are isolated
-        # (no nearby levels with same Jπ), energy disagreement may be due to measurement error
+        # (no nearby levels with same Spin-Parity), energy disagreement may be due to measurement error
         # or calibration issues rather than genuine mismatch.
         #
         # When Enabled: If spin_similarity >= Threshold AND parity_similarity >= Threshold,
@@ -110,10 +110,10 @@ Scoring_Config = {
         # Example: Rescue_Exponent=0.5 (sqrt) transforms energy=0.4→0.63, energy=0.6→0.77
         'Enabled': True,
         'Threshold': 0.85,        # Minimum spin/parity similarity to trigger rescue (firm matches only)
-        'Rescue_Exponent': 0.5    # Exponent for energy boost: energy → energy^exponent (0.5 = sqrt, 0.7 = gentler)
+        'Rescue_Exponent': 0.5    # Exponent for energy boost: energy → energy^exponent (0.5 = square root, 0.7 = gentler)
     },
     'General': {
-        # Score used when data is missing (e.g. unknown). Perform **Manual Imputation**. XGBoost receives a concrete number of 0.5, not a `NaN`, so it treats it like any other feature value.
+        # Score used when data is missing (e.g. unknown). Perform **Manual Imputation**. Machine Learning models receive a concrete number of 0.5, not a missing value, so it treats it like any other feature value.
         'Neutral_Score': 0.5
     }
 }
@@ -154,15 +154,15 @@ def parse_json_datasets(dataset_codes):
                 data = json.load(f)
                 
                 # Format: New ENSDF JSON schema (levels_table -> levels, gammas_table -> gammas)
-                if isinstance(data, dict) and 'levels_table' in data:
-                    raw_levels = data['levels_table'].get('levels', [])
-                    gammas_table_list = data.get('gammas_table', {}).get('gammas', [])
+                if isinstance(data, dict) and 'levelsTable' in data:
+                    raw_levels = data['levelsTable'].get('levels', [])
+                    gammas_table_list = data.get('gammasTable', {}).get('gammas', [])
                     
                     for level_index, level_item in enumerate(raw_levels):
                         energy_value = level_item.get('energy', {}).get('value')
                         energy_uncertainty = level_item.get('energy', {}).get('uncertainty', {}).get('value', 5.0)
-                        spin_parity_list = level_item.get('spin_parity', {}).get('values', [])
-                        spin_parity_string = level_item.get('spin_parity', {}).get('evaluator_input')
+                        spin_parity_list = level_item.get('spinParity', {}).get('values', [])
+                        spin_parity_string = level_item.get('spinParity', {}).get('evaluatorInput')
                         
                         # Extract gamma decays for this level from gammas_table_list
                         gamma_decays = []
@@ -172,7 +172,7 @@ def parse_json_datasets(dataset_codes):
                                 if 0 <= gamma_index < len(gammas_table_list):
                                     gamma_entry = gammas_table_list[gamma_index]
                                     gamma_energy = gamma_entry['energy']
-                                    gamma_intensity = gamma_entry.get('gamma_intensity', {})
+                                    gamma_intensity = gamma_entry.get('gammaIntensity', {})
                                     
                                     gamma_decays.append({
                                         'energy': gamma_energy['value'],
@@ -255,15 +255,15 @@ def calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2):
         return Scoring_Config['General']['Neutral_Score']
 
     # Extract spin values (J) from both levels
-    # Input: two_times_spin (2J stored as integer in JSON, e.g., 3 means J=3/2)
-    # Output: list of (J, is_tentative) tuples
+    # Input: twoTimesSpin (2J stored as integer in JSON, e.g., 3 means J=3/2)
+    # Output: list of (J, isTentative) tuples
     spins_1 = [
-        (state['two_times_spin'] / 2.0, state['is_tentative_spin'])
-        for state in spin_parity_list_1 if state.get('two_times_spin') is not None
+        (state['twoTimesSpin'] / 2.0, state['isTentativeSpin'])
+        for state in spin_parity_list_1 if state.get('twoTimesSpin') is not None
     ]
     spins_2 = [
-        (state['two_times_spin'] / 2.0, state['is_tentative_spin'])
-        for state in spin_parity_list_2 if state.get('two_times_spin') is not None
+        (state['twoTimesSpin'] / 2.0, state['isTentativeSpin'])
+        for state in spin_parity_list_2 if state.get('twoTimesSpin') is not None
     ]
 
     # Guard: If filtering removed all spin values (all were None), return neutral score
@@ -272,7 +272,7 @@ def calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2):
 
     # Optimistic matching: Compare all spin pairs and keep the best (maximum) similarity score
     # If ANY spin combination matches, accept two levels match compatibility
-    max_similarity_score = 0.0
+    maximum_similarity_score = 0.0
     
     for spin_1, spin1_is_tentative in spins_1:
         for spin_2, spin2_is_tentative in spins_2:
@@ -304,10 +304,10 @@ def calculate_spin_similarity(spin_parity_list_1, spin_parity_list_2):
                 pair_similarity = Scoring_Config['Spin']['Mismatch_Firm']
 
             # Keep the best score across all spin pairs
-            if pair_similarity > max_similarity_score:
-                max_similarity_score = pair_similarity
+            if pair_similarity > maximum_similarity_score:
+                maximum_similarity_score = pair_similarity
     
-    return max_similarity_score
+    return maximum_similarity_score
 
 def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
     """
@@ -345,13 +345,13 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
 
     # Extract parity values (+/-) from both levels
     # Input: parity ('+' or '-' string in JSON)
-    # Output: list of (parity, is_tentative) tuples
+    # Output: list of (parity, isTentative) tuples
     parities_1 = [
-        (state['parity'], state['is_tentative_parity'])
+        (state['parity'], state['isTentativeParity'])
         for state in spin_parity_list_1 if state.get('parity') is not None
     ]
     parities_2 = [
-        (state['parity'], state['is_tentative_parity'])
+        (state['parity'], state['isTentativeParity'])
         for state in spin_parity_list_2 if state.get('parity') is not None
     ]
 
@@ -361,7 +361,7 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
 
     # Optimistic matching: Compare all parity pairs and keep the best (maximum) similarity score
     # If ANY parity combination matches, accept two levels match compatibility
-    max_parity_similarity_score = 0.0
+    maximum_parity_similarity_score = 0.0
     
     for parity_1, is_tentative_1 in parities_1:
         for parity_2, is_tentative_2 in parities_2:
@@ -387,10 +387,10 @@ def calculate_parity_similarity(spin_parity_list_1, spin_parity_list_2):
                     pair_similarity = Scoring_Config['Parity']['Mismatch_Weak']
             
             # Keep the best score across all parity pairs
-            if pair_similarity > max_parity_similarity_score:
-                max_parity_similarity_score = pair_similarity
+            if pair_similarity > maximum_parity_similarity_score:
+                maximum_parity_similarity_score = pair_similarity
                 
-    return max_parity_similarity_score
+    return maximum_parity_similarity_score
 
 
 def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
@@ -459,7 +459,7 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
     def normalize_gamma_intensities(raw_decays):
         clean_list = []
         has_intensity = False
-        max_intensity = 0.0
+        maximum_intensity = 0.0
         
         for gamma in raw_decays:
             energy_value = float(gamma['energy'])
@@ -472,7 +472,8 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
             
             if intensity_value > 0:
                 has_intensity = True
-                if intensity_value > max_intensity: max_intensity = intensity_value
+                if intensity_value > maximum_intensity:
+                    maximum_intensity = intensity_value
             
             clean_list.append({
                 'energy': energy_value, 
@@ -482,8 +483,8 @@ def calculate_gamma_decay_pattern_similarity(gamma_decays_1, gamma_decays_2):
             })
             
         # Normalize strongest gamma to 100.0 (scales uncertainties proportionally)
-        if has_intensity and max_intensity > 0:
-            scale = 100.0 / max_intensity
+        if has_intensity and maximum_intensity > 0:
+            scale = 100.0 / maximum_intensity
             for gamma in clean_list:
                 gamma['intensity'] *= scale
                 gamma['intensity_uncertainty'] *= scale

@@ -14,7 +14,7 @@ Workflow Diagram:
 [Start]
    |
    v
-[Step 1: Synthetic Data Gen] --> [Physics Rules]
+[Step 1: Synthetic Data Generation] --> [Physics Rules]
    |                                  |
    v                                  v
 [Step 2: Model Training] <---- [Synthetic Labels]
@@ -49,7 +49,7 @@ Step 2: Model Training
 Step 3: Test Data Ingestion
   Source: Test datasets (A, B, C) in data/raw/
   Input: Local JSON files (test_dataset_A.json, etc.) containing levels and gamma transitions
-  Process: Standardizes energy, uncertainty, Jπ strings, and gamma decay records into a unified DataFrame
+  Process: Standardizes energy, uncertainty, Spin-Parity strings, and gamma decay records into a unified DataFrame
   Constraint: Strictly for inference; these levels are never seen during the training phase.
   Function: parse_json_datasets()
 
@@ -58,14 +58,14 @@ Step 4: Pairwise Inference
   Process: 
     - Generate all cross-dataset pairs
     - Extract feature vectors (Feature_Engineer.extract_features)
-    - Predict match probability (Inference)
-  Output: List of level pairs with probability > threshold
+    - Apply both Machine Learning models to calculate matching probabilities
+  Output: Ranked list of candidate matches
 
-Step 5: Graph-Based Clustering
-  Input: Candidate level pairs from Step 4
-  Process: Greedy merge algorithm enforcing dataset-uniqueness
-  Output: Clusters with anchors and members
-  Result: Final reconciled level scheme
+Step 5: Constrained Clustering (Graph Partitioning)
+  Input: Candidate match probabilities from Step 4
+  Process: Enforce clique consistency and dataset uniqueness constraints
+  Function: Level_Clusterer.perform_clustering_and_output()
+  Output: Final unified level scheme reconciling datasets A, B, and C
 """
 
 # Configuration Parameters

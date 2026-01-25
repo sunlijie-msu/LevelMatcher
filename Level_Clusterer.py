@@ -5,18 +5,39 @@ from Feature_Engineer import extract_features
 # High-level Structure and Module Architecture:
 ======================================
 
+Workflow Diagram:
+[Start]
+   |
+   v
+[Step 1: Edge Score Filtering] --> [XGBoost/LightGBM Probabilities]
+   |
+   v
+[Step 2: Constraint Validation] --> [Dataset Uniqueness Rule]
+   |
+   v
+[Step 3: Clique Partitioning] --> [Graph Consensus]
+   |
+   v
+[Step 4: Consensus Assignment] --> [Final Level Scheme]
+
+Numbered Technical Steps:
+1. **Edge Filtering**: Identify all level match candidates with high Machine Learning probability.
+2. **Deterministic Partitioning**: Group levels across different datasets that represent the same physical state.
+3. **Consensus Merging**: Calculate the best-estimate energy and quantum properties for each merged cluster.
+4. **Physical Validation**: Enforce that a single physical level cannot contain multiple levels from the same dataset.
+
 Module Purpose:
 This module implements a Constrained Graph Partitioning algorithm to reconcile matched level pairs into coherent physical levels.
 
 ALGORITHM CLASSIFICATION & COMPARISON:
 --------------------------------------
-This module is NOT traditional unsupervised ML clustering (e.g., discovering communities in raw data). It is a deterministic, rule-based partitioning engine.
+This module is NOT traditional unsupervised Machine Learning clustering (e.g., discovering communities in raw data). It is a deterministic, rule-based partitioning engine.
 
 | Aspect | Unsupervised Graph Clustering (Standard ML) | Constrained Graph Partitioning (This Module) |
 | :--- | :--- | :--- |
 | **Logic** | Discovers hidden patterns/densities. | Reconciles known identities with hard rules. |
 | **Learning Type** | Unsupervised (no labels). | Deterministic (rules + supervised predictions). |
-| **Edge Weights** | Topological proximity or similarity. | ML-Predicted Probabilities (XGBoost/LightGBM). |
+| **Edge Weights** | Topological proximity or similarity. | Machine Learning Predicted Probabilities (XGBoost/LightGBM). |
 | **Constraints** | Usually none (soft clusters). | **Hard Physics Constraints** (Dataset Uniqueness). |
 | **Structure** | Overlapping or fuzzy groups. | **Clique-Based** (Mutual Consistency required). |
 | **Optimization** | Maximizes Modularity / Minimizes Cut. | Enforces Physical Validity & Clique Integrity. |
@@ -217,7 +238,7 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
         if anchor_spin_parity == "unknown": anchor_spin_parity = "N/A"
         
         cluster_header = f"\nCluster {i+1}:"
-        anchor_line = f"  Anchor: {anchor_id} | E={anchor_energy:.1f}±{anchor_uncertainty:.1f} keV | Jπ={anchor_spin_parity}"
+        anchor_line = f"  Anchor: {anchor_id} | E={anchor_energy:.1f}±{anchor_uncertainty:.1f} keV | Spin-Parity={anchor_spin_parity}"
         members_header = "  Members:"
         
         # Only print details to console for the primary model (XGBoost) to avoid cluttered output
@@ -231,7 +252,7 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
         clustering_output_lines.append(members_header + "\n")
         
         # Display each member with match probability relative to anchor
-        # Anchor member shows no probability (identity match). Other members show ML-predicted probability.
+        # Anchor member shows no probability (identity match). Other members show Machine Learning-predicted probability.
         for dataset_code in sorted(cluster.keys()):
             member_id = cluster[dataset_code]
             member_data = level_lookup[member_id]
@@ -241,7 +262,7 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
             if member_spin_parity == "unknown": member_spin_parity = "N/A"
             
             if member_id == anchor_id:
-                member_line = f"    [{dataset_code}] {member_id}: E={member_energy:.1f}±{member_uncertainty:.1f} keV, Jπ={member_spin_parity} (Anchor)"
+                member_line = f"    [{dataset_code}] {member_id}: E={member_energy:.1f}±{member_uncertainty:.1f} keV, Spin-Parity={member_spin_parity} (Anchor)"
                 if model_name == "XGBoost": print(member_line)
                 clustering_output_lines.append(member_line + "\n")
             else:
@@ -250,7 +271,7 @@ def perform_clustering_and_output(matching_level_pairs, model_instance, output_f
                 # Convert to DataFrame with explicit feature names
                 input_dataframe = pd.DataFrame([input_vector], columns=feature_names)
                 probability = model_instance.predict(input_dataframe)[0]
-                member_line = f"    [{dataset_code}] {member_id}: E={member_energy:.1f}±{member_uncertainty:.1f} keV, Jπ={member_spin_parity} (Match Probability: {probability:.1%})"
+                member_line = f"    [{dataset_code}] {member_id}: E={member_energy:.1f}±{member_uncertainty:.1f} keV, Spin-Parity={member_spin_parity} (Match Probability: {probability:.1%})"
                 if model_name == "XGBoost": print(member_line)
                 clustering_output_lines.append(member_line + "\n")
     

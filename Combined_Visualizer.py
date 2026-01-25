@@ -1,4 +1,6 @@
-"""Combined Level Scheme and Clustering Visualizer
+"""
+Combined Level Scheme and Clustering Visualizer
+======================================
 
 # High-level Structure and Workflow Explanation:
 ======================================
@@ -21,18 +23,21 @@ Workflow Diagram:
 [Step 3: Rendering] --> [Draw Levels (True Energy)]
    |                              |
    v                              v
-[Align Clusters (Y-Axis)] --> [Connect Labels]
+[Align Clusters (Vertical Axis)] --> [Connect Labels]
    |
    v
 [End: Output Scheme Images]
 
-Explanation of Code Structure
-1) Parse clustering results into clusters and members.
-2) Build per-dataset level lists and apply collision resolution for energy/Jπ text labels.
-3) Compute a single global y-position per cluster (collision-resolved using cluster anchor energies).
-4) Draw level bars at true energies (no vertical bar offsets).
-5) Place cluster/probability labels at the cluster y-position for vertical alignment across datasets,
-   and draw a short connector if the label y differs from the bar energy.
+Numbered Technical Steps:
+1. **Data Ingestion**: Parses standardized JSON level data and Machine Learning clustering output logs.
+2. **Collision Resolution**: Applies iterative relaxation to spread overlapping energy and Spin-Parity labels.
+3. **Geometry Calculation**: Computes vertical alignment indices for clusters to ensure horizontal consensus visibility.
+4. **Rendering**: Uses Matplotlib to generate high-fidelity physical level schemes with gamma transition arrows.
+
+Architecture:
+- `spread_text_positions`: Iterative relaxation algorithm for label spacing.
+- `plot_level_schemes`: Main rendering engine for input datasets.
+- `plot_clustering_results`: Visualization engine for reconciled physical levels.
 """
 
 import matplotlib.pyplot as plt
@@ -150,14 +155,14 @@ def plot_level_schemes():
             
             # Spin/Parity
             spin_parity_string = ""
-            if isinstance(level.get('spin_parity'), dict):
-                spin_parity_string = level.get('spin_parity', {}).get('evaluator_input', '')
+            if isinstance(level.get('spinParity'), dict):
+                spin_parity_string = level.get('spinParity', {}).get('evaluatorInput', '')
             
             # Format level label for the reader (e.g. 600(1))
-            # The JSON property 'evaluator_input' uses NNDC space-separated format (e.g. 600 1)
+            # The JSON property 'evaluatorInput' uses NNDC space-separated format (e.g. 600 1)
             label_left = ""
             if isinstance(level.get('energy'), dict):
-                evaluator_input = level['energy'].get('evaluator_input', '')
+                evaluator_input = level['energy'].get('evaluatorInput', '')
                 if ' ' in evaluator_input:
                     # Convert NNDC "Value Uncertainty" to scientific "Value(Uncertainty)" for the plot
                     value_part, uncertainty_part = evaluator_input.split(' ', 1)
@@ -184,7 +189,7 @@ def plot_level_schemes():
         
         # Calculate text positions with collision resolution
         energies = [x['energy'] for x in levels_data]
-        text_y_positions = spread_text_positions(energies, min_distance=250)
+        text_y_positions = spread_text_positions(energies, minimum_distance=250)
         
         # Calculate vertical offsets for level bars when too close (within 150 keV)
         bar_offsets = [0.0] * len(energies)
@@ -238,8 +243,8 @@ def plot_level_schemes():
             all_gamma_data = []
             
             for gamma_index, gamma in enumerate(gammas_table):
-                initial_level_index = gamma.get('initial_level_index')
-                final_level_index = gamma.get('final_level_index')
+                initial_level_index = gamma.get('initialLevel')
+                final_level_index = gamma.get('finalLevel')
                 
                 # Validate indices
                 if initial_level_index is None or final_level_index is None:
@@ -255,7 +260,7 @@ def plot_level_schemes():
                 
                 # Get gamma properties
                 gamma_energy = gamma.get('energy', {}).get('value', 0)
-                gamma_intensity = gamma.get('gamma_intensity', {}).get('value', 100)
+                gamma_intensity = gamma.get('gammaIntensity', {}).get('value', 100)
                 
                 all_gamma_data.append({
                     'gamma_index': gamma_index,
@@ -354,7 +359,7 @@ def parse_clustering_results(clustering_file_path):
                 continue
             
             # Match anchor line
-            anchor_match = re.match(r'^Anchor:\s+(\S+)\s+\|\s+E=([\d.]+)±([\d.]+)\s+keV\s+\|\s+Jπ=(.+)$', line)
+            anchor_match = re.match(r'^Anchor:\s+(\S+)\s+\|\s+E=([\d.]+)±([\d.]+)\s+keV\s+\|\s+Spin-Parity=(.+)$', line)
             if anchor_match and current_cluster is not None:
                 current_cluster['anchor_id'] = anchor_match.group(1)
                 current_cluster['anchor_energy'] = float(anchor_match.group(2))
@@ -363,7 +368,7 @@ def parse_clustering_results(clustering_file_path):
                 continue
             
             # Match member line
-            member_match = re.match(r'^\[(\w+)\]\s+(\S+):\s+E=([\d.]+)±([\d.]+)\s+keV,\s+Jπ=(.+?)\s+\((.+)\)$', line)
+            member_match = re.match(r'^\[(\w+)\]\s+(\S+):\s+E=([\d.]+)±([\d.]+)\s+keV,\s+Spin-Parity=(.+?)\s+\((.+)\)$', line)
             if member_match and current_cluster is not None:
                 dataset_name = member_match.group(1)
                 level_id = member_match.group(2)
@@ -422,8 +427,8 @@ def plot_clustering_results(input_path='Output_Clustering_Results.txt', output_p
     datasets = sorted(list(unique_datasets))
     
     # Calculate figure size based on density (tunable multiplier)
-    fig_height = max(8, len(clusters) * clustering_fig_height_multiplier)
-    figure, axis = plt.subplots(figsize=(clustering_fig_width_inches, fig_height))
+    fig_height = max(8, len(clusters) * clustering_figure_height_multiplier)
+    figure, axis = plt.subplots(figsize=(clustering_figure_width_inches, fig_height))
     
     # X-axis positions (tunable spacing)
     x_positions = {ds: index * clustering_x_spacing for index, ds in enumerate(datasets)}
@@ -431,12 +436,12 @@ def plot_clustering_results(input_path='Output_Clustering_Results.txt', output_p
     # Y-Position Calculation
     # Use anchor energies as base, then spread them to prevent text overlap
     anchor_energies = [c.get('anchor_energy', 0) for c in clusters]
-    y_positions = spread_text_positions(anchor_energies, min_distance=clustering_min_distance)
+    y_positions = spread_text_positions(anchor_energies, minimum_distance=clustering_minimum_distance)
     
     if len(y_positions) > 0:
-        y_max_limit = y_positions[-1] + 300
+        y_maximum_limit = y_positions[-1] + 300
     else: 
-        y_max_limit = 1000
+        y_maximum_limit = 1000
 
     # Plot Text for each cluster
     for index, cluster in enumerate(clusters):
@@ -451,7 +456,7 @@ def plot_clustering_results(input_path='Output_Clustering_Results.txt', output_p
             x_position = x_positions[dataset_code]
             
             # Text Content
-            # Format: 'Energy(Unc)', 'Jpi', 'Prob', 'ClusterID'
+            # Format: 'Energy(Uncertainty)', 'Spin-Parity', 'Probability', 'ClusterID'
             energy_string = f"{member['energy']:.0f}({int(member['uncertainty'])})"
             spin_parity_string = member['spin_parity']
             
@@ -471,12 +476,12 @@ def plot_clustering_results(input_path='Output_Clustering_Results.txt', output_p
             axis.text(x_position, y_position, text_block, 
                      ha='center', va='center', 
                      fontsize=Font_Config['cluster_text'], family='Times New Roman',
-                     bbox=dict(boxstyle=f"round,pad={clustering_box_pad}", facecolor="white", edgecolor="gray", alpha=0.9))
+                     bbox=dict(boxstyle=f"round,pad={clustering_box_padding}", facecolor="white", edgecolor="gray", alpha=0.9))
 
     # Determine Y-Axis Limits
-    axis.set_ylim(-200, y_max_limit)
-    right_limit = (len(datasets) - 1) * clustering_x_spacing + clustering_x_margin
-    left_limit = -clustering_x_margin
+    axis.set_ylim(-200, y_maximum_limit)
+    right_limit = (len(datasets) - 1) * clustering_x_spacing + clustering_x_axis_margin
+    left_limit = -clustering_x_axis_margin
     axis.set_xlim(left_limit, right_limit)
     
     # X-Axis Labels

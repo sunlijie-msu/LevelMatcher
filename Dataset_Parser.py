@@ -6,25 +6,25 @@ Dataset Parser for Nuclear Level Matcher
 ======================================
 
 Workflow Diagram:
-[Start] -> [Raw ENSDF Strings] -> [Parser Engine] -> [Structured Output]
+[Start] -> [Raw Evaluated Nuclear Structure Data File Strings] -> [Parser Engine] -> [Structured Output]
                                      |
                                      v
                              [Inference Rules]
                             /        |        \
-      [Uncertainties (Precision)] [Jπ Lists]  [Gamma Decays]
+      [Uncertainties (Precision)] [Spin-Parity Lists]  [Gamma Decays]
                             \        |        /
                              v       v       v
                      [Standardized JSON Schema (Levels/Gammas)]
 
 Technical Steps:
-1. Parse raw ENSDF-style strings for energies, uncertainties, spins, and parities.
+1. Parse raw strings from Evaluated Nuclear Structure Data File (ENSDF) for energies, uncertainties, spins, and parities.
 2. Infer uncertainties from precision (significant figures) where explicit values are missing.
 3. Standardize data into a consistent JSON schema for the pipeline.
 4. Output structured files to `data/raw/` for ingestion by Feature Engineer.
 
 Architecture:
 - `infer_uncertainty_from_precision`: Heuristic engine for uncertainty estimation.
-- `standardize_spin_parity`: Normalizes Jπ strings (e.g., "(3/2,5/2)+" -> distinct hypotheses).
+- `standardize_spin_parity`: Normalizes Spin-Parity strings (e.g., "(3/2,5/2)+" -> distinct hypotheses).
 - `generate_datasets`: Main driver creating input files from embedded raw data (or file inputs).
 """
 
@@ -33,9 +33,9 @@ import re
 import os
 import argparse
 
-def infer_uncertainty_from_precision(value_str):
+def infer_uncertainty_from_precision(value_string):
     """
-    Infers uncertainty from reported precision in ENSDF evaluatorInput string.
+    Infers uncertainty from reported precision in Evaluated Nuclear Structure Data File (ENSDF) evaluatorInput string.
     
     Nuclear physics convention: Uncertainty = 0.5 × least_significant_digit_place_value
     
@@ -48,14 +48,14 @@ def infer_uncertainty_from_precision(value_str):
     
     Returns: Inferred uncertainty as float, or 5.0 (conservative default) if cannot parse
     """
-    if not value_str:
+    if not value_string:
         return 5.0
     
-    value_str = value_str.strip()
+    value_string = value_string.strip()
     
     # Handle scientific notation (e.g., "2.0E3" or "1.5e+02")
-    if 'E' in value_str.upper():
-        parts = value_str.upper().split('E')
+    if 'E' in value_string.upper():
+        parts = value_string.upper().split('E')
         if len(parts) != 2:
             return 5.0
         
@@ -80,11 +80,11 @@ def infer_uncertainty_from_precision(value_str):
             return 5.0 * (10 ** exponent)
     
     # Handle regular decimal notation
-    if '.' in value_str:
+    if '.' in value_string:
         # Count decimal places WITHOUT stripping trailing zeros
         # Example: "2000.0" has 1 decimal place → precision to 0.1 keV → ±0.5 keV
         # Example: "1234.56" has 2 decimal places → precision to 0.01 keV → ±0.05 keV
-        decimal_part = value_str.split('.')[1]
+        decimal_part = value_string.split('.')[1]
         decimal_places = len(decimal_part)
         return 5.0 * (10 ** (-decimal_places))
     else:
@@ -106,11 +106,11 @@ def parse_spin_parity(spin_parity_string):
         try:
             start_spin, end_spin = map(int, clean_string.split(':'))
             return [{
-                "two_times_spin": s * 2,
-                "is_tentative_spin": False,
+                "twoTimesSpin": spin_index * 2,
+                "isTentativeSpin": False,
                 "parity": None,
-                "is_tentative_parity": False
-            } for s in range(start_spin, end_spin + 1)]
+                "isTentativeParity": False
+            } for spin_index in range(start_spin, end_spin + 1)]
         except ValueError: pass
 
     # 2. List parsing
@@ -119,7 +119,7 @@ def parse_spin_parity(spin_parity_string):
     if is_global_tentative: 
         clean_string = clean_string[1:-1]
 
-    parts = [p.strip() for p in clean_string.split(',')]
+    parts = [part.strip() for part in clean_string.split(',')]
     results = []
 
     for part in parts:
@@ -129,50 +129,50 @@ def parse_spin_parity(spin_parity_string):
         # Extract parity
         parity_value = '+' if '+' in part else '-' if '-' in part else None
         
-        # Check tentativeness (local parens)
+        # Check tentativeness (local parentheses)
         is_local_tentative = '(' in part or ')' in part
         is_tentative = is_global_tentative or is_local_tentative
 
-        # Extract numeric spin: remove parens, parity signs
+        # Extract numeric spin: remove parentheses, parity signs
         spin_raw = part.replace('+', '').replace('-', '').replace('(', '').replace(')', '').strip()
         
         try:
-            spin_value = float(eval(spin_raw))
-            two_times_spin_value = int(round(spin_value * 2))
+            spin_value_parsed = float(eval(spin_raw))
+            two_times_spin_value = int(round(spin_value_parsed * 2))
             
             results.append({
-                "two_times_spin": two_times_spin_value,
-                "is_tentative_spin": is_tentative,
+                "twoTimesSpin": two_times_spin_value,
+                "isTentativeSpin": is_tentative,
                 "parity": parity_value,
-                "is_tentative_parity": is_tentative if parity_value else False
+                "isTentativeParity": is_tentative if parity_value else False
             })
         except: continue
         
     return results
 
-def calculate_absolute_uncertainty(val_str, unc_str):
+def calculate_absolute_uncertainty(value_string, uncertainty_string):
     """
-    Calculates absolute uncertainty based on ENSDF convention.
+    Calculates absolute uncertainty based on Evaluated Nuclear Structure Data File convention.
     123(12) -> 12
     123.4(12) -> 1.2
     0.123(4) -> 0.0004
     """
-    if not unc_str:
+    if not uncertainty_string:
         return 0.0
     
-    val_str = val_str.strip()
-    if '.' in val_str:
-        decimal_part = val_str.split('.')[1]
+    value_string = value_string.strip()
+    if '.' in value_string:
+        decimal_part = value_string.split('.')[1]
         decimals = len(decimal_part)
     else:
         decimals = 0
         
-    return float(unc_str) * (10 ** -decimals)
+    return float(uncertainty_string) * (10 ** -decimals)
 
-def format_evaluator_input(val_str, unc_str):
-    if not unc_str:
-        return val_str
-    return f"{val_str} {unc_str}"
+def format_evaluator_input(value_string, uncertainty_string):
+    if not uncertainty_string:
+        return value_string
+    return f"{value_string} {uncertainty_string}"
 
 def parse_ensdf_line(line):
     """
@@ -214,19 +214,19 @@ def parse_ensdf_line(line):
                     "type": "symmetric" if uncertainty_string else "inferred"
                 }
             },
-            "is_stable": False,
+            "isStable": False,
             "gamma_decays": []
         }
         if energy_string:
-            data["energy"]["evaluator_input"] = format_evaluator_input(energy_string, uncertainty_string)
+            data["energy"]["evaluatorInput"] = format_evaluator_input(energy_string, uncertainty_string)
             
         spin_parity_values = parse_spin_parity(spin_parity_raw)
         if spin_parity_values or spin_parity_raw:
-            data["spin_parity"] = {}
+            data["spinParity"] = {}
             if spin_parity_values:
-                data["spin_parity"]["values"] = spin_parity_values
+                data["spinParity"]["values"] = spin_parity_values
             if spin_parity_raw:
-                data["spin_parity"]["evaluator_input"] = spin_parity_raw
+                data["spinParity"]["evaluatorInput"] = spin_parity_raw
                 
         return "L", data
     
@@ -322,17 +322,17 @@ def convert_log_to_datasets(log_path):
                             "value": gamma_energy_value,
                             "uncertainty": { "value": gamma_data["energy_uncertainty"], "type": "symmetric" } if gamma_data["energy_uncertainty"] > 0 else {"type": "unreported"}
                         },
-                        "gamma_intensity": {
+                        "gammaIntensity": {
                             "value": gamma_data["relative_intensity_value"],
                             "uncertainty": { "value": gamma_data["intensity_uncertainty_value"], "type": "symmetric" } if gamma_data["intensity_uncertainty_value"] > 0 else {"type": "unreported"}
                         },
-                        "initial_level_index": level_index,
-                        "final_level_index": final_level_index
+                        "initialLevel": level_index,
+                        "finalLevel": final_level_index
                     }
                     if gamma_data.get("energy_input_string"):
-                        gamma_entry["energy"]["evaluator_input"] = gamma_data["energy_input_string"]
+                        gamma_entry["energy"]["evaluatorInput"] = gamma_data["energy_input_string"]
                     if gamma_data.get("intensity_input_string"):
-                        gamma_entry["gamma_intensity"]["evaluator_input"] = gamma_data["intensity_input_string"]
+                        gamma_entry["gammaIntensity"]["evaluatorInput"] = gamma_data["intensity_input_string"]
                         
                     gammas_table_list.append(gamma_entry)
                     level_gamma_indices.append(gamma_counter)
@@ -342,9 +342,9 @@ def convert_log_to_datasets(log_path):
                     level_item["gammas"] = level_gamma_indices
                 del level_item["gamma_decays"]
         
-        output_data_structure = { "levels_table": { "levels": level_list } }
+        output_data_structure = { "levelsTable": { "levels": level_list } }
         if gammas_table_list:
-            output_data_structure["gammas_table"] = { "gammas": gammas_table_list }
+            output_data_structure["gammasTable"] = { "gammas": gammas_table_list }
             
         # Robustly determine output directory
         base_dir = os.path.dirname(os.path.abspath(__file__))
