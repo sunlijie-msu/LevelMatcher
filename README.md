@@ -10,6 +10,50 @@ Level Matcher identifies corresponding nuclear energy levels across different te
 - **Graph-Based Clustering**: Deterministic algorithm enforcing dataset uniqueness and mutual consistency
 - **Ambiguity Resolution**: Multi-cluster membership support for poorly-resolved levels
 
+### Data Partitioning Strategy
+
+The system uses three distinct datasets with different purposes:
+
+| Dataset | Size | Purpose | Model Interaction |
+|---------|------|---------|-------------------|
+| **Training Set** | ~17,758 (80%) | Model **learns** from these samples | Weights updated via gradient descent |
+| **Validation Set** | ~4,440 (20%) | Monitor generalization **during training** | Evaluated but weights NOT updated |
+| **Test Sets (A/B/C)** | ~30 real levels | Final inference (production use) | Never seen during any training phase |
+
+**Training Process**:
+1. **Iteration 1-N**: Model adjusts weights using training set
+2. **Each Iteration**: Model predicts on validation set as quality check
+3. **Early Stopping**: Training halts when validation error plateaus (prevents overfitting)
+4. **Production**: Trained model performs inference on real nuclear data (test sets A/B/C)
+
+### Diagnostic Metrics
+
+The training pipeline reports the following metrics to assess model quality:
+
+| Metric | Definition | Interpretation |
+|--------|------------|----------------|
+| **RMSE** | Root Mean Squared Error | Average prediction error magnitude (penalizes large errors heavily) |
+| **MAE** | Mean Absolute Error | Average absolute deviation (robust to outliers) |
+| **Early Stopping Iteration** | Training round when validation stopped improving | Indicates optimal model complexity |
+
+**Typical Output Example**:
+```
+XGBoost Training Complete (stopped at iteration 540)
+  Train RMSE: 0.0181 | Validation RMSE: 0.0192
+  Train MAE:  0.0084 | Validation MAE:  0.0089
+```
+
+**Quality Indicators**:
+- **Low RMSE (<0.05)**: Model accurately predicts match probabilities
+- **Small Train/Validation Gap (<0.01)**: No overfitting detected
+- **Early Stopping Before Max Iterations**: Model converged without memorizing training data
+- **High RMSE (>0.3)**: Poor fit; consider adjusting regularization or feature engineering
+
+**Why These Metrics Matter**: 
+- RMSE directly measures probability prediction accuracy (target: 0-1 range)
+- Validation metrics reveal if the model generalizes beyond training examples
+- Train/validation gap detects overfitting (model memorizing noise instead of learning physics)
+
 ## Key Features
 
 ### Machine Learning Models

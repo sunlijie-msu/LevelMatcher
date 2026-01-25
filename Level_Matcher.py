@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, mean_absolute_error, log_loss
 from Feature_Engineer import extract_features, generate_synthetic_training_data, parse_json_datasets
 from Level_Clusterer import perform_clustering_and_output
 import warnings
@@ -94,6 +96,17 @@ if __name__ == "__main__":
     
     # Convert to DataFrame with explicit feature names to prevent sklearn warnings
     training_dataframe = pd.DataFrame(training_features, columns=feature_names)
+    
+    # Split synthetic data into training and validation subsets (80/20 split)
+    # Purpose of this split:
+    #   Training Set (80%): Model learns patterns from these samples (gradient descent optimization)
+    #   Validation Set (20%): Held-out samples used to monitor generalization WITHOUT updating model weights
+    #                         Enables early stopping when validation performance stops improving (prevents overfitting)
+    # Note: This is NOT the final test data (A, B, C datasets are completely separate real test data)
+    X_train, X_validation, y_train, y_validation = train_test_split(
+        training_dataframe, training_labels, test_size=0.2, random_state=42, stratify=None
+    )
+    print(f"Training samples: {len(X_train)}, Validation samples: {len(X_validation)}")
 
     # Train XGBoost regressor with monotonic constraints enforcing physics rules
     # All five features designed as higher value → better match probability
@@ -102,7 +115,7 @@ if __name__ == "__main__":
     # ==========================================
     
     # 2a: Train XGBoost (Primary Model)
-    print("Training XGBoost Model...")
+    print("\nTraining XGBoost Model...")
     model_xgboost = XGBRegressor(objective='binary:logistic',
                                        # Learning Objective Function: Training Loss + Regularization.
                                        # The loss function computes the difference between the true y value and the predicted y value.
@@ -124,14 +137,36 @@ if __name__ == "__main__":
                                        # Interaction with the number of trees:
                                        # Lower learning rates typically require more trees
                                        # Higher learning rates may converge faster but require careful tuning of other parameters
+                                       early_stopping_rounds=50,
+                                       # Stop training if validation metric does not improve for 50 consecutive rounds
+                                       # Prevents overfitting and reduces training time
                                        random_state=42)
                                        # Random number seed for reproducibility.
     
-    # Train model on synthetic training data
-    model_xgboost.fit(training_dataframe, training_labels)
+    # Train model with validation monitoring
+    # Training process:
+    #   1. Model sees X_train samples and adjusts internal weights to minimize prediction error (learns)
+    #   2. After each boosting round, model predicts on X_validation (does NOT update weights)
+    #   3. If validation error stops improving for 50 consecutive rounds, training halts (early stopping)
+    # Result: Model learns from 80% of data while 20% acts as independent quality check
+    model_xgboost.fit(X_train, y_train, 
+                     eval_set=[(X_train, y_train), (X_validation, y_validation)],
+                     verbose=False)
+    
+    # Compute diagnostic metrics
+    train_predictions = model_xgboost.predict(X_train)
+    validation_predictions = model_xgboost.predict(X_validation)
+    train_rmse = np.sqrt(mean_squared_error(y_train, train_predictions))
+    validation_rmse = np.sqrt(mean_squared_error(y_validation, validation_predictions))
+    train_mae = mean_absolute_error(y_train, train_predictions)
+    validation_mae = mean_absolute_error(y_validation, validation_predictions)
+    
+    print(f"XGBoost Training Complete (stopped at iteration {model_xgboost.best_iteration})")
+    print(f"  Train RMSE: {train_rmse:.4f} | Validation RMSE: {validation_rmse:.4f}")
+    print(f"  Train MAE:  {train_mae:.4f} | Validation MAE:  {validation_mae:.4f}")
 
     # 2b: Train LightGBM (Secondary Model)
-    print("Training LightGBM Model...")
+    print("\nTraining LightGBM Model...")
     # Note: 'objective="binary"' in LightGBM is equivalent to 'binary:logistic' in XGBoost (outputs probability 0-1).
     # Heavy regularization prevents extreme confidence (100%/0%) and overfitting on small datasets.
     # Configuration Logic:
@@ -151,8 +186,22 @@ if __name__ == "__main__":
                                              verbose=-1,
                                              random_state=42)
     
-    # Train LightGBM model
-    model_lightgbm.fit(training_dataframe, training_labels)
+    # Train LightGBM model with validation monitoring
+    model_lightgbm.fit(X_train, y_train,
+                      eval_set=[(X_train, y_train), (X_validation, y_validation)],
+                      eval_metric='rmse')
+    
+    # Compute diagnostic metrics
+    train_predictions_lgbm = model_lightgbm.predict(X_train)
+    validation_predictions_lgbm = model_lightgbm.predict(X_validation)
+    train_rmse_lgbm = np.sqrt(mean_squared_error(y_train, train_predictions_lgbm))
+    validation_rmse_lgbm = np.sqrt(mean_squared_error(y_validation, validation_predictions_lgbm))
+    train_mae_lgbm = mean_absolute_error(y_train, train_predictions_lgbm)
+    validation_mae_lgbm = mean_absolute_error(y_validation, validation_predictions_lgbm)
+    
+    print(f"LightGBM Training Complete (best iteration: {model_lightgbm.best_iteration_})")
+    print(f"  Train RMSE: {train_rmse_lgbm:.4f} | Validation RMSE: {validation_rmse_lgbm:.4f}")
+    print(f"  Train MAE:  {train_mae_lgbm:.4f} | Validation MAE:  {validation_mae_lgbm:.4f}")
 
     # ==========================================
     # Step 3: Test Data Ingestion

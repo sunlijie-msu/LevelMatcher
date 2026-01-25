@@ -89,6 +89,53 @@ Major libraries implementing Gradient Boosting.
 
 ## Level 5: The Implementation
 
+### Data Partitioning Strategy
+
+The training pipeline uses three distinct datasets to ensure robust model development:
+
+| Dataset | Size | Purpose | Model Interaction |
+|---------|------|---------|-------------------|
+| **Training Set** | ~17,758 (80%) | Model **learns** from these samples | Weights updated via gradient descent |
+| **Validation Set** | ~4,440 (20%) | Monitor generalization **during training** | Evaluated but weights NOT updated |
+| **Test Sets (A/B/C)** | ~30 real levels | Final inference (production use) | Never seen during any training phase |
+
+**Critical Distinction**: The validation set is a held-out portion of synthetic training data used to monitor overfitting during model training via early stopping. The test sets (A/B/C) contain real experimental nuclear data and are used exclusively for production inference after training completes.
+
+**Training Workflow**:
+1. Synthetic data generation produces 22,198 labeled examples
+2. Random 80/20 split creates training and validation subsets
+3. Model trains on 80%, evaluates on 20% each iteration
+4. Early stopping triggered when validation error stops improving
+5. Final model deployed on real test datasets (A/B/C)
+
+### Diagnostic Metrics
+
+Model training quality is assessed through the following metrics:
+
+| Metric | Formula | Purpose | Target Range |
+|--------|---------|---------|-------------|
+| **RMSE** | $\sqrt{\frac{1}{n}\sum(y_{pred} - y_{true})^2}$ | Measures average prediction error (penalizes outliers) | <0.05 excellent, >0.3 poor |
+| **MAE** | $\frac{1}{n}\sum|y_{pred} - y_{true}|$ | Average absolute deviation (robust metric) | <0.02 excellent, >0.2 poor |
+| **Iteration Count** | Training rounds before early stopping | Model complexity indicator | <70% of max = good generalization |
+
+**Interpreting Results**:
+
+```
+XGBoost Training Complete (stopped at iteration 540/1000)
+  Train RMSE: 0.0181 | Validation RMSE: 0.0192
+  Train MAE:  0.0084 | Validation MAE:  0.0089
+```
+
+**Analysis**:
+- Train/Validation gap (0.0011) is minimal → No overfitting
+- Validation RMSE (0.0192) is excellent → Strong generalization
+- Stopped at 54% of max iterations → Optimal complexity without memorization
+
+**Red Flags**:
+- Large train/validation gap (>0.05): Model overfitting training noise
+- High validation RMSE (>0.3): Poor feature engineering or excessive regularization
+- Stopping at iteration 1: Regularization too aggressive (LightGBM example: RMSE 0.4958)
+
 ### Feature Engineering
 
 Feature engineering is the process of transforming raw data into meaningful input features that enable the machine learning model to detect patterns, relationships, and interactions. Feature engineering is one of the most critical steps in building high-performance tree-based models.
