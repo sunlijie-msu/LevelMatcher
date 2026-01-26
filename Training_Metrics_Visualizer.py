@@ -33,12 +33,13 @@ Numbered Technical Steps:
 4. **Panel 2 - MAE Comparison**: Bar chart showing training vs validation MAE for XGBoost and LightGBM.
 5. **Panel 3 - LogLoss Comparison**: Binary classification calibration metric (primary metric for probability predictions).
 6. **Panel 4 - Feature Importance**: Horizontal bar chart showing Gain (average loss reduction) for each feature.
-7. **Panel 5 - Overfitting Analysis**: Calculates and visualizes train/validation gap (overfitting indicator).
-8. **Quality Assurance**: Adds reference lines, annotations, and color coding for instant interpretation.
+7. **Panel 5 - Overfitting Analysis**: Calculates and visualizes train/validation gap (overfitting indicator). Sets model-specific colors (XGBoost: Bluish, LightGBM: Redish).
+8. **Quality Assurance**: Adds reference lines, annotations, and standardized color coding for instant cross-model comparison.
 
 Architecture:
 - Single function `visualize_training_metrics()` for simplicity
 - Uses matplotlib subplots for multi-panel layout
+- Standardized Hex Color Palette: XGBoost (`#1f77b4`), LightGBM (`#d62728`)
 - Automatic scaling and formatting for publication-quality output
 
 Purpose:
@@ -77,6 +78,12 @@ def visualize_training_metrics(xgboost_metrics, lightgbm_metrics, output_path='o
     feature_names = ['Energy_Similarity', 'Spin_Similarity', 'Parity_Similarity', 
                      'Specificity', 'Gamma_Decay_Pattern_Similarity']
     
+    # Model Color Palette (Standardized)
+    color_xgboost = '#1f77b4'  # Professional Bluish
+    color_lightgbm = '#d62728' # Professional Redish
+    alpha_train = 0.9
+    alpha_val = 0.5
+    
     # ==========================================
     # Panel 1: RMSE Comparison
     # ==========================================
@@ -89,24 +96,26 @@ def visualize_training_metrics(xgboost_metrics, lightgbm_metrics, output_path='o
     x_positions = np.arange(len(model_labels))
     bar_width = 0.35
     
-    bars_train = axis_rmse.bar(x_positions - bar_width/2, training_rmse_values, bar_width, 
-                                label='Training RMSE', color='steelblue', alpha=0.8)
-    bars_validation = axis_rmse.bar(x_positions + bar_width/2, validation_rmse_values, bar_width,
-                                     label='Validation RMSE', color='coral', alpha=0.8)
+    # XGBoost bars
+    axis_rmse.bar(x_positions[0] - bar_width/2, training_rmse_values[0], bar_width, 
+                 label='XGB Training', color=color_xgboost, alpha=alpha_train)
+    axis_rmse.bar(x_positions[0] + bar_width/2, validation_rmse_values[0], bar_width,
+                 label='XGB Validation', color=color_xgboost, alpha=alpha_val)
+    
+    # LightGBM bars
+    axis_rmse.bar(x_positions[1] - bar_width/2, training_rmse_values[1], bar_width, 
+                 label='LGBM Training', color=color_lightgbm, alpha=alpha_train)
+    axis_rmse.bar(x_positions[1] + bar_width/2, validation_rmse_values[1], bar_width,
+                 label='LGBM Validation', color=color_lightgbm, alpha=alpha_val)
     
     # Add reference line for excellent performance threshold (RMSE < 0.05)
     axis_rmse.axhline(y=0.05, color='green', linestyle='--', linewidth=1.5, alpha=0.7, label='Excellent Threshold')
     axis_rmse.axhline(y=0.3, color='red', linestyle='--', linewidth=1.5, alpha=0.7, label='Poor Threshold')
     
-    # Add value labels on bars
-    for bar in bars_train:
-        height = bar.get_height()
-        axis_rmse.text(bar.get_x() + bar.get_width()/2., height,
-                      f'{height:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
-    for bar in bars_validation:
-        height = bar.get_height()
-        axis_rmse.text(bar.get_x() + bar.get_width()/2., height,
-                      f'{height:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
+    # Add value labels
+    for i, (t, v) in enumerate(zip(training_rmse_values, validation_rmse_values)):
+        axis_rmse.text(x_positions[i] - bar_width/2, t, f'{t:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
+        axis_rmse.text(x_positions[i] + bar_width/2, v, f'{v:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
     
     axis_rmse.set_xlabel('Model', fontsize=label_fontsize, fontweight='bold')
     axis_rmse.set_ylabel('RMSE (Root Mean Squared Error)', fontsize=label_fontsize, fontweight='bold')
@@ -125,24 +134,26 @@ def visualize_training_metrics(xgboost_metrics, lightgbm_metrics, output_path='o
     training_mae_values = [xgboost_metrics['train_mae'], lightgbm_metrics['train_mae']]
     validation_mae_values = [xgboost_metrics['validation_mae'], lightgbm_metrics['validation_mae']]
     
-    bars_train_mae = axis_mae.bar(x_positions - bar_width/2, training_mae_values, bar_width,
-                                    label='Training MAE', color='mediumseagreen', alpha=0.8)
-    bars_validation_mae = axis_mae.bar(x_positions + bar_width/2, validation_mae_values, bar_width,
-                                        label='Validation MAE', color='orange', alpha=0.8)
+    # XGBoost bars
+    axis_mae.bar(x_positions[0] - bar_width/2, training_mae_values[0], bar_width,
+                label='XGB Training', color=color_xgboost, alpha=alpha_train)
+    axis_mae.bar(x_positions[0] + bar_width/2, validation_mae_values[0], bar_width,
+                label='XGB Validation', color=color_xgboost, alpha=alpha_val)
+    
+    # LightGBM bars
+    axis_mae.bar(x_positions[1] - bar_width/2, training_mae_values[1], bar_width,
+                label='LGBM Training', color=color_lightgbm, alpha=alpha_train)
+    axis_mae.bar(x_positions[1] + bar_width/2, validation_mae_values[1], bar_width,
+                label='LGBM Validation', color=color_lightgbm, alpha=alpha_val)
     
     # Add reference line for excellent performance threshold (MAE < 0.02)
     axis_mae.axhline(y=0.02, color='green', linestyle='--', linewidth=1.5, alpha=0.7, label='Excellent Threshold')
     axis_mae.axhline(y=0.2, color='red', linestyle='--', linewidth=1.5, alpha=0.7, label='Poor Threshold')
     
-    # Add value labels on bars
-    for bar in bars_train_mae:
-        height = bar.get_height()
-        axis_mae.text(bar.get_x() + bar.get_width()/2., height,
-                     f'{height:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
-    for bar in bars_validation_mae:
-        height = bar.get_height()
-        axis_mae.text(bar.get_x() + bar.get_width()/2., height,
-                     f'{height:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
+    # Add value labels
+    for i, (t, v) in enumerate(zip(training_mae_values, validation_mae_values)):
+        axis_mae.text(x_positions[i] - bar_width/2, t, f'{t:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
+        axis_mae.text(x_positions[i] + bar_width/2, v, f'{v:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
     
     axis_mae.set_xlabel('Model', fontsize=label_fontsize, fontweight='bold')
     axis_mae.set_ylabel('MAE (Mean Absolute Error)', fontsize=label_fontsize, fontweight='bold')
@@ -161,24 +172,26 @@ def visualize_training_metrics(xgboost_metrics, lightgbm_metrics, output_path='o
     training_logloss_values = [xgboost_metrics['train_logloss'], lightgbm_metrics['train_logloss']]
     validation_logloss_values = [xgboost_metrics['validation_logloss'], lightgbm_metrics['validation_logloss']]
     
-    bars_train_logloss = axis_logloss.bar(x_positions - bar_width/2, training_logloss_values, bar_width,
-                                           label='Training LogLoss', color='royalblue', alpha=0.8)
-    bars_validation_logloss = axis_logloss.bar(x_positions + bar_width/2, validation_logloss_values, bar_width,
-                                                label='Validation LogLoss', color='tomato', alpha=0.8)
+    # XGBoost bars
+    axis_logloss.bar(x_positions[0] - bar_width/2, training_logloss_values[0], bar_width,
+                    label='XGB Training', color=color_xgboost, alpha=alpha_train)
+    axis_logloss.bar(x_positions[0] + bar_width/2, validation_logloss_values[0], bar_width,
+                    label='XGB Validation', color=color_xgboost, alpha=alpha_val)
+    
+    # LightGBM bars
+    axis_logloss.bar(x_positions[1] - bar_width/2, training_logloss_values[1], bar_width,
+                    label='LGBM Training', color=color_lightgbm, alpha=alpha_train)
+    axis_logloss.bar(x_positions[1] + bar_width/2, validation_logloss_values[1], bar_width,
+                    label='LGBM Validation', color=color_lightgbm, alpha=alpha_val)
     
     # Add reference line for excellent performance threshold (LogLoss < 0.1)
     axis_logloss.axhline(y=0.1, color='green', linestyle='--', linewidth=1.5, alpha=0.7, label='Excellent Threshold')
     axis_logloss.axhline(y=0.5, color='red', linestyle='--', linewidth=1.5, alpha=0.7, label='Poor Threshold')
     
-    # Add value labels on bars
-    for bar in bars_train_logloss:
-        height = bar.get_height()
-        axis_logloss.text(bar.get_x() + bar.get_width()/2., height,
-                         f'{height:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
-    for bar in bars_validation_logloss:
-        height = bar.get_height()
-        axis_logloss.text(bar.get_x() + bar.get_width()/2., height,
-                         f'{height:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
+    # Add value labels
+    for i, (t, v) in enumerate(zip(training_logloss_values, validation_logloss_values)):
+        axis_logloss.text(x_positions[i] - bar_width/2, t, f'{t:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
+        axis_logloss.text(x_positions[i] + bar_width/2, v, f'{v:.4f}', ha='center', va='bottom', fontsize=annotation_fontsize)
     
     axis_logloss.set_xlabel('Model', fontsize=label_fontsize, fontweight='bold')
     axis_logloss.set_ylabel('LogLoss (Cross-Entropy)', fontsize=label_fontsize, fontweight='bold')
@@ -215,10 +228,9 @@ def visualize_training_metrics(xgboost_metrics, lightgbm_metrics, output_path='o
     
     # Horizontal bar chart for better label readability
     y_positions_importance = np.arange(len(feature_names))
-    # Sort for visual hierarchy (optional but good practice) - keep as fixed order for comparing runs? 
-    # Let's keep fixed order to match X-axis consistency
+    # Sort for visual hierarchy
     
-    bars_importance = axis_importance.barh(y_positions_importance, importance_values, color='teal', alpha=0.8)
+    bars_importance = axis_importance.barh(y_positions_importance, importance_values, color=color_xgboost, alpha=0.8)
     
     # Add value labels
     for index, bar in enumerate(bars_importance):
@@ -244,10 +256,8 @@ def visualize_training_metrics(xgboost_metrics, lightgbm_metrics, output_path='o
     lightgbm_gap = lightgbm_metrics['validation_rmse'] - lightgbm_metrics['train_rmse']
     gap_values = [xgboost_gap, lightgbm_gap]
     
-    # Color code: green if gap < 0.01 (good), yellow if < 0.05 (acceptable), red if >= 0.05 (overfitting)
-    bar_colors = ['green' if gap < 0.01 else 'gold' if gap < 0.05 else 'crimson' for gap in gap_values]
-    
-    bars_gap = axis_gap.bar(x_positions, gap_values, color=bar_colors, alpha=0.8)
+    # Use consistent model colors
+    bars_gap = axis_gap.bar(x_positions, gap_values, color=[color_xgboost, color_lightgbm], alpha=0.8)
     
     # Add reference line for acceptable gap threshold
     axis_gap.axhline(y=0.01, color='green', linestyle='--', linewidth=1.5, alpha=0.7, label='Excellent (<0.01)')
