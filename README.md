@@ -1,753 +1,223 @@
 # Level Matcher
 
-A physics-informed nuclear level matching system developed by the FRIB Nuclear Data Group. This tool employs dual machine learning models (XGBoost + LightGBM) with physics-informed feature engineering to match energy levels across experimental datasets, generating "Adopted Levels" with probabilistic confidence scores.
-
-## Overview
-
-Level Matcher identifies corresponding nuclear energy levels across different test datasets by combining:
-- **Physics-Informed Feature Engineering**: Five-dimensional feature vectors encoding nuclear physics constraints
-- **Dual-Model Comparison**: XGBoost (flexible baseline) + LightGBM (regularization-constrained validation)
-- **Graph-Based Clustering**: Deterministic algorithm enforcing dataset uniqueness and mutual consistency
-- **Ambiguity Resolution**: Multi-cluster membership support for poorly-resolved levels
-
-### Data Partitioning Strategy
-
-The system uses three distinct datasets with different purposes:
-
-| Dataset | Size | Purpose | Model Interaction |
-|---------|------|---------|-------------------|
-| **Training Set** | ~17,758 (80%) | Model **learns** from these samples | Weights updated via gradient descent |
-| **Validation Set** | ~4,440 (20%) | Monitor generalization **during training** | Evaluated but weights NOT updated |
-| **Test Sets (A/B/C)** | ~30 real levels | Final inference (production use) | Never seen during any training phase |
-
-**Training Process**:
-1. **Iteration 1-N**: Model adjusts weights using training set
-2. **Each Iteration**: Model predicts on validation set as quality check
-3. **Early Stopping**: Training halts when validation error plateaus (prevents overfitting)
-4. **Production**: Trained model performs inference on real nuclear data (test sets A/B/C)
-
-### Diagnostic Metrics
-
-The training pipeline reports the following metrics to assess model quality:
-
-| Metric | Definition | Interpretation |
-|--------|------------|----------------|
-| **RMSE** | Root Mean Squared Error | Average prediction error magnitude (penalizes large errors heavily) |
-| **MAE** | Mean Absolute Error | Average absolute deviation (robust to outliers) |
-| **LogLoss** | Binary Cross-Entropy | Primary calibration metric for probability predictions (lower is better) |
-| **Feature Importance (Gain)** | Average loss reduction per feature | Reveals which features drive model decisions |
-| **Early Stopping Iteration** | Training round when validation stopped improving | Indicates optimal model complexity |
-
-**Typical Output Example**:
-```
-XGBoost Training Complete (stopped at iteration 540)
-  Train RMSE: 0.0181 | Validation RMSE: 0.0192
-  Train MAE:  0.0084 | Validation MAE:  0.0089
-  Train LogLoss: 0.2015 | Validation LogLoss: 0.1986
-```
-
-**Quality Indicators**:
-- **Low RMSE (<0.05)**: Model accurately predicts match probabilities
-- **Small Train/Validation Gap (<0.01)**: No overfitting detected
-- **Low LogLoss (<0.3)**: Well-calibrated probability predictions
-- **Early Stopping Before Max Iterations**: Model converged without memorizing training data
-- **High RMSE (>0.3)**: Poor fit; consider adjusting regularization or feature engineering
-- **Validation LogLoss < Training LogLoss**: Excellent generalization (rare but ideal scenario)
-
-**Why These Metrics Matter**: 
-- **RMSE** directly measures probability prediction accuracy (target: 0-1 range)
-- **MAE** provides robust error measurement less sensitive to outliers
-- **LogLoss** measures calibration quality (critical for binary classification with probabilities)
-- **Feature Importance** reveals physics-driven feature hierarchy (e.g., Spin_Similarity > Energy_Similarity)
-- **Validation metrics** reveal if the model generalizes beyond training examples
-- **Train/Validation Gap** detects overfitting (model memorizing noise instead of learning physics)
-
-**Visualization**: The pipeline automatically generates a 5-panel diagnostic plot (`outputs/figures/Training_Metrics_Diagnostic.png`) showing:
-1. **RMSE Comparison**: Training vs validation RMSE for both models with quality thresholds
-2. **MAE Comparison**: Training vs validation MAE for both models with quality thresholds
-3. **LogLoss Comparison**: Binary cross-entropy loss showing calibration quality
-4. **Feature Importance (Gain)**: Horizontal bar chart revealing feature contribution hierarchy for XGBoost
-5. **Overfitting Analysis**: Train/validation gap with color coding (green=excellent, yellow=acceptable, red=overfitting) and iteration count percentages
-
-## Key Features
-
-### Machine Learning Models
-
-**XGBoost (Primary Model)**
-- Configuration: `binary:logistic`, 1000 estimators, max_depth=10, learning_rate=0.05
-- Regularization: Light (reg_alpha=0.0, reg_lambda=1.0)
-- Behavior: Flexible feature weighting based on training data patterns
-- Purpose: Standard baseline model
-
-**LightGBM (Comparison Model)**
-- Configuration: `binary`, 500 estimators, max_depth=5, num_leaves=7, learning_rate=0.02
-- Regularization: Heavy (reg_alpha=1.0, reg_lambda=10.0) + shallow trees
-- Behavior: Constrained feature weighting; heavy regularization amplifies gamma-pattern importance when training data shows strong gamma-energy correlations
-- Purpose: Validation tool - reveals when gamma patterns dominate predictions
-- Example: A_2000↔B_2006 yields XGBoost 19.4% vs LightGBM 99.5% when gamma patterns perfectly align despite 6 keV energy mismatch
-
-### Feature Engineering (5D Vector)
-
-All features explicitly named for sklearn compatibility:
-1. **Energy_Similarity**: Gaussian kernel based on Z-score (experimental uncertainties)
-2. **Spin_Similarity**: Nuclear selection rules with forbidden transition vetoes (0.0 for violations)
-3. **Parity_Similarity**: Parity conservation checking
-4. **Specificity**: Multi-dataset validation confidence metric
-5. **Gamma_Decay_Pattern_Similarity**: Cosine similarity of Gaussian-broadened gamma spectra
-
-### Physics Rescue Mechanism
-
-Formula: `effective_energy = energy_similarity ** rescue_exponent` (default exponent=0.5, implements sqrt transformation)
-
-**Trigger Conditions** (threshold=0.85):
-- `(spin_similarity >= 0.85 AND parity_similarity >= 0.85) OR gamma_similarity >= 0.85`
-
-**Behavior**: Replaces raw energy similarity in final probability calculation when quantum numbers or gamma patterns provide strong evidence despite moderate energy mismatch. This prevents rejection of valid matches where measurement uncertainties cause apparent energy discrepancies.
-
-### Graph Clustering Algorithm
-
-**Key Constraints**:
-- **Dataset Uniqueness**: Maximum one level per dataset per cluster
-- **Mutual Consistency**: All members must be pairwise compatible (clique structure)
-- **Ambiguity Resolution**: Levels with large uncertainties can belong to multiple clusters
-
-**Anchor Selection**: Level with smallest energy uncertainty defines cluster reference properties
-
-## Project Structure
-
-```
-LevelMatcher/
-├── data/
-│   └── raw/                    # Input JSON datasets
-│       ├── test_dataset_A.json
-│       ├── test_dataset_B.json
-│       └── test_dataset_C.json
-│
-├── outputs/
-│   ├── clustering/             # Clustering results (text files)
-│   │   ├── Output_Clustering_Results_XGB.txt
-│   │   └── Output_Clustering_Results_LightGBM.txt
-│   ├── figures/                # Visualization outputs (PNG files)
-│   │   ├── Input_Level_Scheme.png
-│   │   ├── Output_Cluster_Scheme_XGB.png
-│   │   └── Output_Cluster_Scheme_LightGBM.png
-│   └── pairwise/              # Pairwise inference results
-│       └── Output_Level_Pairwise_Inference.txt
-│
-├── docs/                       # Documentation and reports
-│   ├── reports/
-│   │   └── Hyperparameter_Analysis_Report.md
-│   ├── Gamma_Decay_Pattern_Feature_Engineering.md
-│   ├── Gamma_Decay_Pattern_Feature_Engineering.html
-│   ├── Technology_Hierarchy.md
-│   └── Technology_Hierarchy.pdf
-│
-├── scripts/
-│   ├── hyperparameter_tuning/ # Hyperparameter optimization utilities
-│   │   ├── Hyperparameter_Tuner.py
-│   │   ├── Hyperparameter_Visualizer.py
-│   │   └── Output_Hyperparameter_*.txt
-│   └── legacy/                # Experimental/deprecated code
-│       ├── Level_Matcher_Legacy.py
-│       ├── Shared_Area_Model.py
-│       ├── Subset_Robust_Model.py
-│       ├── Vector_Space_Model.py
-│       ├── Library_Verification.py
-│       └── ai_studio_code.py
-│
-├── Level_Matcher.py           # Main application (training, inference, clustering)
-├── Feature_Engineer.py        # Physics engine (feature extraction, synthetic data)
-├── Dataset_Parser.py          # ENSDF log to JSON converter
-├── Combined_Visualizer.py     # Level scheme and clustering visualizations
-├── copy_for_notebookLM.py     # Utility: Convert .py to .txt for NotebookLM
-├── data/
-│   └── raw/                   # Input datasets (dataset_A.json, etc.)
-├── docs/                      # Documentation and reports
-├── outputs/
-│   ├── clustering/            # Clustering results (XGBoost, LightGBM)
-│   ├── pairwise/              # Pairwise inference results
-│   └── figures/               # Generated visualizations
-├── scripts/
-│   ├── hyperparameter_tuning/ # Hyperparameter optimization tools
-│   └── legacy/                # Archive of deprecated scripts
-├── README.md                  # This file
-└── .gitignore                 # Git exclusions (outputs, cache)
-```
-
-## Core Modules
-
-### Level_Matcher.py
-**Purpose**: Main orchestration engine
-
-**Workflow**:
-1. **Data Loading**: Import levels from `data/raw/dataset_*.json`
-2. **Training**: Generate 580+ synthetic training samples, train both models (XGBoost + LightGBM)
-3. **Pairwise Inference**: Calculate match probabilities for all cross-dataset level pairs
-4. **Clustering**: Execute graph-based clustering independently for each model
-5. **Output Generation**:
-   - `outputs/pairwise/Output_Level_Pairwise_Inference.txt`: Side-by-side model comparison
-   - `outputs/clustering/Output_Clustering_Results_XGB.txt`: XGBoost clusters
-   - `outputs/clustering/Output_Clustering_Results_LightGBM.txt`: LightGBM clusters
-
-**Configuration Parameters**:
-```python
-pairwise_output_threshold = 0.001  # Minimum probability for pairwise output (0.1%)
-clustering_merge_threshold = 0.15  # Minimum probability for cluster merging (15%)
-```
-
-**Feature Names** (explicitly defined for sklearn compatibility):
-```python
-feature_names = ['Energy_Similarity', 'Spin_Similarity', 'Parity_Similarity', 
-                 'Specificity', 'Gamma_Decay_Pattern_Similarity']
-```
-
-**DataFrame Implementation**: All model training and predictions use `pd.DataFrame(features, columns=feature_names)` to eliminate sklearn feature name warnings.
-
-### Feature_Engineer.py
-**Purpose**: Physics-informed feature extraction and synthetic training data generation
-
-**Key Functions**:
-- `load_levels_from_json()`: Data ingestion from `data/raw/` directory
-- `calculate_energy_similarity()`: Gaussian kernel scoring (Z-score based)
-- `calculate_spin_similarity()`: Selection rule enforcement (0.0 veto for forbidden transitions)
-- `calculate_parity_similarity()`: Parity conservation validation
-- `calculate_gamma_decay_pattern_similarity()`: Cosine similarity of Gaussian-broadened spectra
-- `extract_features()`: Constructs 5D feature vectors
-- `generate_synthetic_training_data()`: Generates 580+ synthetic points across six physics scenarios
-
-**Physics Rescue Implementation** (lines 771-786):
-```python
-if ((spin_similarity >= physics_rescue_threshold and parity_similarity >= physics_rescue_threshold) or 
-    gamma_decay_pattern_similarity >= physics_rescue_threshold):
-    effective_energy = energy_similarity ** physics_rescue_exponent  # Default: sqrt(energy_similarity)
-    probability = effective_energy * physics_confidence * specificity
-```
-
-**Configuration**: `Scoring_Config` dictionary contains physics parameters
-```python
-Scoring_Config = {
-    'Energy': {
-        'Sigma_Scale': 0.1,              # Gaussian kernel width
-        'Default_Uncertainty': 10.0      # Default uncertainty (keV)
-    },
-    'Spin': {
-        'Match_Firm': 1.0,               # Definite spin match score
-        'Match_Tentative': 0.85,         # Tentative match score
-        # ... (see file for complete configuration)
-    }
-}
-        'Match_Strong': 0.8,             # Score for tentative spin match
-        'Mismatch_Weak': 0.2,            # Score for weak spin mismatch (ΔJ = 1, any tentative)
-        'Mismatch_Strong': 0.05,         # Score for strong spin mismatch (ΔJ = 1, both firm)
-        'Mismatch_Firm': 0.0             # Score for impossible transition (ΔJ ≥ 2)
-    },
-    'Parity': {
-        'Match_Firm': 1.0,               # Score for definite parity match
-        'Match_Strong': 0.8,             # Score for tentative parity match
-        'Mismatch_Weak': 0.05,           # Score for tentative parity mismatch
-        'Mismatch_Firm': 0.0             # Score for definite parity mismatch
-    },
-    'Specificity': {
-        'Formula': 'sqrt',               # Options: 'sqrt', 'linear', 'log', 'tunable'
-        'Alpha': 0.5                     # Only for 'tunable': penalty steepness parameter
-    },
-    'Feature_Correlation': {
-        'Enabled': True,                 # Enable physics rescue for perfect spin+parity
-        'Threshold': 0.85,               # Minimum similarity to trigger rescue
-        'Rescue_Exponent': 0.5           # Energy boost: e → e^0.5 (sqrt transformation)
-    },
-    'General': {
-        'Neutral_Score': 0.5             # Score when data is missing/unknown
-    }
-}
-```
-
-## Workflow
-
-1.  **Data Ingestion:**
-    *   Reads `data/raw/test_dataset_A.json`, `data/raw/test_dataset_B.json`, `data/raw/test_dataset_C.json`
-    *   Extracts: energy value, energy uncertainty, spin-parity list, spin-parity string
-    *   Generates unique level identifiers (e.g., `A_1000`)
-
-2.  **Model Training (Supervised Learning):**
-    *   Generates 580+ synthetic training samples encoding physics rules across six scenarios (perfect matches, physics vetoes, energy mismatches, ambiguous physics, weak matches, random background)
-    *   Implements **Feature Correlation** ("Physics Rescue"):
-        *   **Condition**: Spin+Parity ≥ 0.85 OR Gamma Pattern ≥ 0.85.
-        *   **Action**: Boosts energy similarity using `energy^Rescue_Exponent` (soft rescue).
-        *   **Rationale**: Validates matches where internal structure is identical but energy calibration differs.
-        *   **Effect**: Rescue != Firm Match. It prevents invalidation (0 $\to$ 15-20%) rather than forcing a high probability match, preserving the energy disagreement penalty while keeping the candidate alive.
-    *   Trains XGBoost regressor with `objective='binary:logistic'`
-    *   Enforces `monotone_constraints='(1, 1, 1, 1, 1)'` on all five features
-    *   Hyperparameters: `n_estimators=1000`, `max_depth=10`, `learning_rate=0.05`
-
-3.  **Pairwise Inference:**
-    *   Compares all cross-dataset level pairs (A vs B, A vs C, B vs C)
-    *   Extracts five-dimensional feature vector for each pair
-    *   Predicts match probability using trained model
-    *   Writes results to `Output_Level_Pairwise_Inference.txt` (pairs above `pairwise_output_threshold`)
-
-4.  **Graph Clustering (Rule-Based Algorithm):**
-    *   Initializes each level as singleton cluster
-    *   Iterates through level pairs sorted by probability (highest first)
-    *   Attempts cluster merging with four-tier fallback logic:
-        1. **Scenario A - No Dataset Overlap:** Verifies all-to-all compatibility, then merges clusters
-        2. **Scenario B - Dataset Overlap:** Attempts multi-cluster assignment for ambiguous levels
-        3. **Singleton Expansion:** Adds partner to existing singleton cluster when merge fails
-        4. **New Cluster Creation:** Creates independent two-member cluster as last resort
-    *   Merge constraints:
-        *   Both levels' probabilities exceed `clustering_merge_threshold`
-        *   No dataset overlap in merged cluster (enforces dataset uniqueness)
-        *   All members mutually compatible (clique constraint)
-    *   Ambiguity handling: Poorly-resolved levels can belong to multiple clusters when compatible with all members
-    *   Outputs final clustering results to console and file
-
-5.  **Anchor Selection & Reporting:**
-    *   Selects cluster member with smallest energy uncertainty as anchor
-    *   Reports anchor energy, Jπ assignment, and member list with match probabilities
-
-## Usage
-
-### Basic Workflow
-```
-
-### Dataset_Parser.py
-**Purpose**: Convert ENSDF evaluator log files to structured JSON format
-
-**Capabilities**:
-- Handles complex Jπ notation: ranges (`1:3`), lists (`1,2,3`), tentative assignments (`(2)+`), nested parentheses
-- Parses energy values with uncertainties
-- Outputs to `data/raw/test_dataset_*.json`
-
-**Usage**:
-```bash
-python Dataset_Parser.py evaluatorInput.log
-```
-
-### Combined_Visualizer.py
-**Purpose**: Generate level scheme and clustering visualizations
-
-**Outputs**:
-- `outputs/figures/Input_Level_Scheme.png`: Input datasets (all three datasets side-by-side)
-- `outputs/figures/Output_Cluster_Scheme_XGB.png`: XGBoost clustering results
-- `outputs/figures/Output_Cluster_Scheme_LightGBM.png`: LightGBM clustering results
-
-**Visual Quality**: High-resolution (300 DPI), generous margins, no overlapping text
-
-## Usage
-
-### Basic Workflow
-
-```bash
-# 1. Run the level matcher (training + inference + clustering)
-python Level_Matcher.py
-
-# 2. Generate visualizations
-python Combined_Visualizer.py
-
-# 3. View pairwise inference results (model comparison)
-cat outputs/pairwise/Output_Level_Pairwise_Inference.txt
-
-# 4. View XGBoost clustering results
-cat outputs/clustering/Output_Clustering_Results_XGB.txt
-
-# 5. View LightGBM clustering results  
-cat outputs/clustering/Output_Clustering_Results_LightGBM.txt
-```
-
-### Data Preparation
-
-**Option A** - Use existing test datasets:
-```bash
-# Files already present in data/raw/: test_dataset_{A,B,C}.json
-python Level_Matcher.py
-```
-
-**Option B** - Convert evaluator log file:
-```bash
-# Create evaluatorInput.log with format:
-# # Dataset A:
-# E_level = 1000(3) keV; Jπ: unknown.
-# E_level = 2000(2) keV; Jπ: 2+.
-# # Dataset B:
-# E_level = 1003(5) keV; Jπ: unknown.
-
-python Dataset_Parser.py evaluatorInput.log
-# Outputs: data/raw/test_dataset_A.json, data/raw/test_dataset_B.json, ...
-```
-
-### Hyperparameter Tuning
-
-Located in `scripts/hyperparameter_tuning/`:
-```bash
-cd scripts/hyperparameter_tuning
-
-# Run hyperparameter exploration
-python Hyperparameter_Tuner.py
-
-# Visualize results
-python Hyperparameter_Visualizer.py
-
-# View detailed analysis
-cat ../docs/reports/Hyperparameter_Analysis_Report.md
-```
-
-## Output Files
-
-### Pairwise Inference
-**File**: `outputs/pairwise/Output_Level_Pairwise_Inference.txt`
-
-**Format**:
-```
-A_1000 <-> B_1003 | XGB: 85.3% | LGBM: 87.2%
-  Features: Energy_Sim=0.95, Spin_Sim=0.80, Parity_Sim=1.00, Specificity=0.75, Gamma_Pattern_Sim=0.92
-```
-
-**Content**: All level pairs exceeding `pairwise_output_threshold` (default 0.1%), sorted by XGBoost probability, showing side-by-side model comparison.
-
-### Clustering Results
-**Files**: 
-- `outputs/clustering/Output_Clustering_Results_XGB.txt`
-- `outputs/clustering/Output_Clustering_Results_LightGBM.txt`
-
-**Format**:
-```
-Cluster 1:
-  Anchor: A_0 | E=0.0±0.0 keV | Jπ=0+
-  Members:
-    [A] A_0: E=0.0±0.0 keV, Jπ=0+ (Anchor)
-    [B] B_0: E=0.0±0.0 keV, Jπ=0+ (Match Prob: 94.7%)
-    [C] C_0: E=0.0±0.0 keV, Jπ=0+ (Match Prob: 94.7%)
-```
-
-**Content**: Clusters sorted by average energy, anchor defined as level with smallest uncertainty, member probabilities calculated relative to anchor.
-
-## Configuration
-
-### Level_Matcher.py Thresholds
-
-```python
-pairwise_output_threshold = 0.001  # Minimum probability for pairwise output (0.1%)
-clustering_merge_threshold = 0.15  # Minimum probability for cluster merging (15%)
-```
-
-**Recommendations**:
-- `pairwise_output_threshold`: Lower values (0.001-0.01) capture weak candidates for manual review
-- `clustering_merge_threshold`: Higher values (0.15-0.30) enforce stricter cluster quality
-
-### Feature_Engineer.py Physics Parameters
-
-```python
-Scoring_Config = {
-    'Energy': {
-        'Sigma_Scale': 0.1,              # Gaussian kernel width
-        'Default_Uncertainty': 10.0      # Default uncertainty (keV)
-    },
-    'Spin': {
-        'Match_Firm': 1.0,               # Definite spin match
-        'Match_Tentative': 0.85,         # Tentative match
-        'Conflict_Firm': 0.0,            # Forbidden transition (veto)
-        'Unknown_Penalty': 0.6           # Unknown spin handling
-    },
-    'Parity': {
-        'Match': 1.0,                    # Parity conservation
-        'Conflict': 0.0,                 # Parity violation (veto)
-        'Unknown_Penalty': 0.8           # Unknown parity handling
-    },
-    'Physics_Rescue': {
-        'Threshold': 0.85,               # Trigger threshold
-        'Exponent': 0.5                  # Energy transformation (sqrt)
-    }
-}
-```
-
-### Model Hyperparameters
-
-**XGBoost** (Level_Matcher.py, line ~336):
-```python
-level_matcher_model_xgb = xgb.XGBRegressor(
-    objective='binary:logistic',
-    n_estimators=1000,
-    max_depth=10,
-    learning_rate=0.05,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    min_child_weight=1,
-    gamma=0,
-    reg_alpha=0.0,
-    reg_lambda=1.0,
-    random_state=42,
-    tree_method='hist'
-)
-```
-
-**LightGBM** (Level_Matcher.py, line ~360):
-```python
-level_matcher_model_lgbm = lgb.LGBMRegressor(
-    objective='binary',
-    n_estimators=1000,
-    num_leaves=7,            # Heavily regularized
-    max_depth=5,             # Shallow trees
-    learning_rate=0.05,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    min_child_samples=20,
-    reg_alpha=1.0,           # L1 regularization
-    reg_lambda=10.0,         # L2 regularization (strong)
-    random_state=42,
-    verbose=-1
-)
-```
-
-## Dependencies
-
-```
-python >= 3.8
-pandas
-numpy
-xgboost
-lightgbm
-matplotlib
-scikit-learn
-```
-
-Install via:
-```bash
-pip install pandas numpy xgboost lightgbm matplotlib scikit-learn
-```
-
-## Testing and Validation
-
-### Mandatory Testing After Code Changes
-Per project guidelines, **all code modifications must be immediately tested**:
-
-```bash
-# Test full pipeline
-python Level_Matcher.py
-
-# Verify outputs exist
-ls outputs/clustering/Output_Clustering_Results_XGB.txt
-ls outputs/clustering/Output_Clustering_Results_LightGBM.txt
-ls outputs/pairwise/Output_Level_Pairwise_Inference.txt
-
-# Test visualizations
-python Combined_Visualizer.py
-
-# Verify figures generated
-ls outputs/figures/Input_Level_Scheme.png
-ls outputs/figures/Output_Cluster_Scheme_XGB.png
-ls outputs/figures/Output_Cluster_Scheme_LightGBM.png
-```
-
-### Validation Checklist
-- ✅ No Python errors or warnings during execution
-- ✅ All output files generated in correct locations
-- ✅ Clustering results contain expected number of clusters
-- ✅ Visualizations display without overlapping text
-- ✅ Feature names eliminate sklearn warnings
-
-## Known Behavior and Model Differences
-
-### XGBoost vs LightGBM Divergence
-
-**Expected Behavior**: Models produce different match probabilities due to different optimization objectives:
-- **XGBoost**: Balanced feature weighting, energy-dominant
-- **LightGBM**: Heavily regularized, gamma-pattern-aware
-
-**Example Case** (A_2000 ↔ B_2006):
-- Energy mismatch: 6 keV
-- Gamma decay pattern: Perfect alignment
-- XGBoost probability: 19.4% (low due to energy mismatch)
-- LightGBM probability: 99.5% (high due to perfect gamma pattern)
-
-**Interpretation**: LightGBM's strong regularization and shallow trees favor perfect feature matches (gamma patterns) over energy proximity. This divergence is intentional - LightGBM serves as a validation tool to flag ambiguous cases where gamma patterns provide strong evidence despite energy discrepancies.
-
-### Physics Rescue Activation
-
-When physics rescue activates (`spin >= 0.85 AND parity >= 0.85` OR `gamma >= 0.85`):
-- Energy similarity undergoes sqrt transformation: `effective_energy = energy_similarity ** 0.5`
-- Example: `energy_similarity = 0.49` → `effective_energy = 0.70` (44% boost)
-- This prevents rejection of valid matches where quantum numbers are certain but energy measurements have large uncertainties
-
-## Development Practices
-
-### Code Standards
-Per `.github/copilot-instructions.md`:
-- **No acronyms**: Use `tentative` not `tent`, `error` not `err`
-- **No ALL CAPS**: Use `Title_Case` or `snake_case`, never `ALL_CAPS_VARIABLES`
-- **Self-explanatory naming**: Use `calculate_` prefix for math/logic functions
-- **Educational comments**: Preserve and update all high-level strategy explanations
-- **Clean codebase**: Remove redundant/obsolete files immediately
-
-### Testing Requirements
-- **Zero tolerance for untested changes**: All modifications must be runtime-validated
-- **Full pipeline testing**: After edits affecting dependent modules, test end-to-end workflow
-- **Visual verification**: For plotting code, ensure no overlapping text or illegible fonts
-
-### Documentation Requirements
-- **Update docstrings immediately**: Code changes must reflect in documentation on same commit
-- **Professional terminology**: Use consistent physics vocabulary across all comments
-- **Compliance checklist**: Verify adherence to `.github/copilot-instructions.md` before committing
-
-## Troubleshooting
-
-### "X does not have valid feature names" Warning
-**Fixed** in current version via explicit feature naming:
-```python
-feature_names = ['Energy_Similarity', 'Spin_Similarity', 'Parity_Similarity', 
-                 'Specificity', 'Gamma_Decay_Pattern_Similarity']
-training_dataframe = pd.DataFrame(training_features, columns=feature_names)
-```
-If warnings persist: Delete `__pycache__/` directory and re-run.
-
-### File Not Found Errors
-Ensure correct directory structure:
-- Input data: `data/raw/test_dataset_*.json`
-- Outputs created automatically in `outputs/` subdirectories
-
-### Empty Clustering Results
-Check `clustering_merge_threshold` - if set too high (>0.50), no level pairs may qualify for merging. Recommended range: 0.15-0.30.
-
-### Model Probability Divergence > 50%
-This is expected behavior for cases with:
-- Perfect gamma pattern + moderate energy mismatch
-- Strong quantum number evidence + poor energy resolution
-
-Use LightGBM output as validation tool, not replacement for XGBoost baseline.
-
-## References
-
-- FRIB Nuclear Data Group: https://groups.nscl.msu.edu/frib_decay/
-- ENSDF Format Specification: https://www.nndc.bnl.gov/ensdf/
-- XGBoost Documentation: https://xgboost.readthedocs.io/
-- LightGBM Documentation: https://lightgbm.readthedocs.io/
-
-## License
-
-Developed by FRIB Nuclear Data Group. For research and educational purposes.
-
-## Contact
-
-For questions or collaboration: FRIB Nuclear Data Group @ Michigan State University
+A physics-informed nuclear level matching system developed by the Facility for Rare Isotope Beams (FRIB) Nuclear Data Group. This tool employs dual machine learning models (Extreme Gradient Boosting + Light Gradient Boosting Machine) with physics-informed feature engineering to match nuclear energy levels across experimental datasets.
 
 ---
 
-**Last Updated**: January 2026  
-**Version**: 2.0 (Dual-Model Architecture with Physics Rescue)  
-**Project Status**: Active Development
-# E_level = 2000(5) keV; Jπ: 2+.
+## High-Level Structure and Workflow Explanation
 
-python Dataset_Parser.py evaluatorInput.log
-python Level_Matcher.py
+The system operates as a recursive diagnostic pipeline that transforms raw experimental logs into a unified, clique-constrained nuclear level scheme.
+
+```text
+[Raw ENSDF Logs] --> [Dataset_Parser] --> [JSON Datasets]
+                                               |
+                                               v
+[Physics Constraints] --> [Feature_Engineer] --+--> [Synthetic Training Data]
+                                               |
+                                               v
+[Training] <----------- [Level_Matcher] <------+--> [XGBoost / LightGBM Ensembles]
+    |                                          |
+    v                                          v
+[Diagnostic Visuals] <--- [Metrics_Visualizer] [Pairwise Inference]
+                                               |
+                                               v
+[Graph Clustering] <----- [Clique Algorithm] --+--> [Mutual Consistency Check]
+                                               |
+                                               v
+[Final Scheme] <--------- [Combined_Visualizer] --> [High-Res Level Scheme Plots]
 ```
 
-### Generate Visualizations
 
-```bash
-python Combined_Visualizer.py
-# Outputs: 
-# 1. Input_Level_Scheme.png
-# 2. Output_Cluster_Scheme.png
+
+---
+
+## 1. Core Technology Stack: Machine Learning Hierarchy
+
+### Level 1: The Foundation - Decision Trees
+Decision trees are non-parametric supervised learning methods used for classification and regression. The primary objective is to create a model that predicts the target variable value by learning simple decision rules inferred from data features.
+
+#### 1.1 Core Components
+- **Root Node**: The initial starting point containing the complete dataset.
+- **Decision Node (Internal Node)**: Points where data is partitioned based on a feature value.
+- **Branches**: Vectors connecting nodes representing decision outcomes.
+- **Leaf Node (Terminal Node)**: Final outcomes or specific predictions.
+- **Splitting**: The process of dividing a node into multiple sub-nodes.
+
+#### 1.2 Training Methodology
+- **Classification and Regression Trees (CART)**: Builds trees using binary splits to minimize impurity (Gini impurity for classification or Mean Square Error for regression).
+- **Inherent Traits**: High variance and low bias. Deep trees are sensitive to minor data fluctuations and prone to overfitting.
+- **Project Role**: Functions as the base estimator for ensemble methods.
+
+### Level 2: The Strategy - Ensemble Learning
+Ensemble methods combine multiple models to create a single, more robust predictive model.
+
+#### 2.1 Bagging (Bootstrap Aggregating)
+Bagging reduces variance by training multiple versions of the same model on different random subsets (with replacement) of the training data.
+- **Mechanism**: Generates $M$ datasets via bootstrap sampling and trains $M$ independent trees in parallel. Final predictions result from averaging (regression) or majority voting (classification).
+- **Key Algorithm**: Random Forest (Breiman, 2001).
+- **Physics Limitation**: Averaging fails for "Hard Vetoes." If one tree detects a fatal Spin-Parity mismatch (Probability $\approx 0$) but 99 trees observe an energy match (Probability $\approx 1$), the average remains high ($\approx 0.99$). Physics requires a single veto to drive the final probability to zero.
+
+#### 2.2 Boosting
+Boosting is a sequential method where each new model attempts to correct the errors of its predecessor.
+- **Mechanism**: Iterative improvement. Tree $m$ is trained to minimize the loss (errors) of the existing ensemble $F_{m-1}$.
+- **Physics Strength**: Mimics a logical "Veto" system. A subsequent tree can detect a specific violation (e.g., Parity mismatch) and output a large negative correction, effectively suppressing the match probability regardless of other indicators.
+
+### Level 3: The Algorithm
+Mathematical frameworks for implementing Sequential Boosting.
+
+#### 3.1 Adaptive Boosting (AdaBoost)
+- **Mechanism**: Sample re-weighting. At each step, it increases the weights of misclassified observations.
+- **Verdict**: **Rejected**. Sensitive to noisy data and experimental outliers. In nuclear data, anomalies receive exponential weight, causing the model to fixate on experimental errors rather than general trends. Reference: Freund and Schapire (1997).
+
+#### 3.2 Gradient Boosting Machine (GBM)
+- **Mechanism**: Functional Gradient Descent. A new tree is trained to predict the negative gradient (pseudo-residuals) of the loss function, fitting the error rather than the raw data.
+- **Verdict**: **Superior**. Optimizing differentiable loss functions (e.g., Logarithmic Loss) is more robust to outliers than the exponential loss used in AdaBoost. Reference: Friedman (2001).
+
+### Level 4: The Software Implementation
+
+| Package | NaN Handling | Growth Strategy | Best Data Scale | Weakness for Physics | Verdict |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Scikit-Learn GradientBoosting** | Fails (Crashes) | Level-wise | Small | Requires imputation (bias risk); slow; lacks regularization. | **Reject** |
+| **LightGBM** | Native (Safe) | Leaf-wise | Huge ($>10^5$) | "Greedy" growth overfits small data; creates unbalanced trees. | **Reject** |
+| **Scikit-Learn HistGradientBoosting** | Native (Safe) | Leaf-wise | Medium/Large | Less tunable regularization than XGBoost; defaults to greedy growth. | **Acceptable** |
+| **XGBoost** | Native (Safe) | Level-wise | Any | Minimal. Level-wise growth and $L_1$/$L_2$ regularization ideal for stability. | **Best** |
+| **CatBoost** | Native (Safe) | Symmetric | Medium/Large | Slower training for pure numerical tasks; heavier dependency. | **Alternative** |
+
+#### 4.1 Growth Strategies
+- **Leaf-wise Growth (LightGBM)**: Splits the leaf with the highest error. While efficient for large data, it can grow deep, lopsided trees that "memorize" outliers in small datasets.
+- **Level-wise Growth (XGBoost)**: Grows the tree layer-by-layer. This produces balanced trees, acting as a natural regularizer against experimental noise in nuclear physics.
+
+#### 4.2 Academic References
+- **XGBoost**: Tianqi Chen and Carlos Guestrin. "XGBoost: A Scalable Tree Boosting System." *Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining*, 785 (2016). [DOI: 10.1145/2939672.2939785](https://doi.org/10.1145/2939672.2939785)
+- **LightGBM**: Guolin Ke et al. "LightGBM: A Highly Efficient Gradient Boosting Decision Tree." *Advances in Neural Information Processing Systems 30*, 3149 (2017). [Paper Link](https://proceedings.neurips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html)
+
+---
+
+## 2. Why XGBoost for Nuclear Data?
+
+### 2.1 Native Handling of Missing Values (Sparsity Awareness)
+Nuclear experimental datasets are inherently sparse. XGBoost utilizes **Sparsity-Aware Split Finding**. Unlike legacy algorithms requiring bias-inducing imputation, it explicitly learns optimal default directions for missing data (`NaN`). It treats "Unknown" as a distinct physical state, preserving experimental ambiguity.
+
+### 2.2 Small Data Regularization
+Nuclear level schemes typically contain fewer than 500 levels. Algorithms like LightGBM tend to "memorize" noise in small datasets. XGBoost’s level-wise growth, combined with native **$L_1$ (Lasso) and $L_2$ (Ridge) regularization**, prevents overfitting and captures general physical trends.
+
+### 2.3 Statistical-Logical Integration
+*   **The Challenge:** Nuclear level matching is not merely a numerical optimization problem; it is constrained by strict physical laws. Standard models often treat logical constraints (e.g., selection rules) as "soft" statistical features, potentially allowing a precise energy match to override a fatal physics violation (e.g., matching $J^\pi = 3^+$ with $4^-$).
+*   **The XGBoost Solution:**
+    *   **Statistical Compliance (Monotonicity):** A larger energy deviation penalizes the match probability, reflecting the statistical nature of experimental uncertainties.
+    *   **Logical Compliance (Hard Vetoes):** As a sequential learner, XGBoost creates a hierarchy of decisions. It can learn that specific physical violations (like Parity Mismatch) act as absolute vetoes that nullify the probability, regardless of how perfect the energy agreement is.
+
+---
+
+## 3. Level 5: The Implementation Strategy
+
+### 3.1 Data Partitioning Strategy
+
+| Subset | Proportion | Size ($\sim$) | Objective | Model Interaction |
+| :--- | :--- | :--- | :--- | :--- |
+| **Training Set** | 80% | 17,758 | Pattern learning | Weight updates via Gradient Descent |
+| **Validation Set** | 20% | 4,440 | Overfitting monitor | Evaluated without weight updates |
+| **Test Set (A/B/C)**| Real Data | 30 | Final inference | Never seen during training phase |
+
+### 3.2 Diagnostic Metrics
+
+| Metric | Definition | Purpose | Target Range |
+| :--- | :--- | :--- | :--- |
+| **RMSE** | Root Mean Square Error | Measures average prediction error | $<0.05$ (Excel), $>0.3$ (Poor) |
+| **MAE** | Mean Absolute Error | Robust average absolute deviation | $<0.02$ (Excel), $>0.2$ (Poor) |
+| **LogLoss** | Binary Cross-Entropy | Calibrates match probabilities | $<0.3$ (Excel), $>1.0$ (Poor) |
+| **Feature Gain** | Loss reduction per feature | Identifies physical drivers | Higher = More influential |
+| **Stop Round** | Early stopping iteration | Monitors model complexity | $<70\%$ of max estimators |
+
+**LogLoss Deep Dive**: Binary cross-entropy measures how well predicted probabilities match true labels. Lower LogLoss indicates better-calibrated probabilities, essential for ranking match candidates reliably. Implementation uses manual computation with prediction clipping to $[10^{-15}, 1-10^{-15}]$ to avoid numerical errors.
+
+**Feature Importance (Gain) Deep Dive**: XGBoost's Gain metric measures total loss reduction when a feature is used for splits. For nuclear data, the expected hierarchy is: `Spin_Similarity` (highest Gain) > `Parity_Similarity` > `Energy_Similarity` > `Gamma_Decay_Pattern_Similarity` > `Specificity`.
+
+### 3.3 Interpreting Diagnostic Results
+- **Golden State**: Minimal Train/Validation gap (<0.01 RMSE) and validation LogLoss < 0.3.
+- **Red Flag (Overfitting)**: Large gap (>0.05 RMSE) between training and validation.
+- **Red Flag (Underfitting)**: High validation RMSE (>0.3) or stopping at iteration 1.
+
+---
+
+## 4. Physics-Informed Feature Engineering
+
+The model processes five primary features, transforming raw experimental data into nuclear physics descriptors:
+
+1.  **Energy_Similarity**: Calculated using a Gaussian kernel based on the experimental $Z$-score:
+    $$\text{Energy Similarity} = \exp\left(-\sigma_{\text{scale}} \cdot Z^2\right)$$
+    where $Z = \frac{|E_1 - E_2|}{\sqrt{\sigma_1^2 + \sigma_2^2}}$.
+2.  **Spin_Similarity**: Encodes nuclear selection rules. Forbidden transitions ($|\Delta J| \ge 2$) receive an absolute zero veto.
+3.  **Parity_Similarity**: Validates parity conservation. Definite mismatches trigger a zero veto.
+4.  **Gamma_Decay_Pattern_Similarity**: Computes the cosine similarity of Gaussian-broadened gamma-ray spectra.
+5.  **Specificity**: Measures the uniqueness of a level's assignment to penalize high-multiplicity ambiguity ($\text{Specificity} = 1/\sqrt{N}$).
+
+### 4.1 Physics Rescue Mechanism
+When quantum numbers or gamma patterns show exceptional agreement (Similarity $\ge 0.85$), the system activates a rescue protocol:
+- **Formula**: $\text{Effective Energy} = (\text{Energy Similarity})^{0.5}$
+- **Rational**: Prevents rejection of valid matches where energy calibration differs but internal structure is identical.
+
+---
+
+## 5. Graph-Based Clustering Algorithm
+
+The system merges pairwise inferences into physical clusters using a clique-constrained graph algorithm:
+- **Dataset Uniqueness**: Strictly enforces a maximum of one level per dataset per cluster.
+- **Mutual Consistency**: All members must be pairwise compatible (forming a clique).
+- **Anchor Selection**: The level with the smallest experimental energy uncertainty ($\sigma_E$) is selected as the cluster reference.
+- **Ambiguity Support**: Levels with high uncertainty can maintain membership in multiple clusters until resolved.
+
+---
+
+## 6. Project Structure
+
+```text
+LevelMatcher/
+├── Level_Matcher.py           # Main orchestration (Training, Inference, Clustering)
+├── Feature_Engineer.py        # Physics engine (Feature extraction, Rescue mechanism)
+├── Dataset_Parser.py          # Regex-based ENSDF log to JSON converter
+├── Training_Metrics_Visualizer.py # Diagnostic suite (5-panel metrics plots)
+├── Combined_Visualizer.py     # Visualization suite (High-res level scheme plots)
+├── data/
+�?  └── raw/                   # Input JSON datasets (A, B, C)
+├── outputs/
+�?  ├── figures/               # PNG outputs (Diagnostics, Level Schemes)
+�?  ├── clustering/            # Final cluster memberships (Text reports)
+�?  └── pairwise/              # Pairwise match probabilities
+├── docs/                      # Documentation and technical reports
+├── scripts/
+�?  ├── hyperparameter_tuning/ # Optimization and validation utilities
+�?  └── legacy/                # Experimental/archive scripts
+└── README.md                  # This file
 ```
 
-## Physics Logic
+---
 
-### Energy Similarity
-Gaussian kernel of Z-score:
+## 7. Workflow & Usage
 
-$$\text{Energy Similarity} = \exp\left(-\sigma_{\text{scale}} \cdot Z^2\right)$$
+1.  **Ingestion**: `Dataset_Parser.py` normalizes ENSDF evaluator logs into `data/raw/` JSON files.
+2.  **Synthesis**: `Level_Matcher.py` generates synthetic training data to seed the ensemble.
+3.  **Training**: The XGBoost + LightGBM ensembles are trained with early stopping.
+4.  **Inference**: Models perform cross-dataset comparisons outputting probabilities to `outputs/pairwise/`.
+5.  **Clustering**: The graph algorithm consolidates matches into physical level states.
+6.  **Verification**: `Combined_Visualizer.py` generates final plots for visual audit.
 
-where $Z = \frac{|E_1 - E_2|}{\sqrt{\sigma_1^2 + \sigma_2^2}}$
+---
 
-### Spin Similarity
-Nuclear selection rules enforce:
-- **Match (J₁ = J₂):** Score = 1.0 (firm) or 0.9 (tentative)
-- **Adjacent (|J₁ - J₂| = 1):** Score = 0.0 (both firm, vetoed) or 0.2 (any tentative, weak)
-- **Forbidden (|J₁ - J₂| > 1):** Score = 0.0 (absolute veto)
+## 8. Development & Testing Standards
 
-### Parity Similarity
-Conservation rules:
-- **Match (π₁ = π₂):** Score = 1.0 (firm) or 0.9 (tentative)
-- **Mismatch (π₁ ≠ π₂):** Score = 0.0 (both firm, vetoed) or 0.2 (any tentative, weak)
+### 8.1 Mandatory Runtime Validation
+After any code modification:
+1.  Execute `Level_Matcher.py` to verify the training pipeline (Exit Code 0).
+2.  Check `outputs/figures/Training_Metrics_Diagnostic.png` for overfitting flags.
+3.  Run `Combined_Visualizer.py` to ensure visual output integrity.
 
-### Specificity (Ambiguity Penalty)
-Measures how unique a level's spin-parity assignment is:
+### 8.2 Coding Protocols
+- **No Acronyms**: Variables must be fully spelled out (e.g., `energy_uncertainty` not `ener_uncert`).
+- **No ALL CAPS**: Use `Title_Case` or `snake_case` for all variables and constants.
+- **Header Requirement**: Every script must lead with a High-level Structure and Workflow Explanation.
 
-$$\text{Specificity} = \frac{1}{\sqrt{\text{multiplicity}}}$$
-
-The square root formula provides balanced penalization of ambiguous levels:
-- multiplicity=1 (unique Jπ assignment) → Specificity = 1.0 (100%, no penalty)
-- multiplicity=2 (two possible Jπ assignments) → Specificity = 0.71 (29% penalty)
-- multiplicity=4 (four possible Jπ assignments) → Specificity = 0.50 (50% penalty)
-- multiplicity=9 (nine possible Jπ assignments) → Specificity = 0.33 (67% penalty)
-
-This naturally represents uncertainty growth in quantum measurements. Alternative formulas considered:
-- Logarithmic 1/(1+log10(mult)): Too gentle (mult=9 → 51%, only 49% penalty)
-- Reciprocal 1/mult: Too aggressive (mult=9 → 11%, 89% penalty)
-- Linear tunable 1/(1+α*(mult-1)): Requires manual tuning of α parameter
-
-### Feature Vector Structure
-```python
-[Energy_Similarity,      # 0.0 to 1.0 (Gaussian kernel)
- Spin_Similarity,        # 0.0 to 1.0 (physics-informed scoring)
- Parity_Similarity,      # 0.0 to 1.0 (physics-informed scoring)
- Specificity]            # 1.0 / sqrt(multiplicity), measures assignment uniqueness
-```
-
-All features are monotonic increasing: higher values → higher match probability.
-
-**Note on removed features:** Earlier versions included Spin Certainty and Parity Certainty features, but these were found to be redundant. Tentativeness information is already encoded in the similarity scores (firm matches score 1.0, tentative matches score 0.9), making separate certainty features unnecessary.
-
-## Output Files
-
-*   **`Output_Level_Pairwise_Inference.txt`**: All cross-dataset level pairs above `pairwise_output_threshold` with match probabilities and feature breakdowns
-*   **`Output_Clustering_Results.txt`**: Final clustering results with anchor information and member probabilities
-*   **Console Output**: Real-time progress and summary statistics
-
-## Technology Stack
-
-*   **Machine Learning:** XGBoost 2.x (Gradient Boosting with monotonic constraints)
-*   **Data Processing:** NumPy, Pandas
-*   **Visualization:** Matplotlib (level schemes)
-*   **Rationale for XGBoost:**
-    *   Native handling of missing values (common in nuclear data)
-    *   Level-wise tree growth (stable for small datasets, N < 500)
-    *   Advanced regularization (L1/L2) prevents overfitting
-    *   Monotonic constraint support enforces physics rules
-    *   See `Technology_Hierarchy.md` for detailed justification
-
-## Jπ Notation Support
-
-`Dataset_Parser.py` handles complex spin-parity notation:
-
-| Notation | Meaning | Example Output |
-|----------|---------|----------------|
-| `2+` | Definite J=2, positive parity | `twoTimesSpin=4, isTentativeSpin=False, parity='+', isTentativeParity=False` |
-| `(2)+` | Tentative spin, definite parity | `twoTimesSpin=4, isTentativeSpin=True, parity='+', isTentativeParity=False` |
-| `2(+)` | Definite spin, tentative parity | `twoTimesSpin=4, isTentativeSpin=False, parity='+', isTentativeParity=True` |
-| `(2+)` | Both tentative | `twoTimesSpin=4, isTentativeSpin=True, parity='+', isTentativeParity=True` |
-| `1:3` | Range J=1,2,3 | Three separate entries with `twoTimesSpin={2,4,6}` |
-| `(1+,2+,3+)` | Multiple tentative options with shared parity | Three entries, all with `isTentativeSpin=True, parity='+', isTentativeParity=True` |
-| `3/2,5/2(+)` | List where only last has parity | First entry no parity, second entry has `parity='+', isTentativeParity=True` |
-
-## Future Work
-
-Planned features for future versions (requires JSON schema extensions):
-
-| Feature | Physics Value | Implementation Notes |
-|---------|---------------|----------------------|
-| **Half-Life / Lifetime** | High — Orders of magnitude difference is a definitive veto (isomer vs ground state) | Gaussian similarity on log-scale lifetimes |
-| **Band Assignment** | Medium — Useful for high-spin rotational states | Match levels belonging to the same rotational band structure |
-
-## Dependencies
-
-```bash
-pip install xgboost numpy pandas matplotlib
-```
-
-Verify installation:
-```bash
-python Library_Verification.py
-```
-
-## Contact
-For questions or support, contact the FRIB Nuclear Data Group at nucleardata@frib.msu.edu
+---
+**Maintained by**: FRIB Nuclear Data Group  
+**Status**: [STABLE]
+**Version**: 2.0 (Dual-Model Architecture)

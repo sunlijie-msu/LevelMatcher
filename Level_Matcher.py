@@ -167,10 +167,14 @@ if __name__ == "__main__":
     validation_mae = mean_absolute_error(y_validation, validation_predictions)
     
     # Manual binary cross-entropy computation (sklearn log_loss incompatible with continuous probabilities)
+    # Convert labels to numpy array to ensure safe element-wise multiplication with prediction arrays
+    y_train_np = y_train.values if hasattr(y_train, 'values') else np.array(y_train)
+    y_validation_np = y_validation.values if hasattr(y_validation, 'values') else np.array(y_validation)
+    
     train_predictions_clipped = np.clip(train_predictions, 1e-15, 1 - 1e-15)
     validation_predictions_clipped = np.clip(validation_predictions, 1e-15, 1 - 1e-15)
-    train_logloss = -np.mean(y_train * np.log(train_predictions_clipped) + (1 - y_train) * np.log(1 - train_predictions_clipped))
-    validation_logloss = -np.mean(y_validation * np.log(validation_predictions_clipped) + (1 - y_validation) * np.log(1 - validation_predictions_clipped))
+    train_logloss = -np.mean(y_train_np * np.log(train_predictions_clipped) + (1 - y_train_np) * np.log(1 - train_predictions_clipped))
+    validation_logloss = -np.mean(y_validation_np * np.log(validation_predictions_clipped) + (1 - y_validation_np) * np.log(1 - validation_predictions_clipped))
     
     # Extract feature importance (Gain metric: average loss reduction per feature)
     xgboost_feature_importance = model_xgboost.get_booster().get_score(importance_type='gain')
@@ -217,8 +221,8 @@ if __name__ == "__main__":
     # Manual binary cross-entropy computation (sklearn log_loss incompatible with continuous probabilities)
     train_predictions_lgbm_clipped = np.clip(train_predictions_lgbm, 1e-15, 1 - 1e-15)
     validation_predictions_lgbm_clipped = np.clip(validation_predictions_lgbm, 1e-15, 1 - 1e-15)
-    train_logloss_lgbm = -np.mean(y_train * np.log(train_predictions_lgbm_clipped) + (1 - y_train) * np.log(1 - train_predictions_lgbm_clipped))
-    validation_logloss_lgbm = -np.mean(y_validation * np.log(validation_predictions_lgbm_clipped) + (1 - y_validation) * np.log(1 - validation_predictions_lgbm_clipped))
+    train_logloss_lgbm = -np.mean(y_train_np * np.log(train_predictions_lgbm_clipped) + (1 - y_train_np) * np.log(1 - train_predictions_lgbm_clipped))
+    validation_logloss_lgbm = -np.mean(y_validation_np * np.log(validation_predictions_lgbm_clipped) + (1 - y_validation_np) * np.log(1 - validation_predictions_lgbm_clipped))
     
     # Extract feature importance (Gain metric: total loss reduction per feature)
     lightgbm_feature_importance = model_lightgbm.booster_.feature_importance(importance_type='gain')

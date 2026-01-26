@@ -195,14 +195,29 @@ def visualize_training_metrics(xgboost_metrics, lightgbm_metrics, output_path='o
     axis_importance = axes[3]
     
     # Extract importance values for all 5 features
-    # XGBoost returns dict like {'f0': 123.4, 'f1': 456.7, ...} where f0-f4 map to feature indices
+    # XGBoost returns dict using column names from the training DataFrame
+    # If a feature is never used in split, it might be missing from the dict, so we default to 0.0
     importance_values = []
-    for index in range(5):
-        feature_key = f'f{index}'
-        importance_values.append(xgboost_metrics['feature_importance'].get(feature_key, 0.0))
+    
+    # Get importance dictionary. If empty or None, handle gracefully.
+    raw_importance = xgboost_metrics.get('feature_importance', {})
+    
+    for name in feature_names:
+        # Try exact name match first
+        val = raw_importance.get(name, 0.0)
+        
+        # Fallback: if keys are f0, f1 etc. map by index
+        if val == 0.0 and 'f0' in raw_importance:
+            index = feature_names.index(name)
+            val = raw_importance.get(f'f{index}', 0.0)
+            
+        importance_values.append(val)
     
     # Horizontal bar chart for better label readability
     y_positions_importance = np.arange(len(feature_names))
+    # Sort for visual hierarchy (optional but good practice) - keep as fixed order for comparing runs? 
+    # Let's keep fixed order to match X-axis consistency
+    
     bars_importance = axis_importance.barh(y_positions_importance, importance_values, color='teal', alpha=0.8)
     
     # Add value labels
