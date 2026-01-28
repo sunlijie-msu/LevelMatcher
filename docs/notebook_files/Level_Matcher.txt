@@ -3,9 +3,10 @@ import numpy as np
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, mean_absolute_error, log_loss
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 from Feature_Engineer import extract_features, generate_synthetic_training_data, parse_json_datasets
 from Level_Clusterer import perform_clustering_and_output
+from Training_Metrics_Visualizer import visualize_training_metrics
 import warnings
 
 """
@@ -43,10 +44,12 @@ Step 1: Synthetic Training Data Generation
 
 Step 2: Model Training
   Input: Training features and labels from Step 1
+  Data Partitioning: 80% training (17,758 samples), 20% validation (4,440 samples)
   Process: Train two independent models with monotonic constraints (Physics Prior)
-    - XGBoost: Baseline model
+    - XGBoost: Baseline model with early stopping
     - LightGBM: Validation model with heavier regularization
-  Output: Trained binary logistic regressors
+  Evaluation: RMSE, MAE, LogLoss, Feature Importance (Gain metric)
+  Output: Trained binary logistic regressors with diagnostic visualizations
 
 Step 3: Test Data Ingestion
   Source: Test datasets (A, B, C) in data/raw/
@@ -149,11 +152,13 @@ if __name__ == "__main__":
     #   2. After each boosting round, model predicts on X_validation (does NOT update weights)
     #   3. If validation error stops improving for 50 consecutive rounds, training halts (early stopping)
     # Result: Model learns from 80% of data while 20% acts as independent quality check
+    # XGBoost automatically tracks multiple evaluation metrics during training
+    evaluation_results = {}
     model_xgboost.fit(X_train, y_train, 
                      eval_set=[(X_train, y_train), (X_validation, y_validation)],
                      verbose=False)
     
-    # Compute diagnostic metrics
+    # Compute diagnostic metrics for regression quality
     train_predictions = model_xgboost.predict(X_train)
     validation_predictions = model_xgboost.predict(X_validation)
     train_rmse = np.sqrt(mean_squared_error(y_train, train_predictions))
@@ -161,9 +166,23 @@ if __name__ == "__main__":
     train_mae = mean_absolute_error(y_train, train_predictions)
     validation_mae = mean_absolute_error(y_validation, validation_predictions)
     
+    # Manual binary cross-entropy computation (sklearn log_loss incompatible with continuous probabilities)
+    # Convert labels to numpy array to ensure safe element-wise multiplication with prediction arrays
+    y_train_np = y_train.values if hasattr(y_train, 'values') else np.array(y_train)
+    y_validation_np = y_validation.values if hasattr(y_validation, 'values') else np.array(y_validation)
+    
+    train_predictions_clipped = np.clip(train_predictions, 1e-15, 1 - 1e-15)
+    validation_predictions_clipped = np.clip(validation_predictions, 1e-15, 1 - 1e-15)
+    train_logloss = -np.mean(y_train_np * np.log(train_predictions_clipped) + (1 - y_train_np) * np.log(1 - train_predictions_clipped))
+    validation_logloss = -np.mean(y_validation_np * np.log(validation_predictions_clipped) + (1 - y_validation_np) * np.log(1 - validation_predictions_clipped))
+    
+    # Extract feature importance (Gain metric: average loss reduction per feature)
+    xgboost_feature_importance = model_xgboost.get_booster().get_score(importance_type='gain')
+    
     print(f"XGBoost Training Complete (stopped at iteration {model_xgboost.best_iteration})")
     print(f"  Train RMSE: {train_rmse:.4f} | Validation RMSE: {validation_rmse:.4f}")
     print(f"  Train MAE:  {train_mae:.4f} | Validation MAE:  {validation_mae:.4f}")
+    print(f"  Train LogLoss: {train_logloss:.4f} | Validation LogLoss: {validation_logloss:.4f}")
 
     # 2b: Train LightGBM (Secondary Model)
     print("\nTraining LightGBM Model...")
@@ -187,9 +206,9 @@ if __name__ == "__main__":
                                              random_state=42)
     
     # Train LightGBM model with validation monitoring
+    # LightGBM accepts multiple metrics directly in eval_metric parameter
     model_lightgbm.fit(X_train, y_train,
-                      eval_set=[(X_train, y_train), (X_validation, y_validation)],
-                      eval_metric='rmse')
+                      eval_set=[(X_train, y_train), (X_validation, y_validation)])
     
     # Compute diagnostic metrics
     train_predictions_lgbm = model_lightgbm.predict(X_train)
@@ -199,9 +218,48 @@ if __name__ == "__main__":
     train_mae_lgbm = mean_absolute_error(y_train, train_predictions_lgbm)
     validation_mae_lgbm = mean_absolute_error(y_validation, validation_predictions_lgbm)
     
+    # Manual binary cross-entropy computation (sklearn log_loss incompatible with continuous probabilities)
+    train_predictions_lgbm_clipped = np.clip(train_predictions_lgbm, 1e-15, 1 - 1e-15)
+    validation_predictions_lgbm_clipped = np.clip(validation_predictions_lgbm, 1e-15, 1 - 1e-15)
+    train_logloss_lgbm = -np.mean(y_train_np * np.log(train_predictions_lgbm_clipped) + (1 - y_train_np) * np.log(1 - train_predictions_lgbm_clipped))
+    validation_logloss_lgbm = -np.mean(y_validation_np * np.log(validation_predictions_lgbm_clipped) + (1 - y_validation_np) * np.log(1 - validation_predictions_lgbm_clipped))
+    
+    # Extract feature importance (Gain metric: total loss reduction per feature)
+    lightgbm_feature_importance = model_lightgbm.booster_.feature_importance(importance_type='gain')
+    
     print(f"LightGBM Training Complete (best iteration: {model_lightgbm.best_iteration_})")
     print(f"  Train RMSE: {train_rmse_lgbm:.4f} | Validation RMSE: {validation_rmse_lgbm:.4f}")
     print(f"  Train MAE:  {train_mae_lgbm:.4f} | Validation MAE:  {validation_mae_lgbm:.4f}")
+    print(f"  Train LogLoss: {train_logloss_lgbm:.4f} | Validation LogLoss: {validation_logloss_lgbm:.4f}")
+    
+    # ==========================================
+    # Step 2c: Visualize Training Diagnostics
+    # ==========================================
+    # Generate comprehensive diagnostic plots for both models
+    print("\nGenerating Training Metrics Visualization...")
+    xgboost_metrics_data = {
+        'train_rmse': train_rmse,
+        'validation_rmse': validation_rmse,
+        'train_mae': train_mae,
+        'validation_mae': validation_mae,
+        'train_logloss': train_logloss,
+        'validation_logloss': validation_logloss,
+        'feature_importance': xgboost_feature_importance,
+        'best_iteration': model_xgboost.best_iteration,
+        'maximum_iterations': 1000
+    }
+    lightgbm_metrics_data = {
+        'train_rmse': train_rmse_lgbm,
+        'validation_rmse': validation_rmse_lgbm,
+        'train_mae': train_mae_lgbm,
+        'validation_mae': validation_mae_lgbm,
+        'train_logloss': train_logloss_lgbm,
+        'validation_logloss': validation_logloss_lgbm,
+        'feature_importance': lightgbm_feature_importance,
+        'best_iteration': model_lightgbm.best_iteration_,
+        'maximum_iterations': 500
+    }
+    visualize_training_metrics(xgboost_metrics_data, lightgbm_metrics_data)
 
     # ==========================================
     # Step 3: Test Data Ingestion
