@@ -540,6 +540,13 @@ if __name__ == "__main__":
         output_path='outputs/figures/Output_Cluster_Scheme_LightGBM.png', 
         title_suffix='(LightGBM / Gamma-Pattern-Aware)'
     )
+
+    # Generate Clustering Results (KMeans) - Geometric Baseline
+    plot_clustering_results(
+        input_path='outputs/clustering/Output_Clustering_Results_KMeans.txt', 
+        output_path='outputs/figures/Output_Cluster_Scheme_KMeans.png', 
+        title_suffix='(KMeans / Geometric-Baseline)'
+    )
     
     print("=" * 60)
     print("All visualizations complete!")
