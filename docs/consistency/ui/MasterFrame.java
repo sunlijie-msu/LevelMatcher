@@ -1,0 +1,1707 @@
+/*
+ * masterFrame.java
+ *
+ * Created on May 10, 2010, 9:38 AM
+ */
+
+package consistency.ui;
+
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.Insets;
+import java.awt.SystemColor;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.InputEvent;
+import java.io.*;
+
+import java.util.Vector;
+
+import javax.swing.*;
+import javax.swing.GroupLayout.Alignment;
+import javax.swing.LayoutStyle.ComponentPlacement;
+import javax.swing.border.EtchedBorder;
+import javax.swing.text.DefaultCaret;
+
+import consistency.base.AverageValuesInComments;
+import consistency.base.CheckControl;
+import consistency.main.Run;
+import consistency.main.Setup;
+import ensdfparser.ensdf.ENSDF;
+import ensdfparser.nds.ensdf.EnsdfUtil;
+import ensdfparser.nds.ensdf.MassChain;
+import ensdfparser.nds.util.Str;
+import ensdfparser.ui.CustomFrame;
+
+import java.awt.event.ItemListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.ItemEvent;
+
+/**
+ * The top-level user interface 
+ * @author Jun
+ */
+//public class MasterFrame extends javax.swing.JFrame {
+public class MasterFrame extends CustomFrame {
+    
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1L;
+	MassChain data;//all of the data in the file
+
+    boolean isFileLoaded;
+    
+    Vector<File> filesV;
+    
+    consistency.main.Run run;
+	private ButtonGroup limitButtonGroup;
+	private JRadioButton limit99RadioButton;
+	private JRadioButton otherLimitRadioButton;
+	private JTextField uncLimitTextField;
+	private JRadioButton limit35RadioButton;
+    
+    public MasterFrame() {
+        isFileLoaded=false;
+        
+        String outexts=consistency.main.Setup.outexts;
+        //System.out.println(outexts);
+        
+        if(outexts!=null && outexts.length()>0){
+            CheckControl.writeRPT=outexts.contains("rpt");
+            CheckControl.writeLEV=outexts.contains("lev");
+            CheckControl.writeGAM=outexts.contains("gam");
+            CheckControl.writeGLE=outexts.contains("gle");
+            CheckControl.writeMRG=outexts.contains("mrg");
+            CheckControl.writeAVG=outexts.contains("avg");
+            CheckControl.writeFED=outexts.contains("fed");
+        }  
+        
+        initComponents();
+        run=new consistency.main.Run();
+ 
+        pathField.setText(consistency.main.Setup.outdir);
+        data=new MassChain();
+        filesV=new Vector<File>();
+        
+        run.setFilesV(filesV);
+        
+        textArea.setFont(new Font("Courier New", Font.PLAIN, 12));
+        textArea.setTransferHandler(new TransferHandler() {
+            /**
+			 * 
+			 */
+			private static final long serialVersionUID = 1L;
+
+			public boolean canImport(TransferHandler.TransferSupport support) {
+                if (!support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
+                    return false;
+                } 
+                return true;
+            }
+     
+            @SuppressWarnings("unchecked")
+    		public boolean importData(TransferHandler.TransferSupport support) {
+                if (!canImport(support)) {
+                    return false;
+                }
+                 
+                Transferable t = support.getTransferable();
+     
+                try {
+                    java.util.List<File> fileList=(java.util.List<File>)t.getTransferData(DataFlavor.javaFileListFlavor);
+     
+                    consistency.main.Setup.filedir=fileList.get(0).getAbsolutePath();
+                    consistency.main.Setup.save();
+                    data.clear();
+                                 
+                    run.clear();            
+                    //run.printMessage(run.title());
+                    
+                    File[] files=new File[fileList.size()];
+                    fileList.toArray(files);
+                    
+                    loadFiles(files);
+                    
+                    viewGroupsButtonButton.setEnabled(false);
+                    
+                } catch (UnsupportedFlavorException e) {
+                    return false;
+                } catch (Exception e) {
+                	e.printStackTrace();
+                    e.printStackTrace();
+                    JOptionPane.showMessageDialog(rootPane, e);  
+                    return false;
+                }
+     
+                return true;
+            }
+        });
+        
+        run.setMessenger(textArea);
+        run.printMessage("   Run in current folder: "+System.getProperty("user.dir"));
+        //run.printMessage(run.title());
+               
+    }
+    
+    /** This method is called from within the constructor to
+     * initialize the form.
+     * WARNING: Do NOT modify this code. The content of this method is
+     * always regenerated by the Form Editor.
+     */
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
+    private void initComponents() {
+
+        loadButton = new javax.swing.JToggleButton();
+        fileLabel = new javax.swing.JLabel();
+        pathLabel = new javax.swing.JLabel();
+        pathLabel.setToolTipText("Current run folder="+System.getProperty("user.dir"));
+        pathField = new javax.swing.JTextField();
+        checkButton = new javax.swing.JToggleButton();
+        
+        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+
+        loadButton.setText("Load ENSDF File(s)");
+        loadButton.addMouseListener(new MouseAdapter() {
+        	@Override
+        	public void mouseClicked(MouseEvent arg0) {
+        		loadButtonMouseClicked(arg0);
+        	}
+        });
+        /*
+        loadButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                loadButtonActionPerformed(evt);
+            }
+        });
+        */
+        
+        fileLabel.setText("Outputs:");
+        pathLabel.setText("Output path:");
+
+        pathField.addPropertyChangeListener(new java.beans.PropertyChangeListener() {
+            public void propertyChange(java.beans.PropertyChangeEvent evt) {
+                pathFieldPropertyChange(evt);
+            }
+        });
+        pathField.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyReleased(java.awt.event.KeyEvent evt) {
+                pathFieldKeyReleased(evt);
+            }
+        });
+
+        checkButton.setText("Start Checking");
+        checkButton.setToolTipText("<HTML>check format and consistency of records, generate tabulated output for levels<br>"
+                +                        "and gammas grouped by energies, and also average values from different datasets.</HTML>");
+        
+        /*
+        checkButton.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                checkButtonActionPerformed(evt);
+            }
+        });
+        */
+        checkButton.addMouseListener(new MouseAdapter() {
+        	@Override
+        	public void mouseClicked(MouseEvent arg0) {
+        		checkButtonMouseClicked(arg0);
+        	}
+        });
+        
+        scrollPane = new JScrollPane();
+        //scrollPane.setViewportBorder(new TitledBorder(new EtchedBorder(EtchedBorder.LOWERED, null, null), "message", TitledBorder.LEADING, TitledBorder.TOP, null, new Color(0, 0, 0)));
+        scrollPane.setBorder(BorderFactory.createTitledBorder(BorderFactory.createEtchedBorder(EtchedBorder.LOWERED),"message"));
+        scrollPane.setToolTipText("display the processing status and message.");
+        
+        btnBrowse = new JButton("Browse");
+        btnBrowse.addMouseListener(new MouseAdapter() {
+        	@Override
+        	public void mouseClicked(MouseEvent arg0) {
+        		browseButtonMouseClicked(arg0);
+        	}
+        });
+        /*
+        btnBrowse.addActionListener(new ActionListener() {
+        	public void actionPerformed(ActionEvent evt) {
+        		browseButtonActionPerformed(evt);
+        	}
+        });
+        */
+        JLabel lblNewLabel = new JLabel("(a single file of multiple ENSDFs or load multiple files)");
+        
+        rptCheckBox = new JCheckBox(".rpt");
+        rptCheckBox.setToolTipText("file containing error and warning messages");
+        rptCheckBox.setSelected(CheckControl.writeRPT);
+        rptCheckBox.addItemListener(new ItemListener() {
+        	public void itemStateChanged(ItemEvent arg0) {
+            	if(((JCheckBox)arg0.getSource()).isSelected())
+            		CheckControl.writeRPT=true;
+            	else
+            		CheckControl.writeRPT=false;
+        	}
+        });
+
+        
+        levCheckBox = new JCheckBox(".lev");
+        levCheckBox.setToolTipText("file containing tabulated level information");
+        levCheckBox.setSelected(CheckControl.writeLEV);
+        levCheckBox.addItemListener(new ItemListener() {
+        	public void itemStateChanged(ItemEvent arg0) {
+            	if(((JCheckBox)arg0.getSource()).isSelected())
+            		CheckControl.writeLEV=true;
+            	else
+            		CheckControl.writeLEV=false;
+        	}
+        });
+        
+        gamCheckBox = new JCheckBox(".gam");
+        gamCheckBox.setToolTipText("file containing gammas grouped by gamma energy");
+        gamCheckBox.setSelected(CheckControl.writeGAM);
+        gamCheckBox.addItemListener(new ItemListener() {
+        	public void itemStateChanged(ItemEvent arg0) {
+            	if(((JCheckBox)arg0.getSource()).isSelected())
+            		CheckControl.writeGAM=true;
+            	else
+            		CheckControl.writeGAM=false;
+        	}
+        });
+        
+        gleCheckBox = new JCheckBox(".gle");
+        gleCheckBox.setToolTipText("file containing gammas grouped by level energy");
+        gleCheckBox.setSelected(CheckControl.writeGLE);
+        gleCheckBox.addItemListener(new ItemListener() {
+        	public void itemStateChanged(ItemEvent arg0) {
+            	if(((JCheckBox)arg0.getSource()).isSelected())
+            		CheckControl.writeGLE=true;
+            	else
+            		CheckControl.writeGLE=false;
+        	}
+        });
+        
+        //System.out.println(CheckControl.writeMRG);
+        
+        mrgCheckBox = new JCheckBox(".mrg");
+        mrgCheckBox.setToolTipText("file containing original lines of all datasets grouped by levels and gammas");
+        mrgCheckBox.setSelected(CheckControl.writeMRG);
+        mrgCheckBox.addItemListener(new ItemListener() {
+        	public void itemStateChanged(ItemEvent arg0) {
+            	if(((JCheckBox)arg0.getSource()).isSelected())
+            		CheckControl.writeMRG=true;
+            	else
+            		CheckControl.writeMRG=false;
+        	}
+        });
+        
+        avgCheckBox = new JCheckBox(".avg");
+        avgCheckBox.addMouseListener(new MouseAdapter() {
+        	@Override
+        	public void mouseClicked(MouseEvent arg0) {
+        		avgCheckBoxMouseClicked(arg0);
+        	}
+        });
+        avgCheckBox.setToolTipText("<HTML>file containing average results of gamma energies and intensities<br>Right click to set uncertainty limit</HTML>");
+        avgCheckBox.setSelected(CheckControl.writeAVG);
+        avgCheckBox.addItemListener(new ItemListener() {
+        	public void itemStateChanged(ItemEvent arg0) {
+            	if(((JCheckBox)arg0.getSource()).isSelected())
+            		CheckControl.writeAVG=true;
+            	else
+            		CheckControl.writeAVG=false;
+        	}
+        });
+        
+        
+        fedCheckBox = new JCheckBox(".fed");
+        fedCheckBox.setToolTipText("file containing feeding gammas of all levels");
+        fedCheckBox.setSelected(CheckControl.writeFED);
+        fedCheckBox.addItemListener(new ItemListener() {
+        	public void itemStateChanged(ItemEvent arg0) {
+            	if(((JCheckBox)arg0.getSource()).isSelected())
+            		CheckControl.writeFED=true;
+            	else
+            		CheckControl.writeFED=false;
+        	}
+        });
+        
+        this.addMouseListener(new MouseAdapter() {
+        	@Override
+        	public void mouseClicked(MouseEvent evt) {
+        		frameMouseClicked(evt);
+        	}
+        });
+        
+        viewGroupsButtonButton = new JButton("View groups");
+        viewGroupsButtonButton.addMouseListener(new MouseAdapter() {
+        	@Override
+        	public void mouseClicked(MouseEvent arg0) {
+        		viewGroupsButtonActionClicked(arg0);
+        	}
+        });
+        
+        viewGroupsButtonButton.setEnabled(false);
+        //moreInfoButton.addActionListener(new ActionListener() {
+        //	public void actionPerformed(ActionEvent arg0) {
+        //		moreInfoButtonActionPerformed(arg0);
+        //	}
+        //});
+        
+        viewGroupsButtonButton.setToolTipText("<HTML>"
+        		+ "View information and options for generating Adopted Levels and<br>"
+        		+ "Gammas based on grouping of different datasets, e.g., selecting<br>"
+        		+ "datasets in average, list of feeding leves and gammas."
+        		+ "</HTML>");
+        
+ 
+        
+        //////////////////////////////////////////
+        // LAYOUT
+        /////////////////////////////////////////
+        GroupLayout groupLayout = new GroupLayout(getContentPane());
+        groupLayout.setHorizontalGroup(
+        	groupLayout.createParallelGroup(Alignment.LEADING)
+        		.addGroup(groupLayout.createSequentialGroup()
+        			.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+        				.addGroup(groupLayout.createSequentialGroup()
+        					.addGap(1)
+        					.addComponent(scrollPane, GroupLayout.DEFAULT_SIZE, 640, Short.MAX_VALUE))
+        				.addGroup(groupLayout.createSequentialGroup()
+        					.addGap(0)
+        					.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+        						.addGroup(groupLayout.createSequentialGroup()
+        							.addGap(6)
+        							.addComponent(pathLabel)
+        							.addPreferredGap(ComponentPlacement.RELATED)
+        							.addComponent(pathField, 417, 417, 417)
+        							.addGap(18)
+        							.addComponent(btnBrowse, GroupLayout.PREFERRED_SIZE, 110, GroupLayout.PREFERRED_SIZE))
+        						.addGroup(groupLayout.createSequentialGroup()
+        							.addGap(4)
+        							.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+        								.addGroup(groupLayout.createSequentialGroup()
+        									.addComponent(checkButton, GroupLayout.PREFERRED_SIZE, 145, GroupLayout.PREFERRED_SIZE)
+        									.addGap(18)
+        									.addComponent(fileLabel, GroupLayout.PREFERRED_SIZE, 61, GroupLayout.PREFERRED_SIZE)
+        									.addGap(2)
+        									.addComponent(rptCheckBox, GroupLayout.PREFERRED_SIZE, 45, GroupLayout.PREFERRED_SIZE)
+        									.addGap(10)
+        									.addComponent(levCheckBox, GroupLayout.PREFERRED_SIZE, 45, GroupLayout.PREFERRED_SIZE)
+        									.addGap(10)
+        									.addComponent(gamCheckBox, GroupLayout.PREFERRED_SIZE, 55, GroupLayout.PREFERRED_SIZE)
+        									.addGap(9)
+        									.addComponent(gleCheckBox, GroupLayout.PREFERRED_SIZE, 45, GroupLayout.PREFERRED_SIZE)
+        									.addGap(10)
+        									.addComponent(mrgCheckBox, GroupLayout.PREFERRED_SIZE, 52, GroupLayout.PREFERRED_SIZE))
+        								.addGroup(groupLayout.createSequentialGroup()
+        									.addComponent(loadButton, GroupLayout.PREFERRED_SIZE, 145, GroupLayout.PREFERRED_SIZE)
+        									.addPreferredGap(ComponentPlacement.UNRELATED)
+        									.addComponent(lblNewLabel, GroupLayout.DEFAULT_SIZE, 354, Short.MAX_VALUE)))
+        							.addPreferredGap(ComponentPlacement.RELATED)
+        							.addGroup(groupLayout.createParallelGroup(Alignment.TRAILING)
+        								.addGroup(groupLayout.createSequentialGroup()
+        									.addComponent(avgCheckBox, GroupLayout.PREFERRED_SIZE, 55, GroupLayout.PREFERRED_SIZE)
+        									.addPreferredGap(ComponentPlacement.RELATED)
+        									.addComponent(fedCheckBox, GroupLayout.DEFAULT_SIZE, 55, Short.MAX_VALUE))
+        								.addComponent(viewGroupsButtonButton, GroupLayout.PREFERRED_SIZE, 110, GroupLayout.PREFERRED_SIZE))))
+        					.addGap(9)))
+        			.addGap(1))
+        );
+        groupLayout.setVerticalGroup(
+        	groupLayout.createParallelGroup(Alignment.LEADING)
+        		.addGroup(groupLayout.createSequentialGroup()
+        			.addContainerGap()
+        			.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
+        				.addComponent(loadButton)
+        				.addComponent(lblNewLabel)
+        				.addComponent(viewGroupsButtonButton))
+        			.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+        				.addGroup(groupLayout.createSequentialGroup()
+        					.addPreferredGap(ComponentPlacement.RELATED, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+        					.addComponent(checkButton)
+        					.addGap(8))
+        				.addGroup(groupLayout.createSequentialGroup()
+        					.addPreferredGap(ComponentPlacement.UNRELATED)
+        					.addGroup(groupLayout.createParallelGroup(Alignment.LEADING)
+        						.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
+        							.addComponent(fileLabel)
+        							.addComponent(gleCheckBox)
+        							.addComponent(rptCheckBox)
+        							.addComponent(levCheckBox)
+        							.addComponent(gamCheckBox))
+        						.addComponent(mrgCheckBox)
+        						.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
+        							.addComponent(avgCheckBox)
+        							.addComponent(fedCheckBox)))
+        					.addPreferredGap(ComponentPlacement.RELATED)))
+        			.addGroup(groupLayout.createParallelGroup(Alignment.BASELINE)
+        				.addComponent(pathField, GroupLayout.PREFERRED_SIZE, 28, GroupLayout.PREFERRED_SIZE)
+        				.addComponent(btnBrowse)
+        				.addComponent(pathLabel, GroupLayout.PREFERRED_SIZE, 15, GroupLayout.PREFERRED_SIZE))
+        			.addPreferredGap(ComponentPlacement.RELATED)
+        			.addComponent(scrollPane, GroupLayout.PREFERRED_SIZE, 253, GroupLayout.PREFERRED_SIZE)
+        			.addGap(1))
+        );
+  
+
+        groupLayout.setHonorsVisibility(false);
+        
+        textArea = new JTextArea();
+        //textArea.addCaretListener(new CaretListener() {
+        //	public void caretUpdate(CaretEvent e) {
+        //		textArea.update(textArea.getGraphics());
+        //		scrollPane.update(scrollPane.getGraphics());
+        //	}
+       // });
+        
+		textArea.setMargin(new Insets(5,5,5,5));
+		textArea.setEditable(false);
+
+		DefaultCaret caret = (DefaultCaret)textArea.getCaret();
+		caret.setUpdatePolicy(DefaultCaret.OUT_BOTTOM);
+		//caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
+
+		//PrintStream printStream = new PrintStream(new CustomOutputStream(textArea));
+		//System.setOut(printStream);
+		
+		scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		scrollPane.add(textArea);
+        scrollPane.setViewportView(textArea);
+
+        getContentPane().setLayout(groupLayout);
+        
+        pack();
+		textArea.setVisible(true);
+        scrollPane.setVisible(true);
+    }// </editor-fold>//GEN-END:initComponents
+    
+    
+
+	protected void avgCheckBoxMouseClicked(MouseEvent arg0) {
+		if(arg0.getModifiers()==InputEvent.BUTTON1_MASK){//left-button, BUTTON2-middle, BUTTON3-right
+			//do nothing
+		}
+		else if(arg0.getModifiers()==InputEvent.BUTTON3_MASK){//right click
+	        
+			JFrame frame=new JFrame();
+			
+			final JPanel uncertaintySettingPanel=new JPanel();
+			//uncertaintySettingPanel.setBorder(new BevelBorder(BevelBorder.RAISED));
+			//uncertaintySettingPanel.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.LOWERED));
+			uncertaintySettingPanel.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED, SystemColor.windowText,UIManager.getColor("ArrowButton.background")));
+			uncertaintySettingPanel.setForeground(SystemColor.windowText);
+			uncertaintySettingPanel.setBackground(UIManager.getColor("ArrowButton.background"));
+			 
+			limitButtonGroup = new ButtonGroup();
+        	
+            JLabel uncertaintylimitLabel = new JLabel("Uncertainty Limit");
+            uncertaintySettingPanel.add(uncertaintylimitLabel);
+            
+            limit35RadioButton = new JRadioButton("35");
+            limit35RadioButton.setToolTipText("default ENSDF uncertainty limit");
+            limit35RadioButton.addItemListener(new ItemListener() {
+            	public void itemStateChanged(ItemEvent e) {
+                	if(((JRadioButton)e.getSource()).isSelected()){
+                		CheckControl.errorLimit=35;
+                		run.printMessage("Uncertainty rounding limit changed to 35");
+                	}
+            	}
+            });
+            limitButtonGroup.add(limit35RadioButton);
+            uncertaintySettingPanel.add(limit35RadioButton);
+            
+            CheckControl.errorLimit=35;
+            limit35RadioButton.setSelected(true);
+            
+            limit99RadioButton = new JRadioButton("99");
+            limit99RadioButton.addItemListener(new ItemListener() {
+            	public void itemStateChanged(ItemEvent e) {
+                	if(((JRadioButton)e.getSource()).isSelected()){
+                		CheckControl.errorLimit=99;
+                		run.printMessage("Uncertainty rounding limit changed to 99");
+                	}
+            	}
+            });
+            limitButtonGroup.add(limit99RadioButton);
+            uncertaintySettingPanel.add(limit99RadioButton);
+            
+            otherLimitRadioButton = new JRadioButton("other");
+            otherLimitRadioButton.addItemListener(new ItemListener() {
+            	public void itemStateChanged(ItemEvent e) {
+                	otherLimitItemStateChanged(e);
+            	}
+            });
+            
+            limitButtonGroup.add(otherLimitRadioButton);
+            uncertaintySettingPanel.add(otherLimitRadioButton);
+            
+            uncLimitTextField = new JTextField();
+            uncLimitTextField.setEnabled(false);
+            uncLimitTextField.setColumns(10);
+            uncLimitTextField.addKeyListener(new KeyAdapter() {
+            	public void keyReleased(KeyEvent arg0) {
+            		uncLimitFieldKeyReleased(arg0);
+            	}
+            });
+            uncertaintySettingPanel.add(uncLimitTextField);
+			 
+            uncertaintySettingPanel.setVisible(true);
+			 
+	        frame.setTitle("Adopted Levels and Gammas from grouping");
+	        frame.getContentPane().add(uncertaintySettingPanel);
+            frame.pack();
+	        frame.setLocation(this.getX()+this.getWidth()-90,this.getY()+10);
+	        frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+	        frame.setResizable(false);
+	        frame.setVisible(true);
+	        
+           
+     
+		}
+		
+	}
+
+    private void otherLimitItemStateChanged(ItemEvent e){
+    	if(((JRadioButton)e.getSource()).isSelected()){
+    		uncLimitTextField.setEnabled(true);
+        	try{
+        		String text=uncLimitTextField.getText().trim();
+        		if(!text.isEmpty())
+        			CheckControl.errorLimit=Integer.parseInt(text);
+        	}catch(NumberFormatException e1){
+        		JOptionPane.showMessageDialog(this, "Error: wrong input for error limit! Please re-type a integer <100.");
+        	}
+    	}else{
+    		uncLimitTextField.setEnabled(false);
+    	}
+    }
+
+    private void uncLimitFieldKeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_pathFieldKeyReleased
+    	try{
+    		CheckControl.errorLimit=Integer.parseInt(uncLimitTextField.getText());
+    		run.printMessage("Uncertainty rounding limit changed to "+Integer.parseInt(uncLimitTextField.getText()));
+    	}catch(NumberFormatException e){
+    		JOptionPane.showMessageDialog(this, "Error: wrong input for error limit! Please re-type a integer <100.");
+    	}
+    }
+    
+	protected void viewGroupsButtonActionClicked(MouseEvent arg0) {
+		if(arg0.getModifiers()==InputEvent.BUTTON1_MASK){//left-button, BUTTON2-middle, BUTTON3-right
+	        if(!viewGroupsButtonButton.isEnabled())
+	        	return;
+	        
+	        if(!isFileLoaded){
+	            JOptionPane.showMessageDialog(this,"You should load a file and complete the check before using customizing.");
+	            return;
+	        }
+	        
+	        GroupingResultsFrame settingFrame=new GroupingResultsFrame(data,run);
+	        settingFrame.setTitle("Adopted Levels and Gammas from grouping");
+	        settingFrame.setLocation(this.getX()+this.getWidth()-120,this.getY()+10);
+	        settingFrame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+	        settingFrame.setVisible(true);
+	        
+	        //notes which dataset need to have bands drawn for them
+		}
+		else if(arg0.getModifiers()==InputEvent.BUTTON3_MASK){
+	        
+			final JPopupMenu popupMenu=new JPopupMenu();
+			//popupMenu.setBorder(new BevelBorder(BevelBorder.RAISED));
+			//popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.LOWERED));
+			popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED, SystemColor.windowText,UIManager.getColor("ArrowButton.background")));
+            popupMenu.setForeground(SystemColor.windowText);
+            popupMenu.setBackground(UIManager.getColor("ArrowButton.background"));
+			 
+			 JMenuItem itemViewDataset=new JMenuItem("View datasets");
+			 itemViewDataset.setToolTipText("Open a window to view dataset by dataset");
+			 itemViewDataset.addActionListener(new ActionListener(){
+			 //itemWebDisplay.addMouseListener(new MouseAdapter(){
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 itemViewDatasetActionPerformed(evt);
+				 }
+			 });
+			 popupMenu.add(itemViewDataset); 
+			 
+			 
+			 popupMenu.show(arg0.getComponent(), arg0.getX(), arg0.getY());
+			 
+		}
+		
+	}
+
+	protected void groupingSettingsActionPerformed(ActionEvent evt) { 
+		/*
+		try {      
+	        if(!isFileLoaded){
+	            JOptionPane.showMessageDialog(this,"You haven't loaded any ENSDF file for view.");
+	            return;
+	        }
+	        
+		     DatasetViewerFrame viewerFrame=new  DatasetViewerFrame(data,run);
+		     viewerFrame.setTitle("Dataset viewer");
+		     viewerFrame.setLocation(this.getX()+this.getWidth()-120,this.getY()+10);
+		     viewerFrame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+		     viewerFrame.setVisible(true);			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			run.printMessage("Error when openning dataset viewer window.\n");
+			e.printStackTrace();
+		}
+		*/
+	}
+	
+	protected void itemViewDatasetActionPerformed(ActionEvent evt) { 
+		try {      
+	        if(!isFileLoaded){
+	            JOptionPane.showMessageDialog(this,"You haven't loaded any ENSDF file for view.");
+	            return;
+	        }
+	        
+		     DatasetViewerFrame viewerFrame=new  DatasetViewerFrame(data,run);
+		     viewerFrame.setTitle("Dataset viewer");
+		     viewerFrame.setLocation(this.getX()+this.getWidth()-120,this.getY()+10);
+		     viewerFrame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+		     viewerFrame.setVisible(true);			
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			run.printMessage("Error when openning dataset viewer window.\n");
+			e.printStackTrace();
+		}
+	}
+
+	@SuppressWarnings("unused")
+	private void viewGroupsButtonActionPerformed(ActionEvent arg0) {  
+        if(!viewGroupsButtonButton.isEnabled())
+        	return;
+        
+        if(!isFileLoaded){
+            JOptionPane.showMessageDialog(this,"You should load a file and complete the check before using customizing.");
+            return;
+        }
+        
+        GroupingResultsFrame settingFrame=new GroupingResultsFrame(data,run);
+        settingFrame.setTitle("Adopted Levels and Gammas from grouping");
+        settingFrame.setLocation(this.getX()+this.getWidth()-120,this.getY()+10);
+        settingFrame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        settingFrame.setVisible(true);
+        
+        //notes which dataset need to have bands drawn for them
+    	
+		
+	}
+
+    /*
+     * reload last-loaded file
+     * used when a file is changed
+     */
+    private void reloadLastFile() {
+    	try {
+    		if(this.filesV.size()==0) {
+    			run.printMessage("Warning: no file to be reloaded. Please load a file first");
+    			return;
+    		}
+    		
+    		File[] files=new File[filesV.size()];
+    		for(int i=0;i<filesV.size();i++) {
+    			File f=filesV.get(i);
+    			files[i]=new File(f.getAbsolutePath());
+    		}
+
+    		
+            run.clear();            
+            data.clear();
+            
+            run.printMessage("Reloading...");
+            
+            loadFiles(files);//note that selected file that are not ENSDF file are ignored and not put into filesV
+           
+            if(filesV.size()==0)
+            	return;
+            
+            viewGroupsButtonButton.setEnabled(false);
+    	}catch(Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this,e);   
+    	}
+    }
+    private void loadButtonMouseClicked(java.awt.event.MouseEvent evt) {
+    	if(evt.getButton()==1) {
+		//if(evt.getModifiers()==InputEvent.BUTTON1_MASK){//left-button, BUTTON2-middle, BUTTON3-right
+			loadDataFileBrowser();
+		//}else if(evt.getModifiers()==InputEvent.BUTTON3_MASK) {
+    	}else if(evt.getButton()==3) {	
+			final JPopupMenu popupMenu=new JPopupMenu();
+			//popupMenu.setBorder(new BevelBorder(BevelBorder.RAISED));
+			//popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.LOWERED));
+			popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED, SystemColor.windowText,UIManager.getColor("ArrowButton.background")));
+            popupMenu.setForeground(SystemColor.windowText);
+            popupMenu.setBackground(UIManager.getColor("ArrowButton.background"));
+			 
+			 JMenuItem reloadLastFileMenuItem=new JMenuItem("reload last file");
+			 reloadLastFileMenuItem.setToolTipText("reload last-loaded file or files");
+			 reloadLastFileMenuItem.addActionListener(new ActionListener(){
+			 //itemWebDisplay.addMouseListener(new MouseAdapter(){
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 reloadLastFile();
+
+				 }
+			 });
+			 popupMenu.add(reloadLastFileMenuItem); 
+			 
+			 popupMenu.show(evt.getComponent(), evt.getX(), evt.getY());
+		}
+		
+    }
+    
+	@SuppressWarnings("unused")
+	private void loadButtonActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_loadButtonActionPerformed
+		loadDataFileBrowser();
+	}
+	private void loadDataFileBrowser() {
+        
+        isFileLoaded=false;
+         try{
+             run.clear();            
+             //run.printMessage(run.title());
+             
+             //JFileChooser fc=new JFileChooser();
+             JFileChooser fc;
+             try {
+                 fc = new JFileChooser(".");
+              }catch (Exception e) {
+                 fc = new JFileChooser(".", new RestrictedFileSystemView());
+              }
+             
+             
+             if(consistency.main.Setup.filedir!=null)
+            	 fc.setCurrentDirectory(new File(consistency.main.Setup.filedir));
+             
+             fc.setMultiSelectionEnabled(true);
+             
+             int ret=fc.showOpenDialog(this);
+             if(ret==JFileChooser.APPROVE_OPTION){
+                 consistency.main.Setup.filedir=fc.getCurrentDirectory().toString();
+                 consistency.main.Setup.save();
+
+                 data.clear();
+    
+                 File[] files=fc.getSelectedFiles();
+                 //dataFile=fc.getSelectedFile();
+                 
+                 loadFiles(files);
+                 
+                 viewGroupsButtonButton.setEnabled(false);
+             }       
+         }catch(Exception e){
+             e.printStackTrace();
+             JOptionPane.showMessageDialog(this,e);         
+         }
+
+    }//GEN-LAST:event_loadButtonActionPerformed
+       
+
+    private void loadFiles(File[] files) throws Exception{
+
+    	run.resetCheck();
+    	filesV.clear();
+    	
+        if(files.length==1){
+       	 File dataFile=files[0];
+       	 run.printMessage("Loading file: "+dataFile.getAbsolutePath());
+       	 data.load(dataFile);
+        }else if(files.length>1){
+       	 Vector<String> lines=new Vector<String>();
+       	 
+       	 run.printMessage("Loading files:");
+       	 for(int i=0;i<files.length;i++){
+       		 run.printMessage("    "+files[i].getAbsolutePath());
+       		 lines.addAll(Str.readFile(files[i]));
+       		 if(!lines.lastElement().trim().isEmpty())
+       			 lines.addElement("    \n");
+       		 
+       		 //System.out.println("In MasterFrame line 362: lastline new line="+lines.lastElement().trim().indexOf("\n")+"  *"+lines.lastElement()+"*");
+       	 }
+       	 data.load(lines);
+        }
+   
+                                        
+        run.printMessage("Done loading");
+                  
+        for(int i=0;i<files.length;i++)
+       	 filesV.add(files[i]);
+        
+        isFileLoaded=true;
+    }
+
+    protected void checkButtonMouseClicked(MouseEvent arg0) {
+		if(arg0.getButton()==1){//1 for left-button, 2 for BUTTON2-middle, 3 for BUTTON3-right
+	        checkButtonActionPerformed();
+		}
+		else if(arg0.getButton()==3){
+	        /*
+			final JPopupMenu popupMenu=new JPopupMenu();
+			//popupMenu.setBorder(new BevelBorder(BevelBorder.RAISED));
+			//popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.LOWERED));
+			popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED, SystemColor.windowText,UIManager.getColor("ArrowButton.background")));
+            popupMenu.setForeground(SystemColor.windowText);
+            popupMenu.setBackground(UIManager.getColor("ArrowButton.background"));
+			 
+			 JMenuItem groupingSettings=new JMenuItem("Open settings for grouping");
+			 groupingSettings.setToolTipText("Open settings for grouping");
+			 groupingSettings.addActionListener(new ActionListener(){
+			 //itemWebDisplay.addMouseListener(new MouseAdapter(){
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 groupingSettingsActionPerformed(evt);
+				 }
+			 });
+			 popupMenu.add(groupingSettings); 
+			 
+			 
+			 popupMenu.show(arg0.getComponent(), arg0.getX(), arg0.getY());
+			 */
+		}
+		
+	}
+
+    
+    private void checkButtonActionPerformed() {
+
+        if(!isFileLoaded){
+            JOptionPane.showMessageDialog(this,"You should load a file or files for checking!");
+            return;
+        }
+        
+        boolean validOutdir=true;
+        String message="";
+        if(Setup.outdir.trim().length()==0){
+        	message="Error: output path is empty. ";           
+        	validOutdir=false;
+        }else{ 
+            File f=new File(Setup.outdir.trim());
+        	if(!f.exists()){
+        		message="Error: output path does not exist. ";
+            	validOutdir=false;
+        	}
+        }
+        
+        if(!validOutdir){
+        	message+="Please specify output path.";
+        	run.printMessage(message);
+            JOptionPane.showMessageDialog(this, message);
+            return;
+        }
+        
+        String outfilename=Setup.outdir+File.separator+Integer.toString(data.getENSDF(0).nucleus().A());
+        
+        run.setOutFilename(outfilename);
+        
+        try{
+            
+            run.clear();//clear messenger textarea
+            
+            run.checkMassChain(outfilename,data);
+
+            String outexts="";
+            if(CheckControl.writeRPT) outexts+=":rpt";
+            if(CheckControl.writeLEV) outexts+=":lev";
+            if(CheckControl.writeGAM) outexts+=":gam";
+            if(CheckControl.writeGLE) outexts+=":gle";
+            if(CheckControl.writeMRG) outexts+=":mrg";
+            if(CheckControl.writeAVG) outexts+=":avg";
+            if(CheckControl.writeFED) outexts+=":fed";
+
+            if(outexts.length()>0){
+            	outexts=outexts.substring(1);
+            	Setup.outexts=outexts;
+            	Setup.save();
+            }
+            
+            viewGroupsButtonButton.setEnabled(true);
+            	
+        }catch(Exception e){
+            JOptionPane.showMessageDialog(this, e);
+        }
+
+
+    }//GEN-LAST:event_tableButtonActionPerformed
+
+    private void browseButtonMouseClicked(MouseEvent evt){
+ 		if(evt.getModifiers()==InputEvent.BUTTON1_MASK){//left-button, BUTTON2-middle, BUTTON3-right
+ 			loadOutputBrowser();
+ 		}else if(evt.getModifiers()==InputEvent.BUTTON3_MASK){
+ 			final JPopupMenu popupMenu=new JPopupMenu();
+ 			//popupMenu.setBorder(new BevelBorder(BevelBorder.RAISED));
+ 			//popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.LOWERED));
+ 			popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED, SystemColor.windowText,UIManager.getColor("ArrowButton.background")));
+             popupMenu.setForeground(SystemColor.windowText);
+             popupMenu.setBackground(UIManager.getColor("ArrowButton.background"));
+
+             
+ 			 JMenuItem useCurrentFolder=new JMenuItem("Use Current Folder");
+ 			 useCurrentFolder.setToolTipText("set output path to be the current working folder where the code is started");
+ 			 useCurrentFolder.addActionListener(new ActionListener(){
+ 				 //item.addMouseListener(new MouseAdapter(){
+ 					 //public void mouseClicked(MouseEvent evt){
+ 					 public void actionPerformed(ActionEvent evt){
+ 						 try {
+ 							 setOutpathAsCurrentActionPerformed(evt); 
+ 						} catch (Exception e) {
+ 							// TODO Auto-generated catch block
+ 							e.printStackTrace();
+ 						}
+ 					 }
+ 				 });
+
+ 			 popupMenu.add(useCurrentFolder);
+ 			 
+ 			 popupMenu.show(evt.getComponent(), evt.getX(), evt.getY());
+ 		}
+     }
+     protected void setOutpathAsCurrentActionPerformed(ActionEvent arg0) {
+     	setOutpath(System.getProperty("user.dir"));		
+ 	}
+     
+     protected void setOutpath(String outdir) {
+         try{
+         	Setup.outdir=outdir;
+         	
+         	run.updateRedirectOutput();
+         	
+             System.out.println();
+             
+             Setup.save();       
+             pathField.setText(outdir);
+
+         }catch(Exception e){
+             e.printStackTrace();
+            	String message="Error when setting output path!";
+            	JOptionPane.showMessageDialog(this,message);
+            	run.printMessage(message);           	                         
+         }		
+ 	}
+    
+     private void loadOutputBrowser() {
+         try{
+             
+             //JFileChooser fc=new JFileChooser();
+             JFileChooser fc;
+             try {
+                 fc = new JFileChooser(".");            
+              }catch (Exception e) {
+                 fc = new JFileChooser(".", new RestrictedFileSystemView());
+              }
+
+             fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+             fc.setApproveButtonText("Select");
+             fc.setApproveButtonToolTipText("Select this directory");
+             
+             if(Setup.outdir!=null)
+                 fc.setCurrentDirectory(new File(Setup.outdir));
+             
+             int ret=fc.showOpenDialog(this);
+             if(ret==JFileChooser.APPROVE_OPTION){
+                 //Setup.outdir=fc.getSelectedFile().toString();
+             	
+             	File file = fc.getSelectedFile();
+             	Setup.outdir=file.getAbsolutePath();
+             	
+                 System.out.println();
+                 Setup.save();
+                 
+                 pathField.setText(Setup.outdir);
+             }
+             
+            
+         }catch(Exception e){
+             //e.printStackTrace();
+            	String message="Error when selecting output path!";
+            	JOptionPane.showMessageDialog(this,message);
+            	run.printMessage(message);           	                         
+         }
+     
+     }
+    
+     @SuppressWarnings("unused")
+	private void browseButtonActionPerformed(java.awt.event.ActionEvent evt) {
+    	 loadOutputBrowser();
+     }
+
+    private void pathFieldPropertyChange(java.beans.PropertyChangeEvent evt) {//GEN-FIRST:event_pathFieldPropertyChange
+        
+    }//GEN-LAST:event_pathFieldPropertyChange
+
+    private void pathFieldKeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_pathFieldKeyReleased
+        //specifies the path that output will be created in
+        consistency.main.Setup.outdir=pathField.getText();
+        consistency.main.Setup.save();
+    }//GEN-LAST:event_pathFieldKeyReleased
+    
+    
+	private void frameMouseClicked(java.awt.event.MouseEvent e) {
+		
+		//System.out.println(" modifiers="+e.getModifiers());
+		//if ((e.getModifiers() & ActionEvent.CTRL_MASK) ==ActionEvent.CTRL_MASK) {
+		//	System.out.println("CTRL KEY PRESSED modifiers="+e.getModifiers());
+		//}
+		
+		if(e.getButton()==1 && e.isControlDown() && e.getClickCount()>=2) {//ctrl + left double click
+		    openWrappingToolWindow();
+            
+		}else if(e.getButton()==3){//right clicked
+			 popupMenu=new JPopupMenu();
+			 //popupMenu.setBorder(new BevelBorder(BevelBorder.RAISED));
+			 //popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.LOWERED));
+			 popupMenu.setBorder(BorderFactory.createEtchedBorder(EtchedBorder.RAISED, SystemColor.windowText,UIManager.getColor("ArrowButton.background")));
+	         popupMenu.setForeground(SystemColor.windowText);
+	         popupMenu.setBackground(UIManager.getColor("ArrowButton.background"));
+			 
+			 JMenuItem mergeFiles=new JMenuItem("Merge input files into a single file");
+			 mergeFiles.setToolTipText("Merge the input ENSDF files of datasets in order of DSID to a single file.");
+			 mergeFiles.addActionListener(new ActionListener(){
+			 //item.addMouseListener(new MouseAdapter(){
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 
+					 if(true){//if(evt.getButton()==1){//left clicked
+						 //debug
+						 //System.out.println("In MasterFrame: figurefiles="+run.getLatexWriter().getFigureFiles().size());
+						 //run.printMessage("\nCreating PDF file from LaTex file.");
+						 try {
+							 
+							 if(!isFileLoaded){						     
+								 JOptionPane.showMessageDialog(popupMenu,"You haven't loaded ENSDF files.");						         
+								 return;						        
+							 }
+							 
+							 run.mergeDatasets(data);
+						} catch (Exception e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+							run.printMessage("Error when merging multiple files to a single file.\n");
+						}
+					 }
+				 }
+			 });
+			 popupMenu.add(mergeFiles); 
+			 	 
+			 popupMenu.addSeparator();
+			 
+			 JMenuItem itemSaveDatasets=new JMenuItem("Save datasets to individual files");
+			 itemSaveDatasets.addActionListener(new ActionListener(){
+			 //itemSaveDatasets.addMouseListener(new MouseAdapter(){//it is recommended not to use MouseListener for menu item
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 
+					 if(true){
+						 try{
+							 if(!isFileLoaded){						     
+								 JOptionPane.showMessageDialog(popupMenu,"You haven't loaded an ENSDF file.");						         
+								 return;						        
+							 }
+							 
+							 run.printMessage("\nSaving each dataset to individual ENSDF file...");
+							 
+							 int modifier=evt.getModifiers();
+							 int mask=ActionEvent.CTRL_MASK;
+							 if((modifier&mask)==mask){
+								 run.saveAllENSDF(data,"old");
+								 
+								 //System.out.println("extension=old");
+							 }else{
+								 run.saveAllENSDF(data);
+								 
+								 //System.out.println("extension=ens");
+							 }
+							 run.printMessage("Done.");
+						 }catch (IOException e) {
+							  // TODO Auto-generated catch block
+							 run.printMessage("Error when spliting datasets and saving each dataset into individual ENSDF file.\n");
+							 e.printStackTrace();
+						 }						 
+					 }
+				 }
+			 });
+			 itemSaveDatasets.setToolTipText("<HTML>"
+			 		+ "Split the input ENSDF file of multiple datasets and save<br>"
+			 		+ "each dataset into a separate file named by DSID in an<br>"
+			 		+ "auto-generated folder in the output path."
+		 		    + "</HTML>");
+			 popupMenu.add(itemSaveDatasets); 
+			 
+		      
+			 popupMenu.addSeparator();
+		         
+	         JMenuItem itemSaveNuclides=new JMenuItem("Save datasets to files by nuclide");
+	         itemSaveNuclides.addActionListener(new ActionListener(){
+	         //itemSaveDatasets.addMouseListener(new MouseAdapter(){//it is recommended not to use MouseListener for menu item
+	             //public void mouseClicked(MouseEvent evt){
+	             public void actionPerformed(ActionEvent evt){
+	                 
+	                 if(true){
+	                     try{
+	                         if(!isFileLoaded){                          
+	                             JOptionPane.showMessageDialog(popupMenu,"You haven't loaded an ENSDF file.");                               
+	                             return;                                
+	                         }
+	                         
+	                         run.printMessage("\nSaving datasets to individual ENSDF files by nuclide...");
+	                         
+	                         int modifier=evt.getModifiers();
+	                         int mask=ActionEvent.CTRL_MASK;
+	                         if((modifier&mask)==mask){
+	                             run.saveAllENSDF(data,"old");
+	                             
+	                             //System.out.println("extension=old");
+	                         }else{
+	                             run.saveAllENSDFByNuclide(data);
+	                             
+	                             //System.out.println("extension=ens");
+	                         }
+	                         run.printMessage("Done.");
+	                     }catch (IOException e) {
+	                          // TODO Auto-generated catch block
+	                         run.printMessage("Error when spliting datasets and saving dataset into individual ENSDF files by nuclide.\n");
+	                         e.printStackTrace();
+	                     }                       
+	                 }
+	             }
+	         });
+	         itemSaveNuclides.setToolTipText("<HTML>"
+	                + "Split the input ENSDF file of multiple datasets and save<br>"
+	                + "datasets into separate files named by nuclide name in an<br>"
+	                + "auto-generated folder in the output path."
+	                + "</HTML>");
+	         popupMenu.add(itemSaveNuclides); 
+	         
+		         
+			 popupMenu.addSeparator();
+			 
+			 
+			 JMenuItem itemCreateAdopted=new JMenuItem("Create new Adopted Dataset");
+			 itemCreateAdopted.setToolTipText("<HTML>"
+				   + "Create output of a new Adopted dataset including all data.<br>"
+			 	   + "Right click to select values (in record or comment) for averaging"
+			 	   + "</HTML>");
+			 itemCreateAdopted.addActionListener(new ActionListener(){
+			 //item.addMouseListener(new MouseAdapter(){//MouseListener doesn't work with MenuItem
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 createAdoptedDatasetMenuItemActionPerformed(evt);
+
+				 }
+			 });
+			 
+			 popupMenu.add(itemCreateAdopted); 
+			 
+			 
+			 popupMenu.addSeparator();
+			 
+			 
+			 
+			 JMenuItem createCombinedDataset=new JMenuItem("Create a combined dataset");
+			 createCombinedDataset.setToolTipText("<HTML>"
+			 		+ "Create a dataset (non-Adopted) combined data from all input individual datasets.<br>"
+				 	+ "Right click to select values (in record or comment) for averaging"
+			 		+ "</HTML>");
+		
+			 createCombinedDataset.addActionListener(new ActionListener(){
+			 //item.addMouseListener(new MouseAdapter(){
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+				     combineDatasetMenuItemActionPerformed(evt);
+				 }
+			 });
+			 
+			 popupMenu.add(createCombinedDataset); 
+			 
+			 popupMenu.addSeparator();
+			 
+			 JMenuItem itemCleanENSDF=new JMenuItem("Clean up input ENSDF files");
+			 itemCleanENSDF.setToolTipText("<HTML>"
+			 		+ "Clean up input ENSDF files by fixing line-length=80 and<br>"
+			 		+ "converting \"C\" comments to \"c\" comments. Outputs are<br>"
+			 		+ "written into new files labelled by CLEANED in file names."
+			 		+ "</HTML>");
+			 
+			 itemCleanENSDF.addActionListener(new ActionListener(){
+			 //item.addMouseListener(new MouseAdapter(){
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 try{
+						 if(!isFileLoaded){						     
+							 JOptionPane.showMessageDialog(popupMenu,"You haven't loaded an ENSDF file.");						         
+							 return;						        
+						 }
+						 
+						 run.printMessage("\n"
+						 		+ "Cleaning up input ENSDF files by fixing line-length=80 and\n"
+						 		+ "converting \"C\" comments to \"c\" comments. Outputs are\n"
+						 		+ "written into new files labelled by \"CLEANED\" in file names.\n");
+						 
+						 for(int i=0;i<filesV.size();i++){
+							 File f=filesV.get(i);
+							 String filename=f.getAbsolutePath();
+							 String prefix=Str.fileNamePrefix(filename);
+							 
+							 String newfilename=prefix+"_CLEANED"+filename.replace(prefix, "");
+							
+							 EnsdfUtil.cleanENSDFFile(filename, newfilename, true);
+							 
+						 }
+						 
+					 }catch (Exception e) {
+						  // TODO Auto-generated catch block
+						 run.printMessage("Error when cleaning up input ENSDF files.\n");
+						 e.printStackTrace();
+					 }	
+
+				 }
+			 });
+			 
+			 popupMenu.add(itemCleanENSDF); 
+			 
+			 popupMenu.addSeparator();
+			 
+			 
+
+			
+			 /*
+			 JCheckBox convertRIForAdopted=new JCheckBox("Convert RI for Adopted") {
+				private static final long serialVersionUID = 1L;			
+				@Override public void updateUI() {	        
+					super.updateUI();	            
+					setFocusPainted(false);	            
+				}	        
+				@Override public Dimension getMinimumSize() {	        
+					Dimension d = getPreferredSize();	            
+					d.width = Short.MAX_VALUE;	            
+					return d;	            
+				}   
+			 };
+		     */  
+		        
+			 JCheckBox convertRIForAdopted=new JCheckBox("Convert RI for Adopted");
+			 convertRIForAdopted.setPreferredSize(new Dimension(40,20));
+			 convertRIForAdopted.setToolTipText("<HTML>"
+			 		+ "Convert gamma intensities in each dataset to relative<br>"
+			 		+ "intensity from each level (PN=6) in output files."
+			 		+ "</HTML>");
+			 convertRIForAdopted.setSelected(CheckControl.convertRIForAdopted);
+			 convertRIForAdopted.addActionListener(new ActionListener(){
+			 //item.addMouseListener(new MouseAdapter(){
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 if(((JCheckBox)evt.getSource()).isSelected())
+						 CheckControl.convertRIForAdopted=true;
+					 else
+						 CheckControl.convertRIForAdopted=false;
+
+				 }
+			 });
+			 
+			 popupMenu.add(convertRIForAdopted); 
+		
+			 /*
+			 JCheckBox keepCommentsForAdopted=new JCheckBox("Keep dataset comments in new Adopted");
+			 keepCommentsForAdopted.setPreferredSize(new Dimension(40,20));
+			 keepCommentsForAdopted.setToolTipText("<HTML>"
+			 		+ "Keep all in-record comments of merged datasets in the new Adopted dataset."
+			 		+ "</HTML>");
+			 keepCommentsForAdopted.setSelected(Control.createCombinedDataset);
+			 keepCommentsForAdopted.addActionListener(new ActionListener(){
+			 //item.addMouseListener(new MouseAdapter(){
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 if(((JCheckBox)evt.getSource()).isSelected())
+						 Control.createCombinedDataset=true;
+					 else
+						 Control.createCombinedDataset=false;
+
+				 }
+			 });
+			 
+			 popupMenu.add(keepCommentsForAdopted); 
+			 */
+			 
+			 popupMenu.addSeparator();
+
+	         
+	         JMenuItem averageValuesInCommentsItem=new JMenuItem("Average values in comments");
+	         String msg="";
+	         msg+="<HTML>Averaging values (EL,T,EG,RI) listed in the average comments<br>";
+	         msg+=      "(KEYWORD=weighted or unweighted) in datasets in input files.<br>";
+	         msg+=      "See .rpt file for averaging details<br>";
+	         msg+=      "&nbsp;&ensp;&emsp;.avg file for all new datasets with average values</HTML>";
+	         averageValuesInCommentsItem.setToolTipText(msg);
+	  
+	         averageValuesInCommentsItem.addActionListener(new ActionListener() {
+	             @Override
+	             public void actionPerformed(ActionEvent arg0) {
+	                 averageComValuesMenuItemActionPerformed(arg0);
+	             }
+	         });
+
+	        
+	         popupMenu.add(averageValuesInCommentsItem); 	
+	         popupMenu.addSeparator();
+			 
+			 JMenuItem mergingTools=new JMenuItem("Open Setup and Merging Tools");
+	         mergingTools.setToolTipText("Open a window for setting up the evaluation folder and for merging all datasets.");
+			 mergingTools.addActionListener(new ActionListener(){
+			 //item.addMouseListener(new MouseAdapter(){
+				 //public void mouseClicked(MouseEvent evt){
+				 public void actionPerformed(ActionEvent evt){
+					 openSetupAndMergeFrame(evt,run);
+
+				 }
+			 });
+			
+			 popupMenu.add(mergingTools); 			
+	         popupMenu.addSeparator();
+
+	         JMenuItem openWidthT12ToolItem=new JMenuItem("Open width-to-T12 tool window");
+	         openWidthT12ToolItem.setToolTipText("Open the window for calculating T1/2 from width in continuation record/comments or vice versa");
+	  
+	         openWidthT12ToolItem.addActionListener(new ActionListener() {
+	             @Override
+	             public void actionPerformed(ActionEvent arg0) {
+	            	 openWidthT12MenuItemActionPerformed(arg0);
+	             }
+	         });
+
+	        
+	         popupMenu.add(openWidthT12ToolItem); 	
+	         popupMenu.addSeparator();
+	         
+	         JMenuItem openAverageToolItem=new JMenuItem("Open average tool window");
+	         openAverageToolItem.setToolTipText("Open the average window for averaging values listed in an average comment");
+	  
+	         openAverageToolItem.addActionListener(new ActionListener() {
+	             @Override
+	             public void actionPerformed(ActionEvent arg0) {
+	                 openAverageWindowMenuItemActionPerformed(arg0);
+	             }
+	         });
+
+	        
+	         popupMenu.add(openAverageToolItem); 	
+	         popupMenu.addSeparator();
+
+	         
+	         JMenuItem openWrapToolItem=new JMenuItem("Open 80-column wrapping tool");
+	         openWrapToolItem.setToolTipText("<HTML>Open a window for wrapping up a long ENSDF comment to 80-column format.<br>"
+	         		                              + "CTRL+double-click on a blank area also brings out this window.</HTML>");
+	  
+	         openWrapToolItem.addActionListener(new ActionListener() {
+	             @Override
+	             public void actionPerformed(ActionEvent arg0) {
+	                 openWrappingToolWindow();
+	             }
+	         });
+
+	        
+	         popupMenu.add(openWrapToolItem);
+
+	         popupMenu.show(e.getComponent(),e.getX(), e.getY());			 	
+		}
+	}
+
+
+	protected void averageComValuesMenuItemActionPerformed(ActionEvent arg0) {
+        try {
+            
+            if(arg0.getModifiers()==InputEvent.BUTTON1_MASK){//left-button, BUTTON2-middle, BUTTON3-right
+                if(!isFileLoaded){                          
+                    JOptionPane.showMessageDialog(popupMenu,"You haven't loaded an ENSDF file.");                               
+                    return;                                
+                } 
+                
+                averageValuesInComments();//default settings for averaging values
+            }else if(arg0.getModifiers()==InputEvent.BUTTON3_MASK){//right click
+                
+                String title="Average values listed in an averaging comment";
+                AverageCommentValuesFrame frame=null;
+                java.awt.Frame[] frames=java.awt.Frame.getFrames();
+                for(int i=0;i<frames.length;i++) {
+                    if(frames[i].getTitle().equals(title))
+                        frame=(AverageCommentValuesFrame)frames[i];
+                    
+                    //System.out.println(frames[i].getName()+"  "+frames[i].getTitle());
+                }
+                
+                if(frame==null) {
+                    frame=new AverageCommentValuesFrame();
+                    frame.setTitle(title);
+                    frame.setLocation(this.getX()+this.getWidth()+5,this.getY()+5);
+                    frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+                    frame.setResizable(false);
+                }
+
+                frame.setVisible(true);
+                
+            }else {
+				 String msg="Strange thing happened. Please try right click on a different area.";
+				 run.printMessage(msg);
+				 JOptionPane.showMessageDialog(popupMenu,msg);
+            }
+        }catch(Exception e) {
+            run.printMessage("Error when averaging values in comments.\n");
+            e.printStackTrace();        
+        }
+        
+    }
+
+	protected void openWidthT12MenuItemActionPerformed(ActionEvent arg0) {
+        try {
+            
+            String title="Calculate T12 from widths";
+            WidthToT12CalculatorFrame frame=null;
+            java.awt.Frame[] frames=java.awt.Frame.getFrames();
+            for(int i=0;i<frames.length;i++) {
+                if(frames[i].getTitle().equals(title))
+                    frame=(WidthToT12CalculatorFrame)frames[i];
+                
+                //System.out.println(frames[i].getName()+"  "+frames[i].getTitle());
+            }
+            
+            if(frame==null) {
+                frame=new WidthToT12CalculatorFrame();
+                frame.setTitle(title);
+                frame.setLocation(this.getX()+this.getWidth()+5,this.getY()+5);
+                frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+                frame.setResizable(false);
+            }
+
+            frame.setVisible(true);          
+        }catch(Exception e) {
+            run.printMessage("Error when calculating T12 from width.\n");
+            e.printStackTrace();        
+        }
+	}
+	
+	protected void openAverageWindowMenuItemActionPerformed(ActionEvent arg0) {
+        try {
+            String title="Average values listed in an averaging comment";
+            AverageCommentValuesFrame frame=null;
+            java.awt.Frame[] frames=java.awt.Frame.getFrames();
+            for(int i=0;i<frames.length;i++) {
+                if(frames[i].getTitle().equals(title))
+                    frame=(AverageCommentValuesFrame)frames[i];
+                
+                //System.out.println(frames[i].getName()+"  "+frames[i].getTitle());
+            }
+            
+            if(frame==null) {
+                frame=new AverageCommentValuesFrame();
+                frame.setTitle(title);
+                frame.setLocation(this.getX()+this.getWidth()+5,this.getY()+5);
+                frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+                frame.setResizable(false);
+            }
+
+            frame.setVisible(true);          
+        }catch(Exception e) {
+            run.printMessage("Error when averaging values in comments.\n");
+            e.printStackTrace();        
+        }
+        
+    }
+	
+	protected void openWrappingToolWindow() {
+	    try {
+            String title="Wrap up comment lines to 80-column format";
+            LineWrappingFrame frame=null;
+            java.awt.Frame[] frames=java.awt.Frame.getFrames();
+            for(int i=0;i<frames.length;i++) {
+                if(frames[i].getTitle().equals(title))
+                    frame=(LineWrappingFrame)frames[i];
+                
+                //System.out.println(frames[i].getName()+"  "+frames[i].getTitle());
+            }
+            
+            if(frame==null) {
+                frame=new LineWrappingFrame();
+                frame.setTitle(title);
+                frame.setLocation(this.getX()+this.getWidth()+5,this.getY()+5);
+                frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+                frame.setResizable(false);
+            }
+
+            frame.setVisible(true);	        
+	    }catch(Exception e) {
+            run.printMessage("Error when 80-column wrapping-tool window.\n");
+            e.printStackTrace();   
+	    }
+	}
+    protected void createAdoptedDatasetMenuItemActionPerformed(ActionEvent arg0) {
+		// TODO Auto-generated method stub
+		 try{
+			 if(!isFileLoaded){						     
+				 JOptionPane.showMessageDialog(popupMenu,"You haven't loaded an ENSDF file.");						         
+				 return;						        
+			 }
+			 
+			 if(!viewGroupsButtonButton.isEnabled()){//if not enabled, check has not been done yet
+				 JOptionPane.showMessageDialog(popupMenu,"You have to start checking first.");						         
+				 return;
+			 }
+			 
+			 
+			 CheckControl.createCombinedDataset=false;
+	            
+			 //System.out.println("MasterFrame 1365: arg0.getModifiers()="+arg0.getModifiers()+" InputEvent.BUTTON1_MASK="+InputEvent.BUTTON1_MASK+" Button3="+InputEvent.BUTTON3_MASK);
+			 //System.out.println("   "+arg0.getSource().toString());
+
+			 //PUZZLE:
+			 //on main window (MacOS), click (left and right using getModifiers()) on an menuitem doesn't work, getModifiers() return 0 for both clicks 
+			 //Note that menutime and menu don't work with MouseListener!!!! (9/5/2024)
+			 if(arg0.getModifiers()==InputEvent.BUTTON1_MASK){//left-button, BUTTON2-middle, BUTTON3-right        	              
+				 run.printMessage("\nCreating an Adopted dataset (.adp) combining all data including comments...");        
+				 run.getConsistencyCheck().writeFile(run.getOutFilename()+".adp","ADP");   
+				 run.printMessage("Done");	            
+			 }else if(arg0.getModifiers()==InputEvent.BUTTON3_MASK){//right click   
+				 JFrame frame=new AverageSettingFrame(data,run);  
+				 frame.setTitle("Settings for selections of values for averaging");
+	             frame.setLocation(this.getX()+this.getWidth()+10,this.getY()+10);
+	             frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+	             frame.setResizable(false);
+	             frame.setVisible(true); 
+			 }else {
+				 String msg="Strange thing happened. Please try right click on a different area.";
+				 run.printMessage(msg);
+				 JOptionPane.showMessageDialog(popupMenu,msg);						         
+				 return;
+			 }
+			 
+		 }catch (Exception e) {
+			  // TODO Auto-generated catch block
+			 run.printMessage("Error when creating output of a new Adopted dataset.\n");
+			 e.printStackTrace();
+		 }			
+	}
+    
+    protected void combineDatasetMenuItemActionPerformed(ActionEvent arg0) {
+        try {
+            if(!isFileLoaded){                          
+                JOptionPane.showMessageDialog(popupMenu,"You haven't loaded an ENSDF file.");                               
+                return;                                
+            } 
+            
+            if(!viewGroupsButtonButton.isEnabled()){//if not enabled, check has not been done yet
+                JOptionPane.showMessageDialog(popupMenu,"You have to start checking first.");                               
+                return;
+            }
+            
+            CheckControl.createCombinedDataset=true;
+ 
+            
+            if(arg0.getModifiers()==InputEvent.BUTTON1_MASK){//left-button, BUTTON2-middle, BUTTON3-right        
+                run.printMessage("\nCreating a non-Adopted dataset (.adp) combining all data including comments..."); 
+                run.getConsistencyCheck().writeFile(run.getOutFilename()+".adp","ADP");  
+                run.printMessage("Done");
+            }else if(arg0.getModifiers()==InputEvent.BUTTON3_MASK){//right click
+                 
+                JFrame frame=new AverageSettingFrame(data,run);
+                                 
+                frame.setTitle("Settings for selections of values for averaging");
+                frame.setLocation(this.getX()+this.getWidth()+10,this.getY()+10);
+                frame.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+                frame.setResizable(false);
+                frame.setVisible(true);
+             
+            }else {
+				 String msg="Strange thing happened. Please try right click on a different area.";
+				 run.printMessage(msg);
+				 JOptionPane.showMessageDialog(popupMenu,msg);
+            }
+
+            
+        }catch(Exception e) {
+            run.printMessage("Error when creating output of a combined dataset.\n");
+            e.printStackTrace();      
+        }
+        
+        CheckControl.createCombinedDataset=false;
+        
+    }
+    
+    public static void main(String args[]) {
+        java.awt.EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                new MasterFrame().setVisible(true);
+            }
+        });
+    }
+    
+	
+    
+    protected void openSetupAndMergeFrame(ActionEvent evt,Run run) { 
+        SetupAndMergeFrame setupAndMergeFrame=new SetupAndMergeFrame(this,run);
+        
+        //globalSettingFrame.setLocationRelativeTo(moreSettingButton);//put the center of opening frame at the center of current frame
+        setupAndMergeFrame.setLocation(this.getX()+this.getWidth(),this.getY());
+        setupAndMergeFrame.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);          
+        setupAndMergeFrame.setVisible(true);
+        setupAndMergeFrame.setResizable(false);
+	}
+   
+
+    protected void averageValuesInComments() {
+        Vector<ENSDF> ensdfV=new Vector<ENSDF>();
+        for(int i=0;i<data.nENSDF();i++)
+            ensdfV.add(data.getENSDF(i));
+        
+        //System.out.println(" size="+ensdfV.size());
+        
+        AverageValuesInComments avgCom=new AverageValuesInComments(ensdfV);
+        
+        String filename=Setup.outdir+File.separator+"average_comment_values";
+        filename=Str.fileNamePrefix(filename);
+        
+        String rptFilePath=filename+".rpt";
+        String outFilePath=filename+".avg";
+        
+        avgCom.writeReport(rptFilePath);
+        avgCom.writeOutput(outFilePath);
+        
+       
+        EnsdfUtil.cleanENSDFFile(outFilePath,true);//convert upper-case comments to lower case
+        
+        String msg="";
+        msg+="\nAveraging values (EL,T,EG,RI) in comments for datasets in input files...\n";
+        msg+="See .rpt file for averaging details\n";
+        msg+="    .avg file for all new datasets with average values\n";
+        run.printMessage(msg);
+
+        
+    }
+    
+    // Variables declaration - do not modify//GEN-BEGIN:variables
+
+
+    private javax.swing.JToggleButton loadButton;
+    private javax.swing.JTextField pathField;
+    private javax.swing.JLabel pathLabel;
+    private javax.swing.JLabel fileLabel;
+    private javax.swing.JToggleButton checkButton;
+
+    private JScrollPane scrollPane;
+    private JTextArea textArea;
+    private JButton btnBrowse;
+    private JCheckBox avgCheckBox;
+    private JCheckBox mrgCheckBox;
+    private JCheckBox gleCheckBox;
+    private JCheckBox gamCheckBox;
+    private JCheckBox rptCheckBox;
+    private JCheckBox levCheckBox;
+	private JPopupMenu popupMenu;
+	private JButton viewGroupsButtonButton;
+	private JCheckBox fedCheckBox;
+}
